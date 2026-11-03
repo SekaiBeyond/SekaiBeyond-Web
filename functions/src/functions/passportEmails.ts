@@ -22,7 +22,9 @@ import {
     MAX_EMAIL_COUNT,
     type MintingDesign,
     mintPassport,
+    passportNoteRef,
     readMintingDesign,
+    validatePassportNote,
 } from "../utils/passports";
 import {
     computeEmailQuota,
@@ -41,9 +43,9 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
  * from the one saved template. There is no sticker; once claimed, the holder
  * reaches the passport's page from their profile shelf.
  *
- * The address stays on the passport as `sentTo`, which the admin screen uses
- * to point out anyone already sent one of the design. Nothing here refuses a
- * repeat: someone who bought two is listed twice.
+ * The address stays on the passport as `sentTo`, which the admin screens show
+ * and search, and use to point out anyone already sent one of the design.
+ * Nothing here refuses a repeat: someone who bought two is listed twice.
  */
 
 const templateRef = () => db.collection("passportEmailTemplate").doc("default");
@@ -95,6 +97,8 @@ function renderKeyEmail(
  * comes back in `deferred`, minting nothing, for another day. Those whose email
  * Resend refused come back in `failed`. Only passports whose email went or is
  * queued are kept, so a failed address can simply be sent again.
+ *
+ * An optional note, such as why they were sent, is given to each passport.
  */
 export const emailPassports = onCall(
     {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB", secrets: [RESEND_API_KEY]},
@@ -102,13 +106,14 @@ export const emailPassports = onCall(
         const uid = await requireAuth(request, "staff");
         const callerSnap = await requireAdmin(uid);
 
-        const input = request.data as {designId?: unknown; emails?: unknown};
+        const input = request.data as {designId?: unknown; emails?: unknown; note?: unknown};
         const designId = validateDocId(input.designId, "designId");
         if (!Array.isArray(input.emails) || input.emails.length < 1 || input.emails.length > MAX_EMAIL_COUNT) {
             throw new HttpsError("invalid-argument", `emails must hold between 1 and ${MAX_EMAIL_COUNT} addresses.`);
         }
         // Lowercased, and kept as often as listed: one passport each.
         const recipients = input.emails.map(e => validateEmail(e, "email"));
+        const note = validatePassportNote(input.note);
 
         const [design, template] = await Promise.all([
             readMintingDesign(designId),
@@ -169,7 +174,7 @@ export const emailPassports = onCall(
             const fields = {recipientEmail: email, design, contactEmail};
             const subject = subjectLine(renderKeyEmail(template.subject, fields, false));
             const html = renderKeyEmail(template.bodyHtml, fields, true);
-            const {passportId, key, write} = mintPassport(design, seen, by, {
+            const {passportId, key, write, noteWrite} = mintPassport(design, seen, by, {
                 sentTo: email,
                 // Set ahead of the send: a passport whose email doesn't go is
                 // deleted below.
@@ -177,8 +182,9 @@ export const emailPassports = onCall(
                 // The admin screens say "Queued" until scheduledMailDrain
                 // ships it.
                 emailScheduled: queued,
-            });
+            }, note);
             ops.push(write);
+            if (noteWrite) ops.push(noteWrite);
             if (queued) {
                 // Without the key: the drain fills it in from passportSecrets,
                 // so the queue, which core staff can read, never holds one, and
@@ -200,8 +206,8 @@ export const emailPassports = onCall(
             }
         });
 
-        // Two writes a passport and one a queued email stay within one batch,
-        // so this lands whole or not at all.
+        // Two writes a passport, one its note and one a queued email stay
+        // within one batch (MAX_EMAIL_COUNT), so this lands whole or not at all.
         try {
             await commitInChunks(ops);
         } catch (err) {
@@ -232,6 +238,7 @@ export const emailPassports = onCall(
                 await commitInChunks(unsent.map(({passportId}) => (batch) => {
                     batch.delete(db.collection("passports").doc(passportId));
                     batch.delete(db.collection("passportSecrets").doc(passportId));
+                    batch.delete(passportNoteRef(passportId));
                 }));
             } catch (err) {
                 console.error("emailPassports: failed to delete passports whose email didn't go",

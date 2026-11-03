@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, endAt, getDoc, getDocs, limit, orderBy, query, startAt, where } from 'firebase/firestore';
 import { createCollectionCache, toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 import { localized } from './localized';
@@ -35,6 +35,12 @@ export interface Passport {
     emailSentAt: Date | null;
     /** Waiting in the overflow queue for the daily cap to reopen. */
     emailScheduled: boolean;
+    /**
+     * Staff's note, such as why it was made; blank without one. Kept in
+     * passportNotes, which only staff can read, so it's blank wherever the
+     * holder reads their own passports.
+     */
+    note: string;
 }
 
 /** What a shelf card on /profile shows, all someone else's profile carries. */
@@ -108,8 +114,12 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
         sentTo: typeof data.sentTo === 'string' ? data.sentTo : '',
         emailSentAt: toDate(data.emailSentAt),
         emailScheduled: data.emailScheduled === true,
+        note: '',
     };
 };
+
+const noteOf = (data: Record<string, any> | undefined): string =>
+    typeof data?.note === 'string' ? data.note : '';
 
 // A handful of public documents that rarely change; the public passport page
 // reads them signed out.
@@ -163,19 +173,51 @@ export const passportScanUrl = (id: string, origin: string): string =>
     `${origin}/p/${encodeURIComponent(id)}`;
 
 /**
- * Every passport from one design, newest first, for the admin dashboard.
- * Filtered and counted client-side: hundreds of docs, and one equality filter
- * needs no composite index.
+ * Every passport from one design, with its note, newest first, for the admin
+ * dashboard. Filtered and counted client-side: hundreds of docs, and one
+ * equality filter needs no composite index. Staff only, for the notes.
  */
 export async function fetchPassportsByDesign(designId: string): Promise<Passport[]> {
-    const snap = await getDocs(query(collection(getFirebaseDb(), 'passports'), where('designId', '==', designId)));
-    return snap.docs.map(toPassport).sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+    const db = getFirebaseDb();
+    const [snap, notes] = await Promise.all([
+        getDocs(query(collection(db, 'passports'), where('designId', '==', designId))),
+        getDocs(query(collection(db, 'passportNotes'), where('designId', '==', designId))),
+    ]);
+    const noteById = new Map(notes.docs.map(d => [d.id, noteOf(d.data())]));
+    return snap.docs
+        .map(d => ({...toPassport(d), note: noteById.get(d.id) ?? ''}))
+        .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
 }
 
-/** One passport by its printed code. Null when there is no such passport. */
+/**
+ * One passport by its printed code, with its note. Null when there is no such
+ * passport. Staff only, for the note.
+ */
 export async function fetchPassport(id: string): Promise<Passport | null> {
-    const snap = await getDoc(doc(getFirebaseDb(), 'passports', normalizePassportCode(id)));
-    return snap.exists() ? toPassport(snap) : null;
+    const db = getFirebaseDb();
+    const code = normalizePassportCode(id);
+    const [snap, noteSnap] = await Promise.all([
+        getDoc(doc(db, 'passports', code)),
+        getDoc(doc(db, 'passportNotes', code)),
+    ]);
+    return snap.exists() ? {...toPassport(snap), note: noteOf(noteSnap.data())} : null;
+}
+
+/**
+ * Emailed passports whose address starts with `prefix`, across designs, for the
+ * admin search. Without notes: the search lists rows, not details.
+ */
+export async function fetchPassportsSentTo(prefix: string): Promise<Passport[]> {
+    const start = prefix.trim().toLowerCase();
+    if (!start) return [];
+    const snap = await getDocs(query(
+        collection(getFirebaseDb(), 'passports'),
+        orderBy('sentTo'),
+        startAt(start),
+        endAt(start + ''),
+        limit(PASSPORT_SEARCH_LIMIT),
+    ));
+    return snap.docs.map(toPassport);
 }
 
 /**
@@ -218,6 +260,10 @@ export const MAX_PASSPORT_EMAIL = 100;
 export const MAX_PASSPORT_KEY_EXPORT = 500;
 /** Mirrors MAX_GRANT_DAYS in functions/src/utils/membership.ts, which enforces it. */
 export const MAX_PASSPORT_TERM_DAYS = 3650;
+/** Mirrors PASSPORT_NOTE_MAX in functions/src/utils/passports.ts, which enforces it. */
+export const PASSPORT_NOTE_MAX = 500;
+/** Emailed passports one address search lists. */
+const PASSPORT_SEARCH_LIMIT = 50;
 /** Ambiguous glyphs (O/0, I/1/L) are absent by construction — see CODE_ALPHABET. */
 const CODE_CHAR = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]*$/;
 

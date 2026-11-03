@@ -3,7 +3,7 @@ import { type Passport, passportDateTime, passportStatusLabel, } from '~/lib/pas
 import type { UserRecord } from '../types';
 import type { StockView } from './PassportStock';
 
-export type SortKey = 'code' | 'status' | 'holder' | 'generated';
+export type SortKey = 'code' | 'status' | 'holder' | 'sentTo' | 'note' | 'generated';
 export type SortDir = 'asc' | 'desc';
 
 export interface Column {
@@ -17,6 +17,8 @@ const COLUMNS: Column[] = [
     {key: 'code', label: {en: 'Code', cn: '编号'}, first: 'asc'},
     {key: 'status', label: {en: 'Status', cn: '状态'}, first: 'asc'},
     {key: 'holder', label: {en: 'Holder', cn: '持有者'}, first: 'asc'},
+    {key: 'sentTo', label: {en: 'Sent to', cn: '发送至'}, first: 'asc'},
+    {key: 'note', label: {en: 'Note', cn: '备注'}, first: 'asc'},
     {key: 'generated', label: {en: 'Generated', cn: '生成时间'}, first: 'desc'},
 ];
 
@@ -80,8 +82,23 @@ const Holder = ({
     );
 };
 
+/**
+ * Sent to and Note, which only some designs use, shown only when a passport of
+ * the design has one, so printed stock keeps its four columns.
+ */
+export interface OptionalColumns {
+    sentTo: boolean;
+    note: boolean;
+}
+
+/** The cell's name on the stacked phone layout, where there are no headers. */
+const StackLabel = ({children}: {children: string}) => (
+    <span className="admin-passport-cell-label">{children}</span>
+);
+
 interface PassportStockTableProps {
     rows: Passport[];
+    optional: OptionalColumns;
     view: StockView;
     onSortBy: (column: Column) => void;
     selectedSet: Set<string>;
@@ -93,6 +110,7 @@ interface PassportStockTableProps {
 
 export const PassportStockTable = ({
                                        rows,
+                                       optional,
                                        view,
                                        onSortBy,
                                        selectedSet,
@@ -102,6 +120,8 @@ export const PassportStockTable = ({
                                        ownersFailed,
                                    }: PassportStockTableProps) => {
     const {isEnglish} = useLanguage();
+    const columns = COLUMNS.filter(column =>
+        (column.key !== 'sentTo' || optional.sentTo) && (column.key !== 'note' || optional.note));
 
     return (
         <div className="admin-data-table-wrap">
@@ -113,7 +133,7 @@ export const PassportStockTable = ({
                                 {isEnglish ? 'Selected' : '已选择'}
                             </span>
                     </th>
-                    {COLUMNS.map(column => (
+                    {columns.map(column => (
                         <th
                             key={column.key}
                             aria-sort={view.sortKey !== column.key
@@ -203,6 +223,38 @@ export const PassportStockTable = ({
                                 isEnglish={isEnglish}
                             />
                         </td>
+                        {optional.sentTo && (
+                            <td className={`admin-passport-cell-sent${
+                                passport.sentTo ? '' : ' admin-passport-cell-sent--none'}`}>
+                                {passport.sentTo ? (
+                                    <>
+                                        <StackLabel>{isEnglish ? 'Sent to ' : '发送至 '}</StackLabel>
+                                        <span className="admin-passport-cell-sent-email" title={passport.sentTo}>
+                                            {passport.sentTo}
+                                        </span>
+                                        {passport.emailScheduled && (
+                                            <span className="admin-passport-cell-by">
+                                                {isEnglish ? 'Queued' : '排队中'}
+                                            </span>
+                                        )}
+                                    </>
+                                ) : <span className="admin-passport-cell-blank">—</span>}
+                            </td>
+                        )}
+                        {optional.note && (
+                            <td
+                                className={`admin-passport-cell-note${
+                                    passport.note ? '' : ' admin-passport-cell-note--none'}`}
+                                title={passport.note || undefined}
+                            >
+                                {passport.note ? (
+                                    <>
+                                        <StackLabel>{isEnglish ? 'Note: ' : '备注：'}</StackLabel>
+                                        {passport.note}
+                                    </>
+                                ) : <span className="admin-passport-cell-blank">—</span>}
+                            </td>
+                        )}
                         <td
                             className="admin-passport-cell-date"
                             title={passportDateTime(passport.createdAt, isEnglish, '—')}

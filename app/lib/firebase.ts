@@ -680,7 +680,8 @@ export const callDeleteSocialPlatform = (data: {id: string}) =>
 export const callSeedSocialPlatforms = () =>
     httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
 
-export const callGeneratePassports = (data: {designId: string; count: number}) =>
+/** `note` is given to each passport; blank for none. */
+export const callGeneratePassports = (data: {designId: string; count: number; note: string}) =>
     httpsCallable<typeof data, {
         designId: string;
         year: number;
@@ -717,6 +718,10 @@ export const callDeleteClaimedPassport = (data: {passportId: string; subtractDay
         nothingToSubtract: boolean;
     }>(getFunctions(), 'deleteClaimedPassport')(data);
 
+/** A blank note clears it. `updated` is false when it already said that. */
+export const callSetPassportNote = (data: {passportId: string; note: string}) =>
+    httpsCallable<typeof data, {note: string; updated: boolean}>(getFunctions(), 'setPassportNote')(data);
+
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
     httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);
 
@@ -745,9 +750,10 @@ export const callDeletePassportDesign = (data: {designId: string}) =>
 /**
  * Mints a passport for each listed address, so two for one listed twice, and
  * emails each its key, up to MAX_PASSPORT_EMAIL a call. Addresses come back
- * sorted by what became of them when they weren't sent or queued.
+ * sorted by what became of them when they weren't sent or queued. `note` is
+ * given to each passport; blank for none.
  */
-export const callEmailPassports = (data: {designId: string; emails: string[]}) =>
+export const callEmailPassports = (data: {designId: string; emails: string[]; note: string}) =>
     httpsCallable<typeof data, {
         sentCount: number;
         queuedCount: number;

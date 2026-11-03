@@ -7,12 +7,14 @@ import {
     callDeletePassports,
     callReissuePassportKey,
     callRevealPassportKey,
+    callSetPassportNote,
     errorMessage,
     getFirebaseDb,
 } from '~/lib/firebase';
 import {
     fetchPassport,
     type Passport,
+    PASSPORT_NOTE_MAX,
     passportDateTime,
     passportName,
     passportScanUrl,
@@ -99,6 +101,8 @@ export const PassportDetail = ({
     // its result.
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [subtractDays, setSubtractDays] = useState(false);
+    // The note being edited; null when it isn't.
+    const [noteDraft, setNoteDraft] = useState<string | null>(null);
 
     const {request: requestPng, node: pngNode} = usePassportPngExport(
         () => showToast(isEnglish ? 'Failed to render the QR code.' : '生成二维码失败。', 'error'),
@@ -254,6 +258,24 @@ export const PassportDetail = ({
             setBusy(false);
             return;
         }
+        setBusy(false);
+    };
+
+    const saveNote = async () => {
+        if (noteDraft === null) return;
+        setBusy(true);
+        try {
+            const res = await callSetPassportNote({passportId, note: noteDraft.trim()});
+            if (res.data.updated) {
+                showToast(isEnglish ? 'Note saved.' : '备注已保存。', 'success');
+            }
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save the note.' : '保存备注失败。'), 'error');
+            setBusy(false);
+            return;
+        }
+        setNoteDraft(null);
+        await refreshAfterWrite();
         setBusy(false);
     };
 
@@ -591,6 +613,74 @@ export const PassportDetail = ({
                                 </dd>
                             </div>
                         </dl>
+                    </section>
+
+                    {/* Staff's own words on it, such as why it was made. */}
+                    <section className="admin-passport-panel">
+                        <div className="admin-passport-panel-head">
+                            <h4 className="admin-passport-panel-title">
+                                {isEnglish ? 'Note' : '备注'}
+                            </h4>
+                            {!readOnly && noteDraft === null && (
+                                <button
+                                    type="button"
+                                    className="admin-qr-row-edit"
+                                    onClick={() => setNoteDraft(passport.note)}
+                                    disabled={busy}
+                                >
+                                    {passport.note
+                                        ? (isEnglish ? 'Edit' : '编辑')
+                                        : (isEnglish ? 'Add note' : '添加备注')}
+                                </button>
+                            )}
+                        </div>
+                        {noteDraft === null ? (
+                            <p className={`admin-passport-note${passport.note ? '' : ' admin-passport-note--none'}`}>
+                                {passport.note || (isEnglish ? 'No note.' : '暂无备注。')}
+                            </p>
+                        ) : (
+                            <>
+                                <input
+                                    className="admin-input admin-passport-note-input"
+                                    value={noteDraft}
+                                    maxLength={PASSPORT_NOTE_MAX}
+                                    onChange={e => setNoteDraft(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') void saveNote();
+                                        else if (e.key === 'Escape') setNoteDraft(null);
+                                    }}
+                                    placeholder={isEnglish
+                                        ? 'Why it was made, who it’s for…'
+                                        : '生成原因、用途…'}
+                                    aria-label={isEnglish ? 'Note' : '备注'}
+                                    disabled={busy}
+                                    autoFocus
+                                />
+                                <div className="admin-passport-panel-foot">
+                                    <button
+                                        className="admin-toggle-btn admin-toggle-save admin-btn-sm"
+                                        onClick={() => void saveNote()}
+                                        disabled={busy}
+                                        type="button"
+                                    >
+                                        {isEnglish ? 'Save' : '保存'}
+                                    </button>
+                                    <button
+                                        className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
+                                        onClick={() => setNoteDraft(null)}
+                                        disabled={busy}
+                                        type="button"
+                                    >
+                                        {isEnglish ? 'Cancel' : '取消'}
+                                    </button>
+                                    <span className="admin-passport-panel-foot-note">
+                                        {isEnglish
+                                            ? 'Only staff see notes. Leave it blank to remove it.'
+                                            : '备注仅工作人员可见。留空即可删除。'}
+                                    </span>
+                                </div>
+                            </>
+                        )}
                     </section>
                 </div>
 

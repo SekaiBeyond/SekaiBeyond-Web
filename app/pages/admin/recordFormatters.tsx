@@ -578,6 +578,10 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>downloaded the activation keys for {r.passportCount ?? 0} {r.passportYear ?? ''} passports</>
                 : <>下载了 {r.passportCount ?? 0} 本 {r.passportYear ?? ''} 年通行证的激活码</>;
+        case 'passport-note-edit':
+            return isEnglish
+                ? <>edited the note on passport {r.passportId ?? ''}</>
+                : <>编辑了通行证 {r.passportId ?? ''} 的备注</>;
         case 'passport-design-create':
             return isEnglish
                 ? <>created the {r.passportYear ?? ''} passport design “{r.passportDesignName ?? ''}”</>

@@ -99,8 +99,9 @@ export const RECORD_CATEGORIES = {
     passport: {
         en: 'Passport', zh: '通行证',
         types: ['passport-generate', 'passport-claim', 'passport-delete', 'passport-key-reissue',
-            'passport-key-view', 'passport-key-export', 'passport-design-create', 'passport-design-edit',
-            'passport-design-delete', 'passport-email-send', 'passport-email-queue', 'passport-email-template-update'],
+            'passport-key-view', 'passport-key-export', 'passport-note-edit', 'passport-design-create',
+            'passport-design-edit', 'passport-design-delete', 'passport-email-send', 'passport-email-queue',
+            'passport-email-template-update'],
     },
     qr: {
         en: 'QR', zh: '二维码',

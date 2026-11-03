@@ -6,7 +6,7 @@ import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
 import { parseFile } from '../tickets/importValidation';
 import type { ShowToast } from '../utils';
 import { PassportEmailTemplateSection } from './PassportEmailTemplateSection';
-import { designLabel, DesignSelect, DesignTermHint } from './PassportGenerator';
+import { designLabel, DesignSelect, DesignTermHint, PassportNoteField } from './PassportGenerator';
 import { countAddresses, parseEmailList } from './passportEmail';
 
 interface PassportEmailerProps {
@@ -55,6 +55,7 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
     const {isEnglish} = useLanguage();
     const [designId, setDesignId] = useState(defaultDesignId ?? designs[0]?.id ?? '');
     const [text, setText] = useState('');
+    const [note, setNote] = useState('');
     const [sending, setSending] = useState(false);
     const [progress, setProgress] = useState<{done: number; total: number} | null>(null);
     const [result, setResult] = useState<RunResult | null>(null);
@@ -198,6 +199,9 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
         setResult(null);
         setProgress({done: 0, total});
 
+        // Kept for the next run: what's put back in the list is sent for the
+        // same reason.
+        const trimmedNote = note.trim();
         let sent = 0;
         let queued = 0;
         // Not sent: put back in the list once the run ends.
@@ -206,7 +210,11 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
         try {
             while (done < total && !cancelRef.current) {
                 const chunk = emails.slice(done, done + MAX_PASSPORT_EMAIL);
-                const {data} = await callEmailPassports({designId: selectedDesign.id, emails: chunk});
+                const {data} = await callEmailPassports({
+                    designId: selectedDesign.id,
+                    emails: chunk,
+                    note: trimmedNote
+                });
                 done += chunk.length;
                 sent += data.sentCount;
                 queued += data.queuedCount;
@@ -288,6 +296,13 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                     <DesignSelect designs={designs} value={designId} onChange={setDesignId} disabled={sending}/>
                     <DesignTermHint design={selectedDesign}/>
                 </label>
+
+                <PassportNoteField
+                    value={note}
+                    onChange={setNote}
+                    disabled={sending}
+                    className="admin-tickets-template-field"
+                />
 
                 <label className="admin-tickets-template-field">
                     <span>{isEnglish ? 'Email addresses' : '邮箱地址'}</span>

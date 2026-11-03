@@ -14,7 +14,10 @@ import {
     newActivationKey,
     normalizePassportId,
     PASSPORT_TERM_DAYS,
+    passportNoteDoc,
+    passportNoteRef,
     readMintingDesign,
+    validatePassportNote,
 } from "../utils/passports";
 import {
     sanitizeDisplayText,
@@ -45,35 +48,52 @@ const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap
 
 /**
  * Mint passports from one design, up to MAX_GENERATE_COUNT at a time. Each is
- * independent; nothing records which were made together. If the keys returned
- * here are lost before printing, exportPassportKeys and revealPassportKey serve
- * them again.
+ * independent; nothing records which were made together, though an optional
+ * note, such as why they were made, is given to each. If the keys returned here
+ * are lost before printing, exportPassportKeys and revealPassportKey serve them
+ * again.
  */
 export const generatePassports = onCall({maxInstances: 5}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
-    const input = request.data as {designId?: unknown; count?: unknown};
+    const input = request.data as {designId?: unknown; count?: unknown; note?: unknown};
     const designId = validateDocId(input.designId, "designId");
     const count = input.count;
     if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > MAX_GENERATE_COUNT) {
         throw new HttpsError("invalid-argument", `count must be an integer between 1 and ${MAX_GENERATE_COUNT}.`);
     }
+    const note = validatePassportNote(input.note);
 
     const design = await readMintingDesign(designId);
 
     const issued: {passportId: string; activationCode: string}[] = [];
     const ops: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
+    const noteOps: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
     const seen = new Set<string>();
     const by = {uid, name: performerName(callerSnap)};
 
     for (let i = 0; i < count; i++) {
-        const {passportId, key, write} = mintPassport(design, seen, by);
+        const {passportId, key, write, noteWrite} = mintPassport(design, seen, by, {}, note);
         issued.push({passportId, activationCode: formatActivationKey(key)});
         ops.push(write);
+        if (noteWrite) noteOps.push(noteWrite);
     }
 
-    await commitInChunks(ops);
+    // The notes go first, in a batch of their own: with them a full run is more
+    // writes than one batch holds, and the passports and keys must land
+    // together. A note without its passport is never shown, so one left by a
+    // failure below only costs a document.
+    await commitInChunks(noteOps);
+    try {
+        await commitInChunks(ops);
+    } catch (err) {
+        if (noteOps.length > 0) {
+            await commitInChunks(issued.map(({passportId}) => (batch) => batch.delete(passportNoteRef(passportId))))
+                .catch(cleanupErr => console.error("generatePassports: failed to delete notes", cleanupErr));
+        }
+        throw err;
+    }
 
     await recordRef().set(recordDoc("passport-generate", {
         performedBy: uid,
@@ -346,6 +366,10 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
 
     if (ops.length > 0) {
         await commitInChunks(ops);
+        // Notes after, apart, for the same batch arithmetic as generatePassports.
+        // One left behind belongs to no passport and is never shown.
+        await commitInChunks(deleted.map(id => (batch) => batch.delete(passportNoteRef(id))))
+            .catch(err => console.error("deletePassports: failed to delete notes", deleted, err));
         await recordRef().set(recordDoc("passport-delete", {
             performedBy: uid,
             performedByName: performerName(callerSnap),
@@ -430,6 +454,7 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
 
         txn.delete(ref);
         txn.delete(db.collection(SECRETS).doc(passportId));
+        txn.delete(passportNoteRef(passportId));
 
         txn.set(recordRef(), recordDoc("passport-delete", {
             performedBy: uid,
@@ -452,6 +477,45 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
             // deleted account); the screen says so.
             nothingToSubtract: subtractDays && !reduced,
         };
+    });
+});
+
+/**
+ * Write, change or clear (blank) one passport's note, claimed or not. Staff
+ * read notes in the panel; the holder never can (see passportNoteRef).
+ */
+export const setPassportNote = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+
+    const input = request.data as {passportId?: unknown; note?: unknown};
+    const passportId = normalizePassportId(input.passportId);
+    if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
+    const note = validatePassportNote(input.note);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const noteRef = passportNoteRef(passportId);
+        const [snap, noteSnap] = await Promise.all([
+            txn.get(db.collection(PASSPORTS).doc(passportId)),
+            txn.get(noteRef),
+        ]);
+        if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
+        if ((noteSnap.data()?.note ?? "") === note) return {note, updated: false};
+
+        if (note) {
+            txn.set(noteRef, passportNoteDoc(snap.data()?.designId ?? "", note, {
+                uid,
+                name: performerName(callerSnap),
+            }));
+        } else {
+            txn.delete(noteRef);
+        }
+        txn.set(recordRef(), recordDoc("passport-note-edit", {
+            performedBy: uid,
+            performedByName: performerName(callerSnap),
+            passportId,
+            passportYear: snap.data()?.year ?? null,
+        }));
+        return {note, updated: true};
     });
 });
 

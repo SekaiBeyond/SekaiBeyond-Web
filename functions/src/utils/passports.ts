@@ -6,6 +6,7 @@ import { db } from "./firebase";
 import { CODE_ALPHABET, generateSecureCode } from "./helpers";
 import { extendedExpiry, startedAtAfter } from "./membership";
 import { recordDoc, recordRef } from "./records";
+import { sanitizeDisplayText, validateStr } from "./validation";
 
 /**
  * A physical passport is a sticker with the public `passportId` (this doc's id,
@@ -26,7 +27,8 @@ const ACTIVATION_KEY_LENGTH = 12;
 export const PASSPORT_TERM_DAYS = 365;
 
 // Each passport writes two docs (passport and secret), so this stays within half
-// of BATCH_LIMIT to commit in one chunk.
+// of BATCH_LIMIT to commit in one chunk. Notes are committed apart (see
+// generatePassports).
 export const MAX_GENERATE_COUNT = Math.min(200, Math.floor(BATCH_LIMIT / 2));
 
 // Same arithmetic: a delete erases the passport and its secret.
@@ -36,8 +38,17 @@ export const MAX_DELETE_COUNT = MAX_GENERATE_COUNT;
 export const MAX_KEY_EXPORT_COUNT = 500;
 
 // One emailPassports call mints and mails this many, within both the mint
-// ceiling and one Resend batch; the client splits bigger lists.
-export const MAX_EMAIL_COUNT = Math.min(MAX_GENERATE_COUNT, SEND_CHUNK_SIZE);
+// ceiling and one Resend batch; the client splits bigger lists. Its four writes
+// an address (passport, secret, note, queued email) stay within one batch.
+export const MAX_EMAIL_COUNT = Math.min(MAX_GENERATE_COUNT, SEND_CHUNK_SIZE, Math.floor(BATCH_LIMIT / 4));
+
+/** One line, like a ticket's note. Mirrored by PASSPORT_NOTE_MAX in app/lib/passports.ts. */
+export const PASSPORT_NOTE_MAX = 500;
+
+/** A note as sent: one line, tags and control characters gone. Blank for none. */
+export function validatePassportNote(value: unknown): string {
+    return sanitizeDisplayText(validateStr(value, "note", PASSPORT_NOTE_MAX));
+}
 
 const SEPARATORS_RE = /[\s-]+/g;
 
@@ -95,6 +106,23 @@ export function isPassportYear(value: unknown): value is number {
 const PASSPORTS = "passports";
 const SECRETS = "passportSecrets";
 
+/**
+ * Staff's note on a passport, such as why it was made. Kept apart from the
+ * passport, which its holder can read, under the same id. The design is copied
+ * so the stock table can read a design's notes in one query.
+ */
+export const passportNoteRef = (passportId: string) => db.collection("passportNotes").doc(passportId);
+
+export function passportNoteDoc(designId: string, note: string, by: {uid: string; name: string}) {
+    return {
+        designId,
+        note,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: by.uid,
+        updatedByName: by.name,
+    };
+}
+
 /** What minting copies from a design, and what a key email shows of it. */
 export interface MintingDesign {
     designId: string;
@@ -133,13 +161,22 @@ export async function readMintingDesign(designId: string): Promise<MintingDesign
  * grants what it was issued with. `seen` only guards ids within one call;
  * batch.create() fails on a collision with an existing passport rather than
  * overwriting it. `extra` is set on the passport alongside.
+ *
+ * A non-blank `note` comes back as `noteWrite`, apart from `write`, since the
+ * callers commit it differently; null without one.
  */
 export function mintPassport(
     design: MintingDesign,
     seen: Set<string>,
     by: {uid: string; name: string},
     extra: Record<string, unknown> = {},
-): {passportId: string; key: string; write: (batch: FirebaseFirestore.WriteBatch) => void} {
+    note = "",
+): {
+    passportId: string;
+    key: string;
+    write: (batch: FirebaseFirestore.WriteBatch) => void;
+    noteWrite: ((batch: FirebaseFirestore.WriteBatch) => void) | null;
+} {
     let passportId = generateSecureCode(PASSPORT_ID_LENGTH);
     while (seen.has(passportId)) passportId = generateSecureCode(PASSPORT_ID_LENGTH);
     seen.add(passportId);
@@ -148,6 +185,11 @@ export function mintPassport(
     return {
         passportId,
         key,
+        // create(), like the passport's, so a colliding id fails rather than
+        // overwriting another passport's note.
+        noteWrite: note
+            ? (batch) => batch.create(passportNoteRef(passportId), passportNoteDoc(design.designId, note, by))
+            : null,
         write: (batch) => {
             batch.create(db.collection(PASSPORTS).doc(passportId), {
                 designId: design.designId,

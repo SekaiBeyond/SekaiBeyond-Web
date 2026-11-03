@@ -13,7 +13,13 @@ import { downloadBlob } from '~/lib/zip';
 import { fetchUsersByUids, type ShowToast } from '../utils';
 import type { UserRecord } from '../types';
 import { buildPassportCsv, buildPassportIdCsv, usePassportPngExport } from './passportExport';
-import { type Column, PassportStockTable, type SortDir, type SortKey } from './PassportStockTable';
+import {
+    type Column,
+    type OptionalColumns,
+    PassportStockTable,
+    type SortDir,
+    type SortKey,
+} from './PassportStockTable';
 
 /**
  * One design's passports as a sortable table: narrowed by status, sorted by the
@@ -56,6 +62,15 @@ export const INITIAL_STOCK_VIEW: StockView = {
 
 /** Sorting by status walks the lifecycle rather than the alphabet. */
 const STATUS_ORDER: Record<PassportStatus, number> = {unclaimed: 0, claimed: 1};
+
+/**
+ * Text columns, where a blank sinks whichever way the column sorts, so
+ * flipping reorders only what's filled in.
+ */
+const compareFilled = (left: string, right: string, factor: number): number => {
+    if (!left || !right) return left ? -1 : right ? 1 : 0;
+    return left.localeCompare(right) * factor;
+};
 
 const statusFilterLabel = (filter: StatusFilter, isEnglish: boolean): string =>
     filter === 'all' ? (isEnglish ? 'All' : '全部') : passportStatusLabel(filter, isEnglish);
@@ -146,6 +161,13 @@ export const PassportStock = ({
     const holderName = (passport: Passport): string =>
         (passport.ownerUid && owners?.get(passport.ownerUid)?.displayName) || '';
 
+    // Over the whole design, so the columns don't come and go between tabs and
+    // pages.
+    const optional: OptionalColumns = useMemo(() => ({
+        sentTo: passports.some(p => p.sentTo),
+        note: passports.some(p => p.note),
+    }), [passports]);
+
     const filtered = useMemo(
         () => passports.filter(p => view.filter === 'all' || p.status === view.filter),
         [passports, view.filter],
@@ -159,13 +181,12 @@ export const PassportStock = ({
                     return a.id.localeCompare(b.id) * factor;
                 case 'status':
                     return (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) * factor;
-                case 'holder': {
-                    const [left, right] = [holderName(a), holderName(b)];
-                    // Unheld passports sink either way, so flipping reorders the
-                    // names.
-                    if (!left || !right) return left ? -1 : right ? 1 : 0;
-                    return left.localeCompare(right) * factor;
-                }
+                case 'holder':
+                    return compareFilled(holderName(a), holderName(b), factor);
+                case 'sentTo':
+                    return compareFilled(a.sentTo, b.sentTo, factor);
+                case 'note':
+                    return compareFilled(a.note, b.note, factor);
                 case 'generated':
                     return ((a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0)) * factor;
             }
@@ -437,6 +458,7 @@ export const PassportStock = ({
                 <>
                     <PassportStockTable
                         rows={rows}
+                        optional={optional}
                         view={view}
                         onSortBy={sortBy}
                         selectedSet={selectedSet}

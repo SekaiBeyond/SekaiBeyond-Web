@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { fileStamp } from '~/lib/csv';
 import { callGeneratePassports, errorMessage } from '~/lib/firebase';
-import { MAX_PASSPORT_GENERATE, type PassportDesign, passportName, } from '~/lib/passports';
+import { MAX_PASSPORT_GENERATE, PASSPORT_NOTE_MAX, type PassportDesign, passportName, } from '~/lib/passports';
 import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
 import { downloadBlob } from '~/lib/zip';
 import type { ShowToast } from '../utils';
@@ -23,6 +23,8 @@ interface GeneratedRun {
     designId: string;
     year: number;
     passports: {passportId: string; activationCode: string}[];
+    /** As sent, for the result screen; blank for none. */
+    note: string;
     /** Fixed when the call landed, so a second download has the same name. */
     stamp: string;
 }
@@ -50,6 +52,45 @@ export const DesignSelect = ({designs, value, onChange, disabled}: {
     );
 };
 
+/**
+ * The optional note given to every passport a run makes, such as why they're
+ * being made. The stock table shows it, so it's also how a run is told apart
+ * later.
+ */
+export const PassportNoteField = ({value, onChange, disabled, className, labelClassName}: {
+    value: string;
+    onChange: (note: string) => void;
+    disabled?: boolean;
+    /** The field's and its label's, to match the form it's in. */
+    className: string;
+    labelClassName?: string;
+}) => {
+    const {isEnglish} = useLanguage();
+    return (
+        <label className={className}>
+            <span className={labelClassName}>
+                {isEnglish ? 'Note' : '备注'}
+                <span className="admin-passport-optional">{isEnglish ? ' · optional' : ' · 选填'}</span>
+            </span>
+            <input
+                className="admin-input"
+                value={value}
+                maxLength={PASSPORT_NOTE_MAX}
+                onChange={e => onChange(e.target.value)}
+                disabled={disabled}
+                placeholder={isEnglish
+                    ? 'Why they’re being made, e.g. giveaway prizes, a replacement, staff comps'
+                    : '生成原因，例如：抽奖奖品、补发、工作人员赠送'}
+            />
+            <small className="admin-title-hint">
+                {isEnglish
+                    ? 'Saved on each passport. Only staff see it; you can change it later on the passport’s page.'
+                    : '保存在每本通行证上，仅工作人员可见；之后可在通行证页面修改。'}
+            </small>
+        </label>
+    );
+};
+
 /** What each passport of the picked design grants, under its picker. */
 export const DesignTermHint = ({design}: {design: PassportDesign | undefined}) => {
     const {isEnglish} = useLanguage();
@@ -72,6 +113,7 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
     const {isEnglish} = useLanguage();
     const [designId, setDesignId] = useState(defaultDesignId ?? designs[0]?.id ?? '');
     const [count, setCount] = useState(50);
+    const [note, setNote] = useState('');
     const [busy, setBusy] = useState(false);
     const [issued, setIssued] = useState<GeneratedRun | null>(null);
     const [exported, setExported] = useState(false);
@@ -100,8 +142,9 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
     const generate = async () => {
         setBusy(true);
         try {
-            const res = await callGeneratePassports({designId, count});
-            const run: GeneratedRun = {...res.data, stamp: fileStamp()};
+            const trimmed = note.trim();
+            const res = await callGeneratePassports({designId, count, note: trimmed});
+            const run: GeneratedRun = {...res.data, note: trimmed, stamp: fileStamp()};
             setIssued(run);
             // Saved unasked, so the screen is a confirmation rather than the only
             // copy. Only a throw re-arms the warning; a download the browser blocks
@@ -191,6 +234,13 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                                     </span>
                                 </div>
                             </div>
+
+                            <PassportNoteField
+                                value={note}
+                                onChange={setNote}
+                                className="admin-passport-run-field"
+                                labelClassName="admin-passport-run-label"
+                            />
                         </div>
                     </div>
 
@@ -232,6 +282,11 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                                 ? `${issued.passports.length} passports · ${issued.year} · ${issuedDesign}`
                                 : `${issued.passports.length} 本通行证 · ${issued.year} · ${issuedDesign}`}
                         </p>
+                        {issued.note && (
+                            <p className="admin-passport-result-meta">
+                                {isEnglish ? `Note: ${issued.note}` : `备注：${issued.note}`}
+                            </p>
+                        )}
                         <p>
                             {exported
                                 ? (isEnglish

@@ -232,6 +232,13 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
+        // Staff's notes on passports, such as why one was made. Apart from
+        // the passport because its holder can read that; staff+ read these
+        // (staff read-only in the panel), and writes go through the functions.
+        match /passportNotes/{passportId} {
+            allow read: if request.auth != null && isStaffOrAbove();
+        }
+
         // Passport designs — a name, a year, and cover art; a year can have
         // several. Publicly readable: a signed-out visitor scanning a sticker
         // needs the name and artwork, and it holds nothing that isn't already

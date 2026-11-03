@@ -6468,6 +6468,32 @@ select.admin-tickets-tag:focus {
     white-space: nowrap;
 }
 
+/* Long addresses and notes clip to one line; the tooltip has the rest. */
+.admin-passport-cell-sent,
+.admin-passport-cell-note {
+    max-width: 220px;
+}
+
+.admin-passport-cell-sent-email {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-passport-cell-note {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+/* Only on the stacked phone layout, which has no headers. */
+.admin-passport-cell-label {
+    display: none;
+}
+
 .admin-passport-cell-blank {
     color: var(--color-text-muted);
 }
@@ -6487,9 +6513,9 @@ select.admin-tickets-tag:focus {
     font-variant-numeric: tabular-nums;
 }
 
-/* Too narrow for five columns, so each passport stacks into a card: code and
-   status first, holder and generation under them, the tick down the left. A
-   horizontal scroll would hide the tick or the date. */
+/* Too narrow for the columns, so each passport stacks into a card: code and
+   status first, then holder, address, note and generation, the tick down the
+   left. A horizontal scroll would hide the tick or the date. */
 @media (max-width: 720px) {
     .admin-passport-table thead {
         display: none;
@@ -6507,6 +6533,8 @@ select.admin-tickets-tag:focus {
         grid-template-areas:
             'tick code   status'
             'tick holder holder'
+            'tick sent   sent'
+            'tick note   note'
             'tick date   date';
         align-items: center;
         gap: 3px 11px;
@@ -6542,6 +6570,35 @@ select.admin-tickets-tag:focus {
 
     /* Nobody holds it, so the line goes rather than stacking a lone dash. */
     .admin-passport-table .admin-passport-cell-holder--none {
+        display: none;
+    }
+
+    .admin-passport-table .admin-passport-cell-sent {
+        grid-area: sent;
+        max-width: none;
+        font-size: 12px;
+    }
+
+    /* The address and its label on one line. */
+    .admin-passport-table .admin-passport-cell-sent-email,
+    .admin-passport-table .admin-passport-cell-sent .admin-passport-cell-by {
+        display: inline;
+    }
+
+    .admin-passport-table .admin-passport-cell-note {
+        grid-area: note;
+        max-width: none;
+        font-size: 12px;
+    }
+
+    .admin-passport-table .admin-passport-cell-label {
+        display: inline;
+        color: var(--color-text-muted);
+    }
+
+    /* As with the holder: nothing to say, so no line. */
+    .admin-passport-table .admin-passport-cell-sent--none,
+    .admin-passport-table .admin-passport-cell-note--none {
         display: none;
     }
 
@@ -6699,6 +6756,14 @@ select.admin-tickets-tag:focus {
     letter-spacing: 0.6px;
     text-transform: uppercase;
     color: var(--color-text-muted);
+}
+
+/* Beside a field's label, in the label's size but not its capitals. */
+.admin-passport-optional {
+    font-weight: 400;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--color-text-light);
 }
 
 /* The sizes stock is printed in, then the box for anything else. */
@@ -7231,6 +7296,23 @@ select.admin-tickets-tag:focus {
     margin: 8px 0 0;
     font-size: 12px;
     color: var(--color-text-muted);
+}
+
+.admin-passport-note {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+.admin-passport-note--none {
+    color: var(--color-text-muted);
+}
+
+.admin-passport-note-input {
+    box-sizing: border-box;
+    width: 100%;
 }
 
 /* The dates, as hairline-divided rows: label left, value right. */

@@ -3,6 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     fetchPassport,
     fetchPassportsByOwner,
+    fetchPassportsSentTo,
     isPassportCodeShape,
     type Passport,
     PASSPORT_ID_LENGTH,
@@ -12,7 +13,6 @@ import {
 } from '~/lib/passports';
 import { PRIVACY_ROWS } from '~/lib/privacy';
 import { searchUsers, type ShowToast } from '../utils';
-import type { UserRecord } from '../types';
 
 interface PassportSearchProps {
     designs: PassportDesign[];
@@ -21,15 +21,19 @@ interface PassportSearchProps {
 }
 
 /**
- * Look up a passport by its sticker code or its owner: a 10-character code
- * resolves directly; anything else is matched against users, and each match's
- * passports are listed.
+ * Look up a passport by its sticker code, its owner, or the address it was
+ * emailed to: a 10-character code resolves directly; anything else is matched
+ * against users, whose passports are listed, and against the start of emailed
+ * passports' addresses, claimed or not.
  */
 export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps) => {
     const {isEnglish} = useLanguage();
     const [term, setTerm] = useState('');
     const [busy, setBusy] = useState(false);
-    const [results, setResults] = useState<{passport: Passport; owner?: UserRecord}[] | null>(null);
+    const [results, setResults] = useState<{passport: Passport; detail: string}[] | null>(null);
+
+    const sentDetail = (passport: Passport): string => !passport.sentTo ? ''
+        : isEnglish ? `emailed to ${passport.sentTo}` : `发送至 ${passport.sentTo}`;
 
     const run = async () => {
         const query = term.trim();
@@ -39,13 +43,24 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
         try {
             if (isPassportCodeShape(query, PASSPORT_ID_LENGTH)) {
                 const passport = await fetchPassport(query);
-                setResults(passport ? [{passport}] : []);
+                setResults(passport ? [{passport, detail: sentDetail(passport)}] : []);
                 return;
             }
-            // Up to 30 matches, whose passports are fetched together.
-            const owners = await searchUsers(query);
+            // Up to 30 matching users, whose passports are fetched together.
+            const [owners, sent] = await Promise.all([searchUsers(query), fetchPassportsSentTo(query)]);
             const perOwner = await Promise.all(owners.map(owner => fetchPassportsByOwner(owner.uid)));
-            setResults(owners.flatMap((owner, i) => perOwner[i].map(passport => ({passport, owner}))));
+            const found = owners.flatMap((owner, i) => perOwner[i].map(passport => ({
+                passport,
+                detail: `${owner.displayName} (${owner.email})`,
+            })));
+            // An emailed passport its recipient claimed is already listed under
+            // them.
+            const listed = new Set(found.map(r => r.passport.id));
+            found.push(...sent.filter(p => !listed.has(p.id)).map(passport => ({
+                passport,
+                detail: sentDetail(passport),
+            })));
+            setResults(found);
         } catch {
             showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error');
         } finally {
@@ -85,12 +100,12 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
                 <p className="admin-no-results">{isEnglish ? 'No passports found.' : '未找到通行证。'}</p>
             ) : (
                 <div className="admin-passport-results">
-                    {results.map(({passport, owner}) => (
+                    {results.map(({passport, detail}) => (
                         <PassportRow
                             key={passport.id}
                             passport={passport}
                             designs={designs}
-                            detail={owner ? `${owner.displayName} (${owner.email})` : ''}
+                            detail={detail}
                             onOpen={onOpen}
                         />
                     ))}

@@ -85,6 +85,7 @@ export type RecordType =
     | "passport-key-reissue"
     | "passport-key-view"
     | "passport-key-export"
+    | "passport-note-edit"
     | "passport-design-create"
     | "passport-design-edit"
     | "passport-design-delete"
