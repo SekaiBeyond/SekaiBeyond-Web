@@ -216,7 +216,8 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                 ? `Revoke "${k.name}"? Anything using it stops working at once, and the key is deleted. This can't be undone.`
                 : `吊销"${k.name}"？所有使用此密钥的服务将立即失效，密钥也将被删除，且无法撤销。`)
             : (isEnglish
-                ? `Delete "${k.name}"? It no longer works, and it will be removed from this list.`
+                ? `Delete
+                        "${k.name}"? It no longer works, and it will be removed from this list.`
                 : `删除"${k.name}"？此密钥已失效，删除后将从列表中移除。`)
         )) return;
         setRevokingId(k.id);

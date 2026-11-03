@@ -3,6 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     claimedElsewhere,
     fetchPassport,
+    fetchPassportsByNote,
     fetchPassportsByOwner,
     fetchPassportsSentTo,
     isPassportCodeShape,
@@ -22,10 +23,10 @@ interface PassportSearchProps {
 }
 
 /**
- * Look up a passport by its sticker code, its owner, or the address it was
- * emailed to: a 10-character code resolves directly; anything else is matched
- * against users, whose passports are listed, and against the start of emailed
- * passports' addresses, claimed or not.
+ * Look up a passport by its sticker code, its owner, the address it was emailed
+ * to or its note: a 10-character code resolves directly; anything else is
+ * matched against users, whose passports are listed, the start of emailed
+ * passports' addresses, claimed or not, and anywhere in a note.
  */
 export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps) => {
     const {isEnglish} = useLanguage();
@@ -44,6 +45,10 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
         return isEnglish ? `${sent} · ⚠ activated on ${shown}` : `${sent} · ⚠ 激活账号为 ${shown}`;
     };
 
+    // Last, as the row cuts a long one short.
+    const withNote = (detail: string, note: string): string =>
+        [detail, isEnglish ? `note: ${note}` : `备注：${note}`].filter(Boolean).join(' · ');
+
     const run = async () => {
         const query = term.trim();
         if (!query) return;
@@ -56,7 +61,11 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
                 return;
             }
             // Up to 30 matching users, whose passports are fetched together.
-            const [owners, sent] = await Promise.all([searchUsers(query), fetchPassportsSentTo(query)]);
+            const [owners, sent, noted] = await Promise.all([
+                searchUsers(query),
+                fetchPassportsSentTo(query),
+                fetchPassportsByNote(query),
+            ]);
             const perOwner = await Promise.all(owners.map(owner => fetchPassportsByOwner(owner.uid)));
             const found = owners.flatMap((owner, i) => perOwner[i].map(passport => ({
                 passport,
@@ -70,6 +79,17 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
             found.push(...sent.filter(p => !listed.has(p.id)).map(passport => ({
                 passport,
                 detail: sentDetail(passport),
+            })));
+            // A note that matched shows on its row, whichever way it was found.
+            const noteById = new Map(noted.map(p => [p.id, p.note]));
+            for (const result of found) {
+                const note = noteById.get(result.passport.id);
+                if (note) result.detail = withNote(result.detail, note);
+                listed.add(result.passport.id);
+            }
+            found.push(...noted.filter(p => !listed.has(p.id)).map(passport => ({
+                passport,
+                detail: withNote(sentDetail(passport), passport.note),
             })));
             setResults(found);
         } catch {
@@ -90,7 +110,7 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
                     onKeyDown={e => {
                         if (e.key === 'Enter') void run();
                     }}
-                    placeholder={isEnglish ? 'Passport code, name, or email' : '通行证编号、姓名或邮箱'}
+                    placeholder={isEnglish ? 'Passport code, name, email, or note' : '通行证编号、姓名、邮箱或备注'}
                 />
                 <button className="admin-btn admin-btn--cta" onClick={() => void run()} disabled={busy || !term.trim()}>
                     {busy ? (isEnglish ? 'Searching...' : '搜索中...') : (isEnglish ? 'Search' : '搜索')}

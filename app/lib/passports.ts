@@ -224,8 +224,29 @@ export async function fetchPassport(id: string): Promise<Passport | null> {
 }
 
 /**
+ * Passports whose note holds `text` anywhere, in any case, across designs, with
+ * their notes, for the admin search: up to PASSPORT_SEARCH_LIMIT, newest first.
+ * Firestore can't search within text, so every note is read, a read each, which
+ * a few hundred passports keep cheap. Staff only, for the notes.
+ */
+export async function fetchPassportsByNote(text: string): Promise<Passport[]> {
+    const needle = text.trim().toLowerCase();
+    if (!needle) return [];
+    const db = getFirebaseDb();
+    const matches = (await getDocs(collection(db, 'passportNotes'))).docs
+        .map(d => ({id: d.id, note: noteOf(d.data())}))
+        .filter(({note}) => note.toLowerCase().includes(needle))
+        .slice(0, PASSPORT_SEARCH_LIMIT);
+    const snaps = await Promise.all(matches.map(({id}) => getDoc(doc(db, 'passports', id))));
+    // A note whose passport has since been deleted has nothing to show.
+    return snaps
+        .flatMap((snap, i) => snap.exists() ? [{...toPassport(snap), note: matches[i].note}] : [])
+        .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+}
+
+/**
  * Emailed passports whose address starts with `prefix`, across designs, for the
- * admin search. Without notes: the search lists rows, not details.
+ * admin search. Without notes, which fetchPassportsByNote reads for the search.
  */
 export async function fetchPassportsSentTo(prefix: string): Promise<Passport[]> {
     const start = prefix.trim().toLowerCase();
@@ -282,7 +303,7 @@ export const MAX_PASSPORT_KEY_EXPORT = 500;
 export const MAX_PASSPORT_TERM_DAYS = 3650;
 /** Mirrors PASSPORT_NOTE_MAX in functions/src/utils/passports.ts, which enforces it. */
 export const PASSPORT_NOTE_MAX = 500;
-/** Emailed passports one address search lists. */
+/** Passports one address or note search lists. */
 const PASSPORT_SEARCH_LIMIT = 50;
 /** Ambiguous glyphs (O/0, I/1/L) are absent by construction — see CODE_ALPHABET. */
 const CODE_CHAR = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]*$/;
