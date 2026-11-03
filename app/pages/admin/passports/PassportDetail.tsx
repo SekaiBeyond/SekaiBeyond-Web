@@ -12,6 +12,7 @@ import {
     getFirebaseDb,
 } from '~/lib/firebase';
 import {
+    claimedElsewhere,
     fetchPassport,
     type Passport,
     PASSPORT_NOTE_MAX,
@@ -369,6 +370,22 @@ export const PassportDetail = ({
     const design = designs.find(d => d.id === passport.designId);
     const designName = passportName(design, isEnglish);
 
+    // Activated on an account with another address than it was emailed to.
+    const elsewhere = claimedElsewhere(passport, owner?.email);
+    const mismatchText = (email: string): string => {
+        const shown = email || (isEnglish ? 'an account without an email address' : '无邮箱地址的账号');
+        // Kept at activation, which also means they were warned; before that,
+        // the holder's address now is all there is.
+        if (passport.claimedEmail !== null) {
+            return isEnglish
+                ? `Activated on ${shown}, not this address. They were warned and chose to go ahead.`
+                : `激活账号为 ${shown}，并非此地址。激活时已提示，对方确认继续。`;
+        }
+        return isEnglish
+            ? `The holder’s email, ${shown}, isn’t this address.`
+            : `持有者的邮箱 ${shown} 并非此地址。`;
+    };
+
     /** The holder card's body — the one fact the page is mostly opened for. */
     const holderBody = () => {
         if (unclaimed) {
@@ -598,6 +615,11 @@ export const PassportDetail = ({
                                                 ? (isEnglish ? 'Queued' : '排队中')
                                                 : fmtDate(passport.emailSentAt)}
                                         </span>
+                                        {elsewhere !== null && (
+                                            <span className="admin-passport-mismatch">
+                                                {mismatchText(elsewhere)}
+                                            </span>
+                                        )}
                                     </dd>
                                 </div>
                             )}

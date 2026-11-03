@@ -6281,6 +6281,12 @@ select.admin-tickets-tag:focus {
     background: rgba(255, 107, 157, 0.16);
 }
 
+/* Emailed passports activated on an account with another address. */
+.admin-passport-tab--warn .admin-passport-tab-count {
+    background: rgba(254, 202, 87, 0.3);
+    color: #8a6400;
+}
+
 /* The selection bar over the rows: always present at the same height, so the
    table doesn't jump on the first tick, with room for select-all to say it
    covers the whole view. */
@@ -6481,6 +6487,20 @@ select.admin-tickets-tag:focus {
     white-space: nowrap;
 }
 
+/* Activated on an account with another address; the title says which. */
+.admin-passport-mismatch-tag {
+    display: inline-block;
+    margin-top: 3px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: rgba(254, 202, 87, 0.22);
+    border: 1px solid rgba(254, 202, 87, 0.6);
+    color: #8a6400;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 .admin-passport-cell-note {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -6583,6 +6603,10 @@ select.admin-tickets-tag:focus {
     .admin-passport-table .admin-passport-cell-sent-email,
     .admin-passport-table .admin-passport-cell-sent .admin-passport-cell-by {
         display: inline;
+    }
+
+    .admin-passport-table .admin-passport-mismatch-tag {
+        margin: 0 0 0 6px;
     }
 
     .admin-passport-table .admin-passport-cell-note {
@@ -7362,6 +7386,20 @@ select.admin-tickets-tag:focus {
     display: block;
     font-size: 12px;
     color: var(--color-text-muted);
+}
+
+/* Under Emailed to: activated on an account with another address. */
+.admin-passport-mismatch {
+    display: block;
+    margin-top: 6px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: rgba(254, 202, 87, 0.14);
+    border: 1px solid rgba(254, 202, 87, 0.5);
+    color: #8a6400;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 /* The printed side: what the sticker shows, where it points, and its artwork. */

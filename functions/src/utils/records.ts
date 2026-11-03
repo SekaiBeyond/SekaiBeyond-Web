@@ -137,6 +137,8 @@ export interface RecordFields {
     passportYear?: number | null;
     passportDesignName?: string;
     passportCount?: number;
+    /** A passport-claim on an account with another address: where it was emailed. */
+    passportSentTo?: string;
     platformLabel?: string;
     conSection?: string;
     configSections?: string[];

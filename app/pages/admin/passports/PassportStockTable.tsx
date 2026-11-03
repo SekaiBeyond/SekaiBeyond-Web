@@ -1,5 +1,5 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { type Passport, passportDateTime, passportStatusLabel, } from '~/lib/passports';
+import { claimedElsewhere, type Passport, passportDateTime, passportStatusLabel, } from '~/lib/passports';
 import type { UserRecord } from '../types';
 import type { StockView } from './PassportStock';
 
@@ -158,114 +158,128 @@ export const PassportStockTable = ({
                 </tr>
                 </thead>
                 <tbody>
-                {rows.map(passport => (
-                    <tr
-                        key={passport.id}
-                        className={`admin-data-table-row--clickable admin-passport-row admin-passport-row--${passport.status}`}
-                        tabIndex={0}
-                        role="button"
-                        onClick={() => onOpen(passport.id)}
-                        onKeyDown={e => {
-                            // Only the row's own keys; space on the tick box
-                            // ticks it.
-                            if (e.target !== e.currentTarget) return;
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                onOpen(passport.id);
-                            }
-                        }}
-                    >
-                        <td
-                            className="admin-passport-cell-tick"
-                            // The tick cell swallows the open, except on a
-                            // claimed row, which has no box.
-                            onClick={e => {
-                                if (passport.status !== 'claimed') e.stopPropagation();
+                {rows.map(passport => {
+                    const elsewhere = claimedElsewhere(
+                        passport, passport.ownerUid ? owners?.get(passport.ownerUid)?.email : undefined);
+                    return (
+                        <tr
+                            key={passport.id}
+                            className={`admin-data-table-row--clickable admin-passport-row admin-passport-row--${passport.status}`}
+                            tabIndex={0}
+                            role="button"
+                            onClick={() => onOpen(passport.id)}
+                            onKeyDown={e => {
+                                // Only the row's own keys; space on the tick box
+                                // ticks it.
+                                if (e.target !== e.currentTarget) return;
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    onOpen(passport.id);
+                                }
                             }}
                         >
-                            <input
-                                type="checkbox"
-                                // Claimed since being ticked: shown unticked,
-                                // as it has left the selection.
-                                checked={passport.status !== 'claimed' && selectedSet.has(passport.id)}
-                                onChange={() => onToggleOne(passport.id)}
-                                disabled={passport.status === 'claimed'}
-                                title={passport.status === 'claimed'
-                                    ? (isEnglish
-                                        ? 'Claimed passports aren’t part of bulk actions — open this one to delete it'
-                                        : '已激活的通行证不参与批量操作 — 如需删除请打开该通行证')
-                                    : undefined}
-                                aria-label={passport.status === 'claimed'
-                                    ? (isEnglish
-                                        ? `Passport ${passport.id} is claimed and can’t be selected`
-                                        : `通行证 ${passport.id} 已激活，无法选择`)
-                                    : (isEnglish
-                                        ? `Select passport ${passport.id}`
-                                        : `选择通行证 ${passport.id}`)}
-                            />
-                        </td>
-                        <td className="admin-passport-cell-code">{passport.id}</td>
-                        <td className="admin-passport-cell-status">
+                            <td
+                                className="admin-passport-cell-tick"
+                                // The tick cell swallows the open, except on a
+                                // claimed row, which has no box.
+                                onClick={e => {
+                                    if (passport.status !== 'claimed') e.stopPropagation();
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    // Claimed since being ticked: shown unticked,
+                                    // as it has left the selection.
+                                    checked={passport.status !== 'claimed' && selectedSet.has(passport.id)}
+                                    onChange={() => onToggleOne(passport.id)}
+                                    disabled={passport.status === 'claimed'}
+                                    title={passport.status === 'claimed'
+                                        ? (isEnglish
+                                            ? 'Claimed passports aren’t part of bulk actions — open this one to delete it'
+                                            : '已激活的通行证不参与批量操作 — 如需删除请打开该通行证')
+                                        : undefined}
+                                    aria-label={passport.status === 'claimed'
+                                        ? (isEnglish
+                                            ? `Passport ${passport.id} is claimed and can’t be selected`
+                                            : `通行证 ${passport.id} 已激活，无法选择`)
+                                        : (isEnglish
+                                            ? `Select passport ${passport.id}`
+                                            : `选择通行证 ${passport.id}`)}
+                                />
+                            </td>
+                            <td className="admin-passport-cell-code">{passport.id}</td>
+                            <td className="admin-passport-cell-status">
                                 <span className={`admin-passport-status admin-passport-status--${passport.status}`}>
                                     <span className="admin-passport-status-dot" aria-hidden="true"/>
                                     {passportStatusLabel(passport.status, isEnglish)}
                                 </span>
-                        </td>
-                        {/* Flagged when empty, so the stacked layout drops the
+                            </td>
+                            {/* Flagged when empty, so the stacked layout drops the
                             line. */}
-                        <td className={`admin-passport-cell-holder${
-                            passport.status === 'claimed' && passport.ownerUid
-                                ? '' : ' admin-passport-cell-holder--none'}`}>
-                            <Holder
-                                passport={passport}
-                                owners={owners}
-                                ownersFailed={ownersFailed}
-                                isEnglish={isEnglish}
-                            />
-                        </td>
-                        {optional.sentTo && (
-                            <td className={`admin-passport-cell-sent${
-                                passport.sentTo ? '' : ' admin-passport-cell-sent--none'}`}>
-                                {passport.sentTo ? (
-                                    <>
-                                        <StackLabel>{isEnglish ? 'Sent to ' : '发送至 '}</StackLabel>
-                                        <span className="admin-passport-cell-sent-email" title={passport.sentTo}>
+                            <td className={`admin-passport-cell-holder${
+                                passport.status === 'claimed' && passport.ownerUid
+                                    ? '' : ' admin-passport-cell-holder--none'}`}>
+                                <Holder
+                                    passport={passport}
+                                    owners={owners}
+                                    ownersFailed={ownersFailed}
+                                    isEnglish={isEnglish}
+                                />
+                            </td>
+                            {optional.sentTo && (
+                                <td className={`admin-passport-cell-sent${
+                                    passport.sentTo ? '' : ' admin-passport-cell-sent--none'}`}>
+                                    {passport.sentTo ? (
+                                        <>
+                                            <StackLabel>{isEnglish ? 'Sent to ' : '发送至 '}</StackLabel>
+                                            <span className="admin-passport-cell-sent-email" title={passport.sentTo}>
                                             {passport.sentTo}
                                         </span>
-                                        {passport.emailScheduled && (
-                                            <span className="admin-passport-cell-by">
+                                            {passport.emailScheduled && (
+                                                <span className="admin-passport-cell-by">
                                                 {isEnglish ? 'Queued' : '排队中'}
                                             </span>
-                                        )}
-                                    </>
-                                ) : <span className="admin-passport-cell-blank">—</span>}
-                            </td>
-                        )}
-                        {optional.note && (
-                            <td
-                                className={`admin-passport-cell-note${
-                                    passport.note ? '' : ' admin-passport-cell-note--none'}`}
-                                title={passport.note || undefined}
-                            >
-                                {passport.note ? (
-                                    <>
-                                        <StackLabel>{isEnglish ? 'Note: ' : '备注：'}</StackLabel>
-                                        {passport.note}
-                                    </>
-                                ) : <span className="admin-passport-cell-blank">—</span>}
-                            </td>
-                        )}
-                        <td
-                            className="admin-passport-cell-date"
-                            title={passportDateTime(passport.createdAt, isEnglish, '—')}
-                        >
-                            {shortDate(passport.createdAt, isEnglish)}
-                            {passport.createdByName && (
-                                <span className="admin-passport-cell-by">{passport.createdByName}</span>
+                                            )}
+                                            {elsewhere !== null && (
+                                                <span
+                                                    className="admin-passport-mismatch-tag"
+                                                    title={isEnglish
+                                                        ? `Activated on ${elsewhere || 'an account without an email address'}`
+                                                        : `激活账号：${elsewhere || '无邮箱地址的账号'}`}
+                                                >
+                                                {isEnglish ? 'Email mismatch' : '邮箱不符'}
+                                            </span>
+                                            )}
+                                        </>
+                                    ) : <span className="admin-passport-cell-blank">—</span>}
+                                </td>
                             )}
-                        </td>
-                    </tr>
-                ))}
+                            {optional.note && (
+                                <td
+                                    className={`admin-passport-cell-note${
+                                        passport.note ? '' : ' admin-passport-cell-note--none'}`}
+                                    title={passport.note || undefined}
+                                >
+                                    {passport.note ? (
+                                        <>
+                                            <StackLabel>{isEnglish ? 'Note: ' : '备注：'}</StackLabel>
+                                            {passport.note}
+                                        </>
+                                    ) : <span className="admin-passport-cell-blank">—</span>}
+                                </td>
+                            )}
+                            <td
+                                className="admin-passport-cell-date"
+                                title={passportDateTime(passport.createdAt, isEnglish, '—')}
+                            >
+                                {shortDate(passport.createdAt, isEnglish)}
+                                {passport.createdByName && (
+                                    <span className="admin-passport-cell-by">{passport.createdByName}</span>
+                                )}
+                            </td>
+                        </tr>
+                    );
+                })}
                 </tbody>
             </table>
         </div>

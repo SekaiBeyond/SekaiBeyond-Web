@@ -164,7 +164,12 @@ type RedeemResult =
     coverImageUrl: string;
 };
 
-export const callRedeemCode = (data: {code: string}) =>
+/**
+ * `confirmEmailMismatch` activates an emailed passport on an account with
+ * another address, refused once as "email-mismatch" with the masked address it
+ * went to and the account's.
+ */
+export const callRedeemCode = (data: {code: string; confirmEmailMismatch?: boolean}) =>
     httpsCallable<typeof data, RedeemResult>(getFunctions(), 'redeemCode')(data);
 
 export const callGenerateBadgeActivationCode = (data: {

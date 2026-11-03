@@ -29,6 +29,12 @@ interface EventInfo {
 
 type ClaimedBadge = Pick<BadgeDef, 'name' | 'nameCn' | 'description' | 'descriptionCn' | 'imageUrl'>;
 
+/** An emailed passport's address, masked, and the signed-in account's. */
+interface EmailMismatch {
+    sentTo: string;
+    accountEmail: string;
+}
+
 interface PassportGrant {
     passportId: string;
     name: string;
@@ -45,11 +51,14 @@ export const RedeemModal = () => {
     const [show, setShow] = useState(false);
     const [input, setInput] = useState('');
     const [state, setState] = useState<
-        'idle' | 'claiming' | 'badge-success' | 'staff-success' | 'passport-success' | 'error'
+        'idle' | 'claiming' | 'email-mismatch' | 'badge-success' | 'staff-success' | 'passport-success' | 'error'
     >('idle');
     const [badge, setBadge] = useState<ClaimedBadge | null>(null);
     const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
     const [passport, setPassport] = useState<PassportGrant | null>(null);
+    const [mismatch, setMismatch] = useState<EmailMismatch | null>(null);
+    // Ticked to say they've checked the account, which lets them go ahead.
+    const [mismatchChecked, setMismatchChecked] = useState(false);
     const [error, setError] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
@@ -65,6 +74,8 @@ export const RedeemModal = () => {
         setBadge(null);
         setEventInfo(null);
         setPassport(null);
+        setMismatch(null);
+        setMismatchChecked(false);
         setError('');
         submittingRef.current = false;
         setTimeout(() => inputRef.current?.focus(), 50);
@@ -110,6 +121,15 @@ export const RedeemModal = () => {
             setError(isEnglish ? 'Invalid code length.' : '兑换码长度无效。');
             return;
         }
+        await redeem(trimmed, false);
+    };
+
+    /**
+     * `confirmEmailMismatch` once they've been shown an emailed passport's
+     * address and gone ahead: a passport stays on the account that activates
+     * it, so the first try asks.
+     */
+    const redeem = async (code: string, confirmEmailMismatch: boolean) => {
         if (!user || !profile) return;
         if (submittingRef.current) return;
 
@@ -120,7 +140,7 @@ export const RedeemModal = () => {
         // One call for any kind of code; guessing here would spend a rate-limit
         // slot per guess.
         try {
-            const {data} = await callRedeemCode({code: trimmed});
+            const {data} = await callRedeemCode({code, ...(confirmEmailMismatch ? {confirmEmailMismatch} : {})});
 
             if (data.kind === 'passport-claim') {
                 setPassport({
@@ -152,8 +172,19 @@ export const RedeemModal = () => {
             refreshProfile().catch(() => {
             });
         } catch (err) {
+            const errCode = functionsErrorCode(err);
+            if (errCode === 'email-mismatch') {
+                const details = functionsErrorDetails<Partial<EmailMismatch>>(err);
+                setMismatch({
+                    sentTo: details?.sentTo ?? '',
+                    accountEmail: details?.accountEmail ?? '',
+                });
+                setMismatchChecked(false);
+                setState('email-mismatch');
+                return;
+            }
             setState('error');
-            switch (functionsErrorCode(err)) {
+            switch (errCode) {
                 case 'rate-limited':
                     setError(isEnglish ? 'Too many attempts. Please wait a moment.' : '尝试次数过多，请稍后再试。');
                     break;
@@ -195,6 +226,10 @@ export const RedeemModal = () => {
     };
 
     if (!show) return null;
+
+    // The server's reading of the account, which is what it compared.
+    const accountLabel = mismatch?.accountEmail
+        || (isEnglish ? 'an account without an email address' : '一个没有邮箱地址的账号');
 
     const memberUntil = passport
         ? formatSiteTime(new Date(passport.membershipExpiresAt), isEnglish, {
@@ -246,6 +281,56 @@ export const RedeemModal = () => {
                         <div className="spinner spinner-centered"/>
                         <p>{isEnglish ? 'Redeeming...' : '兑换中...'}</p>
                     </div>
+                )}
+
+                {state === 'email-mismatch' && mismatch && (
+                    <>
+                        <h2 className="redeem-heading">
+                            {isEnglish ? 'Check Your Account' : '请确认账号'}
+                        </h2>
+                        <p className="redeem-subtitle redeem-mismatch-lead">
+                            {isEnglish ? (
+                                <>This passport was emailed to <strong>{mismatch.sentTo}</strong>, but you’re
+                                    signed in as <strong>{accountLabel}</strong>.</>
+                            ) : (
+                                <>此通行证发送至 <strong>{mismatch.sentTo}</strong>，但您当前登录的账号是{' '}
+                                    <strong>{accountLabel}</strong>。</>
+                            )}
+                        </p>
+                        <p className="redeem-mismatch-warning">
+                            {isEnglish
+                                ? 'Once activated, a passport stays on that account for good. It can’t be moved to another account later.'
+                                : '通行证一经激活即永久归属于该账号，之后无法转移到其他账号。'}
+                        </p>
+                        <p className="redeem-mismatch-hint">
+                            {isEnglish
+                                ? 'If it’s a gift, or this is the account you want it on, go ahead. To put it on the account it was emailed to instead, sign out, sign in with that Google account and redeem the key again.'
+                                : '如果这是别人赠送的，或您确实想激活到此账号，请继续。如需激活到收件邮箱对应的账号，请退出登录，用该 Google 账号登录后重新兑换。'}
+                        </p>
+                        <label className="redeem-mismatch-check">
+                            <input
+                                type="checkbox"
+                                checked={mismatchChecked}
+                                onChange={e => setMismatchChecked(e.target.checked)}
+                            />
+                            <span>
+                                {isEnglish
+                                    ? <>I’ve checked, and want it on <strong>{accountLabel}</strong></>
+                                    : <>我已确认，激活到 <strong>{accountLabel}</strong></>}
+                            </span>
+                        </label>
+                        <button
+                            className="admin-btn admin-btn--cta redeem-done-btn"
+                            onClick={() => void redeem(input.trim(), true)}
+                            disabled={!mismatchChecked}
+                            type="button"
+                        >
+                            {isEnglish ? 'Activate on This Account' : '激活到此账号'}
+                        </button>
+                        <button className="admin-btn admin-btn--dashed redeem-submit-btn" onClick={close} type="button">
+                            {isEnglish ? 'Cancel' : '取消'}
+                        </button>
+                    </>
                 )}
 
                 {state === 'badge-success' && (

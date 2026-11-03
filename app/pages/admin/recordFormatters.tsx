@@ -532,11 +532,16 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>generated {r.passportCount ?? 0} passports from the {r.passportYear ?? ''} design
                     “{r.passportDesignName ?? ''}”</>
                 : <>用 {r.passportYear ?? ''} 年设计「{r.passportDesignName ?? ''}」生成了 {r.passportCount ?? 0} 本通行证</>;
-        case 'passport-claim':
+        case 'passport-claim': {
+            // Activated on an account with another address, after the warning.
+            const elsewhere = r.passportSentTo ? (isEnglish
+                ? <>, though it was emailed to {r.passportSentTo}</>
+                : <>，但其发送地址为 {r.passportSentTo}</>) : null;
             return isEnglish
                 ? <>activated passport {r.passportId ?? ''} (+{r.extendDays ?? 0} days,
-                    now {fmtExpiry(r.newExpiresAt)})</>
-                : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
+                    now {fmtExpiry(r.newExpiresAt)}){elsewhere}</>
+                : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）{elsewhere}</>;
+        }
         case 'passport-delete': {
             // A single deletion names its passport and any holder; a bulk one
             // counts.

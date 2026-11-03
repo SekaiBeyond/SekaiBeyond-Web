@@ -155,6 +155,8 @@ export interface ActivityRecord {
     passportDesignName?: string;
     /** How many passports a generate, delete or key export covered. */
     passportCount?: number;
+    /** A passport-claim on an account with another address: where it was emailed. */
+    passportSentTo?: string;
     platformLabel?: string;
     /** Comma-separated con page sections touched by a con-content-update. */
     conSection?: string;

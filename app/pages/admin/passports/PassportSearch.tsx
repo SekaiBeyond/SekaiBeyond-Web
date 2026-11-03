@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
+    claimedElsewhere,
     fetchPassport,
     fetchPassportsByOwner,
     fetchPassportsSentTo,
@@ -32,8 +33,16 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
     const [busy, setBusy] = useState(false);
     const [results, setResults] = useState<{passport: Passport; detail: string}[] | null>(null);
 
-    const sentDetail = (passport: Passport): string => !passport.sentTo ? ''
-        : isEnglish ? `emailed to ${passport.sentTo}` : `发送至 ${passport.sentTo}`;
+    // With where it was activated when that's another address, as far as the
+    // passport itself says (see claimedElsewhere).
+    const sentDetail = (passport: Passport): string => {
+        if (!passport.sentTo) return '';
+        const sent = isEnglish ? `emailed to ${passport.sentTo}` : `发送至 ${passport.sentTo}`;
+        const elsewhere = claimedElsewhere(passport, undefined);
+        if (elsewhere === null) return sent;
+        const shown = elsewhere || (isEnglish ? 'an account without an email address' : '无邮箱地址的账号');
+        return isEnglish ? `${sent} · ⚠ activated on ${shown}` : `${sent} · ⚠ 激活账号为 ${shown}`;
+    };
 
     const run = async () => {
         const query = term.trim();
@@ -51,7 +60,9 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
             const perOwner = await Promise.all(owners.map(owner => fetchPassportsByOwner(owner.uid)));
             const found = owners.flatMap((owner, i) => perOwner[i].map(passport => ({
                 passport,
-                detail: `${owner.displayName} (${owner.email})`,
+                detail: `${owner.displayName} (${owner.email})${
+                    claimedElsewhere(passport, owner.email) === null ? ''
+                        : isEnglish ? ` · ⚠ emailed to ${passport.sentTo}` : ` · ⚠ 发送至 ${passport.sentTo}`}`,
             })));
             // An emailed passport its recipient claimed is already listed under
             // them.

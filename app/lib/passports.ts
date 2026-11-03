@@ -36,6 +36,11 @@ export interface Passport {
     /** Waiting in the overflow queue for the daily cap to reopen. */
     emailScheduled: boolean;
     /**
+     * The activating account's address, kept since the redeem warning; null
+     * unclaimed or activated before. Compared with `sentTo` by claimedElsewhere.
+     */
+    claimedEmail: string | null;
+    /**
      * Staff's note, such as why it was made; blank without one. Kept in
      * passportNotes, which only staff can read, so it's blank wherever the
      * holder reads their own passports.
@@ -114,6 +119,7 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
         sentTo: typeof data.sentTo === 'string' ? data.sentTo : '',
         emailSentAt: toDate(data.emailSentAt),
         emailScheduled: data.emailScheduled === true,
+        claimedEmail: typeof data.claimedEmail === 'string' ? data.claimedEmail : null,
         note: '',
     };
 };
@@ -171,6 +177,20 @@ export const passportDateTime = (date: Date | null, isEnglish: boolean, blank: s
 /** The URL encoded on the sticker, and the only address a passport ever has. */
 export const passportScanUrl = (id: string, origin: string): string =>
     `${origin}/p/${encodeURIComponent(id)}`;
+
+/**
+ * For an emailed passport activated on an account with another address, that
+ * address ("" for an account without one); null when it matches, when it isn't
+ * emailed or activated, or until it's known. One activated before addresses
+ * were kept goes by its holder's address now, `holderEmail`, undefined while
+ * that loads.
+ */
+export function claimedElsewhere(passport: Passport, holderEmail: string | undefined): string | null {
+    if (passport.status !== 'claimed' || !passport.sentTo) return null;
+    const email = passport.claimedEmail ?? holderEmail;
+    if (email === undefined) return null;
+    return email.toLowerCase() === passport.sentTo.toLowerCase() ? null : email;
+}
 
 /**
  * Every passport from one design, with its note, newest first, for the admin

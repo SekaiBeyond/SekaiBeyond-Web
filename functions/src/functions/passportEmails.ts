@@ -45,7 +45,9 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
  *
  * The address stays on the passport as `sentTo`, which the admin screens show
  * and search, and use to point out anyone already sent one of the design.
- * Nothing here refuses a repeat: someone who bought two is listed twice.
+ * Nothing here refuses a repeat: someone who bought two is listed twice. An
+ * account with another address is warned before activating one (see
+ * claimPassportWithKey).
  */
 
 const templateRef = () => db.collection("passportEmailTemplate").doc("default");

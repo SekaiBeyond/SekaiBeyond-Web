@@ -555,6 +555,50 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     margin: 12px 0 0;
 }
 
+/* An emailed passport about to go on an account with another address: both
+   addresses, why it matters, and a tick before it can go ahead. */
+.redeem-mismatch-lead {
+    margin-bottom: 14px;
+    overflow-wrap: anywhere;
+}
+
+.redeem-mismatch-warning {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(254, 202, 87, 0.14);
+    border: 1px solid rgba(254, 202, 87, 0.5);
+    color: #8a6400;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+.redeem-mismatch-hint {
+    margin: 0 0 14px;
+    color: var(--color-text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.redeem-mismatch-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+
+.redeem-mismatch-check input {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin: 1px 0 0;
+    accent-color: var(--color-purple);
+}
+
 /* --- Collections ----------------------------------------------------------- */
 
 /* The tickets card and the collections stack here as siblings. */

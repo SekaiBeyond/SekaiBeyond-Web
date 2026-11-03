@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
+import { verifiedEmail } from "../utils/accountEmail";
 import { db } from "../utils/firebase";
 import { type CodeKind, codeKind, issueCode, normalizeCode } from "../utils/codes";
 import { getEventDoc } from "../utils/events";
@@ -112,11 +113,18 @@ function isUnmatchedCode(err: unknown): boolean {
     return details?.code === "invalid" || details?.code === "inactive";
 }
 
-/** Claims the passport whose slip carries `key`. Null when no passport has it. */
-async function redeemPassportKey(uid: string, key: string) {
+/**
+ * Claims the passport whose slip carries `key`. Null when no passport has it.
+ * See claimPassportWithKey for `email`.
+ */
+async function redeemPassportKey(
+    uid: string,
+    key: string,
+    email: {accountEmail: string; confirmEmailMismatch: boolean},
+) {
     const passportId = await findPassportByKey(key);
     if (!passportId) return null;
-    const grant = await claimPassportWithKey(uid, passportId, key);
+    const grant = await claimPassportWithKey(uid, passportId, key, email);
     // Named and pictured on the screen that confirms it, the way a badge is.
     const design = grant.designId
         ? (await db.collection("passportDesigns").doc(grant.designId).get()).data()
@@ -133,7 +141,8 @@ async function redeemPassportKey(uid: string, key: string) {
 
 /**
  * One door for every code a member can type: badge codes, staff codes and
- * passport keys.
+ * passport keys. `confirmEmailMismatch` goes ahead with an emailed passport on
+ * an account with another address, refused once as "email-mismatch".
  *
  * Guessing the kind here costs one rate-limit slot however many collections it
  * takes (requireAuth charges one per call), and a prefixed code needs no guess
@@ -166,7 +175,13 @@ export const redeemCode = onCall({maxInstances: 20}, async (request) => {
 
     const passportKey = normalizeActivationKey(code);
     if (passportKey) {
-        const claimed = await redeemPassportKey(uid, passportKey);
+        const {confirmEmailMismatch} = request.data as {confirmEmailMismatch?: unknown};
+        const claimed = await redeemPassportKey(uid, passportKey, {
+            accountEmail: verifiedEmail(request.auth!.token),
+            confirmEmailMismatch: confirmEmailMismatch === undefined
+                ? false
+                : validateBoolean(confirmEmailMismatch, "confirmEmailMismatch"),
+        });
         if (claimed) return {kind: "passport-claim" as const, ...claimed};
     }
 

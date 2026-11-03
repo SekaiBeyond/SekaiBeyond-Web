@@ -26,6 +26,18 @@ export function verifiedEmail(token: DecodedIdToken): string {
     return token.email && token.email_verified === true ? normalizeEmail(token.email) : "";
 }
 
+/**
+ * An address shown to someone who may not own it, such as whoever holds a
+ * passport key emailed to it: enough for its owner to know it, and no more.
+ * "alice@gmail.com" becomes "al•••@gmail.com".
+ */
+export function maskEmail(email: string): string {
+    const at = email.lastIndexOf("@");
+    if (at < 1) return "•••";
+    const local = email.slice(0, at);
+    return `${local.slice(0, local.length > 3 ? 2 : 1)}•••${email.slice(at)}`;
+}
+
 /** Holders past this are a corrupt list, not stale copies: claiming takes it off the first few. */
 const EMAIL_HOLDERS_MAX = 10;
 

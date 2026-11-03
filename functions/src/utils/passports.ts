@@ -2,6 +2,7 @@ import * as crypto from "crypto";
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
 import { BATCH_LIMIT, PUBLIC_ORIGIN, SEND_CHUNK_SIZE } from "./config";
+import { maskEmail } from "./accountEmail";
 import { db } from "./firebase";
 import { CODE_ALPHABET, generateSecureCode } from "./helpers";
 import { extendedExpiry, startedAtAfter } from "./membership";
@@ -252,6 +253,12 @@ export interface PassportGrant {
  * on top of any membership and binds it for good. Throws an HttpsError
  * otherwise.
  *
+ * An emailed passport activated on an account whose address, `accountEmail`,
+ * isn't the one it was sent to may be a gift or may be the wrong account, and
+ * can't be moved after. So it's refused as "email-mismatch" until the holder
+ * says to go ahead with `confirmEmailMismatch`, and the address is kept on the
+ * passport as `claimedEmail` for the admin screens to compare.
+ *
  * There's no per-passport lockout: a wrong key isn't aimed at any one passport.
  * Guessing is stopped by the key's length, the per-account rate limit and App
  * Check.
@@ -260,6 +267,7 @@ export async function claimPassportWithKey(
     uid: string,
     passportId: string,
     activationCode: string,
+    {accountEmail, confirmEmailMismatch}: {accountEmail: string; confirmEmailMismatch: boolean},
 ): Promise<PassportGrant> {
     const passportRef = db.collection(PASSPORTS).doc(passportId);
     const secretRef = db.collection(SECRETS).doc(passportId);
@@ -303,6 +311,18 @@ export async function claimPassportWithKey(
             throw new HttpsError("permission-denied", "That activation key is not correct.", {code: "bad-key"});
         }
 
+        // Asked only once the key is proven, and masked: the key's holder may
+        // not own the address it went to.
+        const sentTo = typeof passport.sentTo === "string" ? passport.sentTo : "";
+        const emailMismatch = sentTo !== "" && sentTo !== accountEmail;
+        if (emailMismatch && !confirmEmailMismatch) {
+            throw new HttpsError("failed-precondition", "This passport was emailed to a different address.", {
+                code: "email-mismatch",
+                sentTo: maskEmail(sentTo),
+                accountEmail,
+            });
+        }
+
         const userData = userSnap.data()!;
         const daysGranted = typeof passport.termDays === "number" ? passport.termDays : PASSPORT_TERM_DAYS;
         const membershipExpiresAt = extendedExpiry(userData.membershipExpiresAt ?? null, daysGranted);
@@ -312,6 +332,7 @@ export async function claimPassportWithKey(
             status: "claimed",
             ownerUid: uid,
             claimedAt: FieldValue.serverTimestamp(),
+            claimedEmail: accountEmail,
         });
         // Membership only; `group` is never touched (see the top of
         // functions/passports.ts).
@@ -330,6 +351,7 @@ export async function claimPassportWithKey(
             passportYear: passport.year ?? null,
             newExpiresAt: membershipExpiresAt.toDate().toISOString(),
             extendDays: daysGranted,
+            ...(emailMismatch ? {passportSentTo: sentTo} : {}),
         }));
 
         return {

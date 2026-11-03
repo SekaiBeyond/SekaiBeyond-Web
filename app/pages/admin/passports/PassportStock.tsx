@@ -3,6 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { fileStamp } from '~/lib/csv';
 import { callDeletePassports, callExportPassportKeys, errorMessage } from '~/lib/firebase';
 import {
+    claimedElsewhere,
     MAX_PASSPORT_DELETE,
     MAX_PASSPORT_KEY_EXPORT,
     type Passport,
@@ -38,15 +39,19 @@ import {
 /** About a screenful, and few enough rows that a re-sort is instant. */
 const PAGE_SIZE = 50;
 
-type StatusFilter = 'all' | PassportStatus;
-const STATUS_FILTERS: StatusFilter[] = ['all', 'unclaimed', 'claimed'];
+/**
+ * A status, or the emailed passports activated on an account with another
+ * address, whose tab shows only while there are some.
+ */
+type StockFilter = 'all' | PassportStatus | 'mismatch';
+const STATUS_FILTERS: StockFilter[] = ['all', 'unclaimed', 'claimed'];
 
 /**
  * How the table is set: slice, column, direction, page. Held by the tab, since
  * opening a passport unmounts this and would otherwise lose your place.
  */
 export interface StockView {
-    filter: StatusFilter;
+    filter: StockFilter;
     sortKey: SortKey;
     sortDir: SortDir;
     page: number;
@@ -72,8 +77,10 @@ const compareFilled = (left: string, right: string, factor: number): number => {
     return left.localeCompare(right) * factor;
 };
 
-const statusFilterLabel = (filter: StatusFilter, isEnglish: boolean): string =>
-    filter === 'all' ? (isEnglish ? 'All' : '全部') : passportStatusLabel(filter, isEnglish);
+const stockFilterLabel = (filter: StockFilter, isEnglish: boolean): string =>
+    filter === 'all' ? (isEnglish ? 'All' : '全部')
+        : filter === 'mismatch' ? (isEnglish ? 'Email mismatch' : '邮箱不符')
+            : passportStatusLabel(filter, isEnglish);
 
 interface PassportStockProps {
     /** Every passport of the selected design, newest first. */
@@ -119,12 +126,6 @@ export const PassportStock = ({
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
-    const counts = useMemo(() => ({
-        all: passports.length,
-        unclaimed: passports.filter(p => p.status === 'unclaimed').length,
-        claimed: passports.filter(p => p.status === 'claimed').length,
-    }), [passports]);
-
     // Holders for the whole design, not a page, because the Holder column sorts.
     // One read per claimed passport, 30 to a query.
     const ownerUids = useMemo(
@@ -160,6 +161,20 @@ export const PassportStock = ({
 
     const holderName = (passport: Passport): string =>
         (passport.ownerUid && owners?.get(passport.ownerUid)?.displayName) || '';
+    const isElsewhere = (passport: Passport): boolean => claimedElsewhere(
+        passport, passport.ownerUid ? owners?.get(passport.ownerUid)?.email : undefined) !== null;
+
+    // Mismatches settle once the holders load, for those activated before the
+    // activating address was kept.
+    const counts: Record<StockFilter, number> = useMemo(() => ({
+        all: passports.length,
+        unclaimed: passports.filter(p => p.status === 'unclaimed').length,
+        claimed: passports.filter(p => p.status === 'claimed').length,
+        mismatch: passports.filter(isElsewhere).length,
+    }), [passports, owners]);
+    const filters = counts.mismatch > 0 || view.filter === 'mismatch'
+        ? [...STATUS_FILTERS, 'mismatch' as const]
+        : STATUS_FILTERS;
 
     // Over the whole design, so the columns don't come and go between tabs and
     // pages.
@@ -169,8 +184,9 @@ export const PassportStock = ({
     }), [passports]);
 
     const filtered = useMemo(
-        () => passports.filter(p => view.filter === 'all' || p.status === view.filter),
-        [passports, view.filter],
+        () => passports.filter(p => view.filter === 'all'
+            || (view.filter === 'mismatch' ? isElsewhere(p) : p.status === view.filter)),
+        [passports, view.filter, owners],
     );
 
     const sorted = useMemo(() => {
@@ -300,7 +316,7 @@ export const PassportStock = ({
         }
     };
 
-    const setFilter = (filter: StatusFilter) => onViewChange({...view, filter, page: 0});
+    const setFilter = (filter: StockFilter) => onViewChange({...view, filter, page: 0});
     const setPage = (next: number) => onViewChange({...view, page: next});
     const sortBy = (column: Column) => onViewChange({
         ...view,
@@ -320,16 +336,17 @@ export const PassportStock = ({
             <span className="admin-field-label">{isEnglish ? 'Stock' : '库存'}</span>
 
             <div className="admin-passport-tabs" role="tablist">
-                {STATUS_FILTERS.map(filter => (
+                {filters.map(filter => (
                     <button
                         key={filter}
                         role="tab"
                         aria-selected={filter === view.filter}
-                        className={`admin-passport-tab${filter === view.filter ? ' admin-passport-tab--on' : ''}`}
+                        className={`admin-passport-tab${filter === view.filter ? ' admin-passport-tab--on' : ''}${
+                            filter === 'mismatch' ? ' admin-passport-tab--warn' : ''}`}
                         onClick={() => setFilter(filter)}
                         type="button"
                     >
-                        {statusFilterLabel(filter, isEnglish)}
+                        {stockFilterLabel(filter, isEnglish)}
                         <span className="admin-passport-tab-count">{counts[filter]}</span>
                     </button>
                 ))}
