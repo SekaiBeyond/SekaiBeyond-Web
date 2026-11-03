@@ -197,8 +197,8 @@ export const UpcomingEventDetailView = ({
                                 ? `This will move the event from Upcoming to Sekai Beyond Con in Past Events, as the ${event.con.year} edition, keeping its poster.`
                                 : `此操作会将活动从预告移到往期活动的“彼世界动漫游戏展”分组，作为 ${event.con.year} 年度，并保留其海报。`)
                             : (isEnglish
-                                ? 'This will move the event from Upcoming to Past Events. You can optionally add one or more labels (e.g. "Workshop", "Convention").'
-                                : '此操作会将活动从预告移到往期活动。你可以选填一个或多个标签（如"工作坊"、"展会"）。')}
+                                ? 'This will move the event from Upcoming to Past Events. You can optionally add one or more labels (e.g. "Workshop", "Game Night").'
+                                : '此操作会将活动从预告移到往期活动。你可以选填一个或多个标签（如"工坊"、"游戏夜"）。')}
                     </p>
                     {!event.con && (
                         <div className="admin-form-grid">
