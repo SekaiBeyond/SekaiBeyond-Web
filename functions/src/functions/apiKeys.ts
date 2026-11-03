@@ -103,10 +103,6 @@ export const listApiKeys = onCall({maxInstances: 10}, async (request) => {
     const snap = await apiKeysCol().orderBy("createdAt", "desc").get();
     const keys = snap.docs.map(doc => {
         const data = doc.data() as ApiKeyDoc;
-        // One revoked before revoking deleted keys stopped working then, so it
-        // lists as expired from that day, with a Delete button.
-        const endsAt = data.revokedAt && data.revokedAt.toMillis() < data.expiresAt.toMillis()
-            ? data.revokedAt : data.expiresAt;
         return {
             id: doc.id,
             name: data.name ?? "",
@@ -116,7 +112,7 @@ export const listApiKeys = onCall({maxInstances: 10}, async (request) => {
             seller: data.seller ?? "",
             createdByName: data.createdByName ?? "",
             createdAt: isoOrNull(data.createdAt),
-            expiresAt: isoOrNull(endsAt),
+            expiresAt: isoOrNull(data.expiresAt),
             lastUsedAt: isoOrNull(data.lastUsedAt),
         };
     });

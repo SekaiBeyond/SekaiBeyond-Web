@@ -51,11 +51,6 @@ export interface ApiKeyDoc {
     createdAt: Timestamp;
     expiresAt: Timestamp;
     lastUsedAt: Timestamp | null;
-    /**
-     * Only on a key revoked before revoking deleted keys, which no longer
-     * works. Drop once none is left.
-     */
-    revokedAt?: Timestamp;
 }
 
 export const apiKeysCol = () => db.collection("apiKeys");

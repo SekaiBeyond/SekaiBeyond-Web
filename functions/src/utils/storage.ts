@@ -95,7 +95,7 @@ export const STORAGE_HOST = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? "fireb
 export const STORAGE_ORIGIN = `${process.env.FIREBASE_STORAGE_EMULATOR_HOST ? "http" : "https"}://${STORAGE_HOST}`;
 const STORAGE_PATH_RE = new RegExp(`${STORAGE_HOST.replace(/\./g, "\\.")}/v0/b/[^/]+/o/([^?]+)`);
 
-export function extractStoragePath(downloadUrl: string): string | null {
+function extractStoragePath(downloadUrl: string): string | null {
     const match = downloadUrl.match(STORAGE_PATH_RE);
     if (!match) return null;
     return decodeURIComponent(match[1]);

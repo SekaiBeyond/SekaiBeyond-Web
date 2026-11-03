@@ -130,19 +130,16 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
 
     const {result, oldIcon} = await adminTransaction(uid, async (txn, callerSnap) => {
         let prevIcon = "";
-        let wasCon = false;
         if (eventId) {
             const existing = await txn.get(db.collection("pastEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
             prevIcon = existing.data()?.icon ?? "";
-            wasCon = readConInfo(existing.data()?.con) !== null;
         }
-        // A form from before Cons leaves `con` out, which keeps the mark. The
-        // year follows the date, so moving a Con to another year moves it there.
-        const con = (markedCon ?? wasCon) ? conForDay(date) : null;
+        // The year follows the date, so moving a Con to another year moves it there.
+        const con = markedCon ? conForDay(date) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
         await requireNewlyLinkedFilesExist([icon], [prevIcon]);
-        // A Con has no tags, also when a form from before Cons sends some.
+        // A Con has no tags.
         const saved = {...data, con, ...(con ? {tagIds: []} : {})};
         const ref = db.collection("pastEvents").doc(docId);
         if (eventId) {
@@ -246,18 +243,15 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         let prevPoster = "";
         let prevEmailHeaderBg = "";
         let wasPublished = false;
-        let wasCon = false;
         if (eventId) {
             const existing = await txn.get(db.collection("upcomingEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
             prevPoster = existing.data()?.poster ?? "";
             prevEmailHeaderBg = existing.data()?.emailHeaderBg ?? "";
             wasPublished = existing.data()?.published ?? false;
-            wasCon = readConInfo(existing.data()?.con) !== null;
         }
-        // As in savePastEvent: left out keeps the mark, and the year is the
-        // start's, the day archiving gives it.
-        const con = (markedCon ?? wasCon) ? conForDay(siteDay(startAt.toMillis())) : null;
+        // The year is the start's, the day archiving gives it.
+        const con = markedCon ? conForDay(siteDay(startAt.toMillis())) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
         await requireNewlyLinkedFilesExist([poster, emailHeaderBg], [prevPoster, prevEmailHeaderBg]);
 

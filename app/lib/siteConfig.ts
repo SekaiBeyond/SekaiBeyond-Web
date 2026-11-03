@@ -2,21 +2,6 @@ import { doc, getDoc } from 'firebase/firestore';
 import { createValueCache } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
-/**
- * The home page's Con before editions came from events marked as a Con. Read
- * only as the home page's fallback while no published event is one; nothing
- * edits it any more.
- */
-export interface ConEdition {
-    year: number;
-    date: string;
-    location: string;
-    locationCn: string;
-    description: string;
-    descriptionCn: string;
-    image: string;
-}
-
 // Mirrors SOCIAL_LINK_PATTERNS in functions/src/functions/admin.ts.
 export const SOCIAL_LINK_KEYS = ['discord', 'instagram', 'bilibili', 'xiaohongshu', 'linkedin', 'github'] as const;
 export type SocialLinkKey = typeof SOCIAL_LINK_KEYS[number];
@@ -56,7 +41,6 @@ export interface TeamMemberConfig {
 
 interface SiteConfig {
     teamMembers: TeamMemberConfig[];
-    conEdition: ConEdition | null;
     contactEmail: string;
     socialLinks: SocialLinks;
     senderPrefix: string;
@@ -64,7 +48,6 @@ interface SiteConfig {
 
 const DEFAULT_CONFIG: SiteConfig = {
     teamMembers: [],
-    conEdition: null,
     contactEmail: '',
     socialLinks: NO_SOCIAL_LINKS,
     senderPrefix: '',
@@ -76,7 +59,6 @@ const cache = createValueCache<SiteConfig>('site config', async () => {
     const data = snap.data();
     return {
         teamMembers: data?.teamMembers ?? [],
-        conEdition: data?.conEdition ?? null,
         contactEmail: data?.contactEmail ?? '',
         socialLinks: {...NO_SOCIAL_LINKS, ...data?.socialLinks},
         senderPrefix: data?.senderPrefix ?? '',

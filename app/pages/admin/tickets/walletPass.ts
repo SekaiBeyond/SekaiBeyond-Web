@@ -24,13 +24,6 @@ export interface WalletPassSettings {
     notes: WalletPassNote[];
 }
 
-export const DEFAULT_WALLET_PASS_SETTINGS: WalletPassSettings = {
-    enabled: true,
-    color: 'auto',
-    headerText: '',
-    notes: [],
-};
-
 /** settings/walletPass as the server reads it (parseWalletPassSettings). */
 export function parseWalletPassSettings(raw: Record<string, unknown> | undefined): WalletPassSettings {
     const str = (v: unknown) => typeof v === 'string' ? v.trim() : '';

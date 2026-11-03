@@ -5,7 +5,6 @@ import { EventImageModal } from "~/components/EventImageModal";
 import { useConContent } from "~/lib/conContent";
 import { localized } from "~/lib/localized";
 import { usePastEvents } from "~/lib/pastEvents";
-import { type ConEdition, useSiteConfig } from "~/lib/siteConfig";
 import { formatSiteTime, siteDay } from "~/lib/siteTime";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
 import { isValidHttpUrl } from "~/lib/urls";
@@ -15,7 +14,7 @@ type Status = 'upcoming' | 'live' | 'past';
 
 /** One year of the Con, from the event marked as it. */
 interface Edition {
-    /** The event's id; '' for the Site Config fallback. */
+    /** The event's id. */
     id: string;
     year: number;
     status: Status;
@@ -47,26 +46,8 @@ const DAY_FORMAT: Intl.DateTimeFormatOptions = {year: 'numeric', month: 'long', 
 const daysUntil = (day: string) =>
     Math.round((Date.parse(day) - Date.parse(siteDay(new Date()))) / 86_400_000);
 
-/** The edition Site Config held before events carried them, shown while no published event is a Con. */
-const legacyEdition = (edition: ConEdition): Edition => ({
-    id: '',
-    year: edition.year,
-    status: edition.date >= siteDay(new Date()) ? 'upcoming' : 'past',
-    startDay: edition.date,
-    when: isEnglish => formatDay(edition.date, isEnglish),
-    location: edition.location,
-    locationCn: edition.locationCn,
-    venueId: '',
-    description: edition.description,
-    descriptionCn: edition.descriptionCn,
-    image: edition.image,
-    recapLink: '',
-    recapLinkCn: '',
-});
-
 export const SekaiBeyondCon = () => {
     const {isEnglish} = useLanguage();
-    const {config, loading: configLoading} = useSiteConfig();
     const {content: conContent, loading: conLoading} = useConContent();
     const {upcomingEvents, loading: upcomingLoading} = useUpcomingEvents();
     const {pastEvents, loading: pastLoading} = usePastEvents();
@@ -129,11 +110,8 @@ export const SekaiBeyondCon = () => {
         return [...byYear.values()].sort((a, b) => b.year - a.year);
     }, [upcomingEvents, pastEvents]);
 
-    const loading = configLoading || conLoading || upcomingLoading || pastLoading;
-    const shown = loading ? []
-        : editions.length > 0 ? editions
-            : config.conEdition ? [legacyEdition(config.conEdition)]
-                : [];
+    const loading = conLoading || upcomingLoading || pastLoading;
+    const shown = loading ? [] : editions;
     // Oldest first, as the badges hang left to right.
     const chronological = [...shown].reverse();
 
@@ -159,13 +137,13 @@ export const SekaiBeyondCon = () => {
 
     if (!edition) return null;
 
-    // The /con page is about the event it links. Without a link to one of these
-    // (or before editions came from events), it's the Con still to come.
+    // The /con page is about the event it links. Without a link to one of these,
+    // it's the Con still to come.
     const linkedId = conContent.event.upcomingEventId;
-    const linksAnEdition = shown.some(e => e.id && e.id === linkedId);
+    const linksAnEdition = shown.some(e => e.id === linkedId);
     const showConPage = conContent.settings.published && (linksAnEdition
         ? edition.id === linkedId
-        : edition.id === '' || edition.status !== 'past');
+        : edition.status !== 'past');
 
     // Either language's recap stands in for a missing one, as in Past Events.
     const recapHref = isEnglish

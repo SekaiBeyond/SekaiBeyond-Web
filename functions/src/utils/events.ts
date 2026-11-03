@@ -33,14 +33,11 @@ export function conForDay(day: string): ConInfo {
 }
 
 /**
- * Whether a save request marks the event as a Con, or undefined when it left
- * `con` out. A form from before Cons leaves it out, and must not clear a
- * stored one, so an update then keeps the mark and a new event isn't a Con.
- * The year isn't sent: the save takes it from the event's date.
+ * Whether a save request marks the event as a Con. The year isn't sent: the
+ * save takes it from the event's date.
  */
-export function validateConInput(raw: unknown): boolean | undefined {
-    if (raw === undefined) return undefined;
-    if (raw === null || typeof raw === "boolean") return raw === true;
+export function validateConInput(raw: unknown): boolean {
+    if (typeof raw === "boolean") return raw;
     throw new HttpsError("invalid-argument", "Invalid con.");
 }
 
