@@ -114,16 +114,14 @@ export const SekaiBeyondCon = () => {
     }, [upcomingEvents, pastEvents]);
 
     const loading = conLoading || upcomingLoading || pastLoading;
+    // Newest first, as the badges hang left to right.
     const shown = loading ? [] : editions;
-    // Oldest first, as the badges hang left to right.
-    const chronological = [...shown].reverse();
 
     // Opens on the Con that's on or ahead, else the latest year.
     const opening = shown.find(e => e.status === 'live')
         ?? shown.findLast(e => e.status === 'upcoming')
         ?? shown[0];
     const edition = shown.find(e => e.year === selectedYear) ?? opening;
-    const hasTabs = shown.length > 1;
 
     // Keeps the chosen badge in view on a narrow screen, scrolling only the
     // row of years, never the page.
@@ -136,7 +134,7 @@ export const SekaiBeyondCon = () => {
         if (badgeBox.left < yearsBox.left || badgeBox.right > yearsBox.right) {
             years.scrollLeft += badgeBox.left - yearsBox.left - (yearsBox.width - badgeBox.width) / 2;
         }
-    }, [edition?.year, hasTabs]);
+    }, [edition?.year]);
 
     if (!edition) return null;
 
@@ -181,17 +179,17 @@ export const SekaiBeyondCon = () => {
         setDirection(year > edition.year ? 'newer' : 'older');
         setSelectedYear(year);
     };
-    // Left to right: +1 is a year newer. Stops at either end.
+    // Left to right: +1 is a year older. Stops at either end.
     const step = (offset: number) => {
-        const next = chronological[chronological.indexOf(edition) + offset];
+        const next = shown[shown.indexOf(edition) + offset];
         if (next) select(next.year);
         return next;
     };
     const onTabKeyDown = (event: KeyboardEvent) => {
         const target = event.key === 'ArrowRight' ? step(1)
             : event.key === 'ArrowLeft' ? step(-1)
-                : event.key === 'Home' ? chronological[0]
-                    : event.key === 'End' ? chronological[chronological.length - 1]
+                : event.key === 'Home' ? shown[0]
+                    : event.key === 'End' ? shown[shown.length - 1]
                         : undefined;
         if (!target) return;
         event.preventDefault();
@@ -206,7 +204,7 @@ export const SekaiBeyondCon = () => {
     const onTouchEnd = (event: TouchEvent) => {
         const start = touchStart.current;
         touchStart.current = null;
-        if (!start || !hasTabs) return;
+        if (!start) return;
         const touch = event.changedTouches[0];
         const dx = touch.clientX - start.x;
         const dy = touch.clientY - start.y;
@@ -215,8 +213,8 @@ export const SekaiBeyondCon = () => {
 
     return (
         <section id="con" className="section">
-            {/* With years to pick, their badges hang from the subtitle. */}
-            <div className={hasTabs ? "section-header con-header--badges" : "section-header"}>
+            {/* The years' badges hang from the subtitle. */}
+            <div className="section-header con-header--badges">
                 <h2 className="section-title">Sekai Beyond Con</h2>
                 <p className="section-subtitle">
                     {isEnglish
@@ -226,56 +224,55 @@ export const SekaiBeyondCon = () => {
             </div>
 
             <div className="con-editions">
-                {hasTabs && (
-                    // Each year a convention badge strung from the subtitle above;
-                    // the chosen one drops down and swings straight.
-                    <div className="con-years" ref={yearsRef}>
-                        <div className="con-years-track">
-                            <div
-                                className="con-badges"
-                                role="tablist"
-                                aria-label={isEnglish ? "Convention year" : "漫展年份"}
-                                onKeyDown={onTabKeyDown}
-                            >
-                                {chronological.map(e => {
-                                    const selected = e === edition;
-                                    return (
-                                        <button
-                                            key={e.year}
-                                            id={tabId(e.year)}
-                                            type="button"
-                                            role="tab"
-                                            className="con-badge"
-                                            data-status={e.status}
-                                            aria-selected={selected}
-                                            aria-controls="con-edition-panel"
-                                            tabIndex={selected ? 0 : -1}
-                                            onClick={() => select(e.year)}
-                                        >
-                                            <span className="con-badge-string" aria-hidden="true"/>
-                                            <span className="con-badge-clip" aria-hidden="true"/>
-                                            <span className="con-badge-card">
-                                                <span className="con-badge-slot" aria-hidden="true"/>
-                                                <span className="con-badge-art" aria-hidden="true">
-                                                    {e.image ? <img src={e.image} alt=""/> : '🌸'}
-                                                </span>
-                                                <span className="con-badge-year">{e.year}</span>
-                                                {e.status !== 'past' && (
-                                                    <span className="con-badge-sticker">{statusNote(e.status)}</span>
-                                                )}
+                {/* Each year a convention badge strung from the subtitle above;
+                    the chosen one drops down and swings straight. */}
+                <div className="con-years" ref={yearsRef}>
+                    <div className="con-years-track">
+                        <div
+                            className="con-badges"
+                            role="tablist"
+                            aria-label={isEnglish ? "Convention year" : "漫展年份"}
+                            onKeyDown={onTabKeyDown}
+                        >
+                            {shown.map(e => {
+                                const selected = e === edition;
+                                return (
+                                    <button
+                                        key={e.year}
+                                        id={tabId(e.year)}
+                                        type="button"
+                                        role="tab"
+                                        className="con-badge"
+                                        data-status={e.status}
+                                        aria-selected={selected}
+                                        aria-controls="con-edition-panel"
+                                        tabIndex={selected ? 0 : -1}
+                                        onClick={() => select(e.year)}
+                                    >
+                                        <span className="con-badge-string" aria-hidden="true"/>
+                                        <span className="con-badge-clip" aria-hidden="true"/>
+                                        <span className="con-badge-card">
+                                            <span className="con-badge-slot" aria-hidden="true"/>
+                                            <span className="con-badge-art" aria-hidden="true">
+                                                {e.image ? <img src={e.image} alt=""/> : '🌸'}
                                             </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                                            <span className="con-badge-year">{e.year}</span>
+                                            {e.status !== 'past' && (
+                                                <span className="con-badge-sticker">{statusNote(e.status)}</span>
+                                            )}
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
-                )}
+                </div>
 
                 <div
                     id="con-edition-panel"
                     className="convention-banner con-edition-panel"
-                    {...(hasTabs ? {role: 'tabpanel', 'aria-labelledby': tabId(edition.year)} : {})}
+                    role="tabpanel"
+                    aria-labelledby={tabId(edition.year)}
                     onTouchStart={onTouchStart}
                     onTouchEnd={onTouchEnd}
                 >

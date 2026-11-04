@@ -446,14 +446,14 @@
     gap: 24px;
 }
 
-/* With years to pick, the header sits right on top of them, so the badges'
-   strings run up to the subtitle. */
+/* The header sits right on top of the years, so the badges' strings run up to
+   the subtitle. */
 .section-header.con-header--badges {
     margin-bottom: 0;
 }
 
-/* The Con's years as convention badges strung from the subtitle, oldest to
-   newest. The chosen badge drops lower and hangs straight; the rest tilt on
+/* The Con's years as convention badges strung from the subtitle, newest to
+   oldest. The chosen badge drops lower and hangs straight; the rest tilt on
    their clips. Selection is styled off aria-selected so the look and the
    announced state can't drift. */
 .con-years {
@@ -644,11 +644,11 @@
 }
 
 .con-edition-enter--newer {
-    animation-name: con-edition-from-right;
+    animation-name: con-edition-from-left;
 }
 
 .con-edition-enter--older {
-    animation-name: con-edition-from-left;
+    animation-name: con-edition-from-right;
 }
 
 @keyframes con-edition-fade {
