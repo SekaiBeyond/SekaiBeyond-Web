@@ -8,7 +8,9 @@ import { useConContent } from "~/lib/conContent";
 
 export const Footer = () => {
     const {isEnglish} = useLanguage();
-    const {hasActive, activeEvents} = useUpcomingEvents();
+    const {hasActive, activeEvents, loading: upcomingLoading} = useUpcomingEvents();
+    // Shown while loading, as there usually is something, so the links don't shift.
+    const upcomingHidden = !upcomingLoading && !hasActive;
     const singleUpcoming = activeEvents.length === 1;
     const {config} = useSiteConfig();
     const conPublished = useConContent().content.settings.published;
@@ -27,7 +29,7 @@ export const Footer = () => {
             <div className="footer-links">
                 {FOOTER_LINKS.map((link: NavLink) => {
                     const href = hrefFor(link);
-                    if (!href || (link.id === 'upcoming' && !hasActive)) return null;
+                    if (!href || (link.id === 'upcoming' && upcomingHidden)) return null;
                     return (
                         <Fragment key={link.id}>
                             {href.startsWith("#") ? (

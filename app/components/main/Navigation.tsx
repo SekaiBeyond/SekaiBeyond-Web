@@ -12,10 +12,12 @@ import { useUpcomingEvents } from "~/lib/upcomingEvents";
 
 export const Navigation = () => {
     const {isEnglish} = useLanguage();
-    const {hasActive, activeEvents} = useUpcomingEvents();
+    const {hasActive, activeEvents, loading: upcomingLoading} = useUpcomingEvents();
     const {content: conContent} = useConContent();
     const conPublished = conContent.settings.published;
     const {config, loading: configLoading} = useSiteConfig();
+    // Shown while loading, as there usually is something, so the links don't shift.
+    const upcomingHidden = !upcomingLoading && !hasActive;
     const followHidden = !configLoading && !hasFollowLinks(config.socialLinks);
     const [mobileOpen, setMobileOpen] = useState(false);
     const singleUpcoming = activeEvents.length === 1;
@@ -34,7 +36,7 @@ export const Navigation = () => {
                 </a>
                 <ul className={`nav-links${mobileOpen ? ' active' : ''}`}>
                     {NAVIGATION_LINKS.map((link: NavLink) => {
-                        if ((link.id === 'upcoming' && !hasActive) || (link.id === 'contact' && followHidden)) return null;
+                        if ((link.id === 'upcoming' && upcomingHidden) || (link.id === 'contact' && followHidden)) return null;
                         const href = resolveNavHref(link, conPublished);
                         const label = navLinkLabel(link, isEnglish, singleUpcoming);
                         return (

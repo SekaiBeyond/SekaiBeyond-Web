@@ -24,7 +24,10 @@ const yearsSince = (from: Date) => {
 export const Hero = () => {
     const {isEnglish} = useLanguage();
     const bubbleStyles = useMemo(generateBubbleStyles, []);
-    const {activeEvents, hasActive} = useUpcomingEvents();
+    const {activeEvents, hasActive, loading: upcomingLoading} = useUpcomingEvents();
+    // Points to what's coming while loading, as there usually is something, so
+    // the button doesn't switch once it loads.
+    const showUpcoming = upcomingLoading || hasActive;
 
     const scrollTo = (e: MouseEvent, id: string) => {
         e.preventDefault();
@@ -59,7 +62,7 @@ export const Hero = () => {
                         <span>{isEnglish ? "Become a Member" : "成为会员"}</span>
                         <span>🌸</span>
                     </a>
-                    {hasActive ? (
+                    {showUpcoming ? (
                         <a href="#upcoming" className="btn btn-secondary" onClick={(e) => scrollTo(e, "upcoming")}>
                             <span>{isEnglish ? (activeEvents.length === 1 ? "See Upcoming Event" : "See Upcoming Events") : "查看活动预告"}</span>
                             <span>✨</span>
