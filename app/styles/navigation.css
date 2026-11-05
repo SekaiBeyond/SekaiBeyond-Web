@@ -116,10 +116,13 @@
     box-shadow: 0 0 12px rgba(255, 107, 157, 0.4);
 }
 
+/* Centred under the avatar; LoginButton sets the shift that keeps it on screen */
 .user-dropdown {
+    --user-dropdown-gap: 10px;
     position: absolute;
-    top: 100%;
-    right: 0;
+    top: calc(100% + var(--user-dropdown-gap));
+    left: 50%;
+    margin-left: var(--user-dropdown-shift, 0px);
     min-width: 220px;
     background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(20px);
@@ -130,22 +133,33 @@
     z-index: 1001;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(-6px);
-    transition: all 0.15s ease;
+    transform: translate(-50%, -6px);
+    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+}
+
+/* Spans the gap above the dropdown so moving the cursor from the avatar down
+   to the menu doesn't leave the wrapper and close it on hover */
+.user-dropdown::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    height: var(--user-dropdown-gap);
 }
 
 @media (hover: hover) {
     .user-dropdown-wrapper:hover .user-dropdown {
         opacity: 1;
         visibility: visible;
-        transform: translateY(0);
+        transform: translate(-50%, 0);
     }
 }
 
 .user-dropdown-wrapper.active .user-dropdown {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0);
+    transform: translate(-50%, 0);
 }
 
 .user-dropdown-header {
@@ -247,11 +261,6 @@
 
     .nav-actions {
         gap: 8px;
-    }
-
-    .language-switcher {
-        padding: 4px 8px;
-        min-width: 0;
     }
 
     .login-btn {

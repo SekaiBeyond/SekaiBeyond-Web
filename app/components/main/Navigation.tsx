@@ -56,8 +56,8 @@ export const Navigation = () => {
                     })}
                 </ul>
                 <div className="nav-actions">
-                    <LanguageSwitcher/>
                     <LoginButton/>
+                    <LanguageSwitcher/>
                     <button
                         type="button"
                         className="nav-toggle"

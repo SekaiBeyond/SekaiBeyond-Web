@@ -232,18 +232,8 @@
     }
 
     .language-switcher {
-        padding: 6px 10px;
-        min-width: 44px;
+        width: 44px;
         height: 44px; /* Better touch target */
-        justify-content: center;
-    }
-
-    .language-switcher .language-text {
-        display: none;
-    }
-
-    .language-flag {
-        font-size: 18px;
     }
 
     .show-more-btn {

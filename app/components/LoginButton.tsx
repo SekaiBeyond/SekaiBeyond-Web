@@ -1,14 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { openRedeemModal } from '~/components/RedeemModal';
+
+/** The least space kept between the dropdown and the right edge of the screen. */
+const DROPDOWN_EDGE_GAP = 12;
 
 export const LoginButton = () => {
     const {user, profile, authReady, cachedPhotoURL, signIn, signOut} = useAuth();
     const {isEnglish} = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // The dropdown is centred under the avatar, but shifted left as far as it
+    // needs to be so it doesn't run off the right edge of the screen.
+    useLayoutEffect(() => {
+        if (!isOpen) return;
+        const place = () => {
+            const wrapper = dropdownRef.current;
+            const menu = menuRef.current;
+            if (!wrapper || !menu) return;
+            const {left, width} = wrapper.getBoundingClientRect();
+            const overflow = left + width / 2 + menu.offsetWidth / 2
+                - (document.documentElement.clientWidth - DROPDOWN_EDGE_GAP);
+            menu.style.setProperty('--user-dropdown-shift', `${Math.min(0, -overflow)}px`);
+        };
+        place();
+        window.addEventListener('resize', place);
+        return () => window.removeEventListener('resize', place);
+    }, [isOpen]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -52,7 +74,7 @@ export const LoginButton = () => {
                     referrerPolicy="no-referrer"
                     onClick={() => setIsOpen(!isOpen)}
                 />
-                <div className="user-dropdown">
+                <div className="user-dropdown" ref={menuRef}>
                     <div className="user-dropdown-header">
                         <span className="user-dropdown-name">{profile?.displayName ?? user.displayName}</span>
                         <span className="user-dropdown-email">{user.email}</span>
