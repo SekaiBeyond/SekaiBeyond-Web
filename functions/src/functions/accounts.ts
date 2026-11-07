@@ -1,11 +1,12 @@
 import { type CallableOptions, type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
     addressTakenMail,
     codeMail,
     emailChangedMail,
+    emailChangeUndoneMail,
     emailSetByStaffMail,
     googleChangedMail,
     type MailLanguage,
@@ -18,13 +19,14 @@ import { creditScannedTickets, emailIndexRef, FORMER_EMAILS_MAX, nextEmailChange
 import { consumeRateLimit, requireAdmin, requireAuth, requireCanManage, requireStaff } from "../utils/auth";
 import { credentialsRef, type GoogleBinding, googleBindingOf, googleIndexRef, PASSWORD_PEPPER } from "../utils/credentials";
 import { type CodePurpose, consumeEmailCode, dropEmailCode, issueEmailCode } from "../utils/emailCodes";
+import { EMAIL_UNDO_DAYS, emailUndoRef, emailUndoUrl, isEmailUndoToken, newEmailUndoToken } from "../utils/emailUndo";
 import { db } from "../utils/firebase";
 import { type GoogleIdentity, verifyGoogleToken } from "../utils/google";
 import { hashPassword, readPasswordAttempt, validateNewPassword, verifyPassword } from "../utils/passwords";
 import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, type ResendEnvelope } from "../utils/resendClient";
 import { callerAddressKey } from "../utils/scans";
-import { sessionIdOf, sessionsRef } from "../utils/sessions";
+import { sessionIdOf, sessionRef, sessionsRef } from "../utils/sessions";
 import { sanitizeDisplayText, validateDocId, validateEmail } from "../utils/validation";
 
 /**
@@ -50,6 +52,7 @@ const HOUR_MS = 60 * MINUTE_MS;
 // Per network, so loose enough for a venue's Wi-Fi all signing up at once.
 const CODES_PER_HOUR_PER_NETWORK = 30;
 const SIGN_INS_PER_MINUTE_PER_NETWORK = 60;
+const UNDOS_PER_HOUR_PER_NETWORK = 30;
 
 // Password tries on one address, by anyone and whether or not it has an account,
 // so being stopped says nothing about it. Enough for someone working out which
@@ -75,6 +78,9 @@ const emailTaken = () =>
 
 const googleTaken = () =>
     new HttpsError("already-exists", "That Google account is bound to another account.", {code: "google-taken"});
+
+const badUndoLink = () =>
+    new HttpsError("not-found", "This link doesn't work.", {code: "bad-undo-link"});
 
 /** When the account in `user` may next change its address, or null if it may now. */
 function emailChangeLockedUntil(user: FirebaseFirestore.DocumentData | undefined): Date | null {
@@ -103,6 +109,23 @@ function readDisplayName(value: unknown): string {
     const name = sanitizeDisplayText(typeof value === "string" ? value : "").slice(0, 50);
     if (!name) throw new HttpsError("invalid-argument", "A name is required.", {code: "no-name"});
     return name;
+}
+
+/**
+ * The caller, for a call that changes how an account signs in. Signing a device
+ * out marks its row in the device list, so a token that never registered a row
+ * has nothing to mark, and would outlive a password reset or an undo for up to
+ * an hour. requireAuth lets those through, as a device registers once it has
+ * loaded; here the row has to be there. Any real device's is by the time it can
+ * open Settings.
+ */
+async function requireRegisteredSession(request: CallableRequest): Promise<string> {
+    const uid = await requireAuth(request, "account");
+    const sessionId = sessionIdOf(request.auth!.token);
+    if (!sessionId || !(await sessionRef(uid, sessionId).get()).exists) {
+        throw new HttpsError("unauthenticated", "This device isn't signed in properly.", {code: "session-ended"});
+    }
+    return uid;
 }
 
 /** Throws unless `code` is the live one. Goes last in a call, as it uses the code up. */
@@ -150,7 +173,7 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
             await sleep(SEND_TIME_MS + Math.random() * SEND_TIME_JITTER_MS);
         }
     } else if (input.purpose === "email-change") {
-        const uid = await requireAuth(request, "account");
+        const uid = await requireRegisteredSession(request);
         const email = validateEmail(input.email, "email");
         const user = (await db.collection("users").doc(uid).get()).data();
         requireEmailChangeAllowed(user);
@@ -471,7 +494,7 @@ export const bindGoogleWithPassword = onCall(ACCOUNT_CALL, async (request) => {
 
 /** For a signed-in account, from Settings. */
 export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireAuth(request, "account");
+    const uid = await requireRegisteredSession(request);
     const input = (request.data ?? {}) as {idToken?: unknown; language?: unknown};
     const google = await verifyGoogleToken(input.idToken);
     await bindGoogleTo(uid, google, readMailLanguage(input.language));
@@ -479,12 +502,21 @@ export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
 });
 
 /**
+ * Takes Google off the Firebase Auth record an older account has, since Firebase's
+ * own Google sign-in would otherwise work until it's turned off.
+ */
+async function unlinkFirebaseGoogle(uid: string): Promise<void> {
+    await getAuth().updateUser(uid, {providersToUnlink: ["google.com"]}).catch((err: unknown) => {
+        if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
+    });
+}
+
+/**
  * Takes the Google account off the caller's account, which needs a password to
- * still be signed in to. Also off the Firebase Auth record an older account has,
- * since Firebase's own Google sign-in would otherwise work until it's turned off.
+ * still be signed in to.
  */
 export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireAuth(request, "account");
+    const uid = await requireRegisteredSession(request);
     const language = readMailLanguage((request.data as {language?: unknown} | null)?.language);
 
     const unbound = await db.runTransaction(async (txn) => {
@@ -512,9 +544,7 @@ export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
         return {email: (user.get("email") as string | undefined) ?? "", googleEmail: google.email};
     });
 
-    await getAuth().updateUser(uid, {providersToUnlink: ["google.com"]}).catch((err: unknown) => {
-        if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
-    });
+    await unlinkFirebaseGoogle(uid);
     if (unbound?.email) {
         await sendNotice(await googleChangedMail(unbound.email, unbound.googleEmail, false, language));
     }
@@ -545,7 +575,7 @@ export const getSignInMethods = onCall({maxInstances: 20}, async (request) => {
 
 /** Changes a password from Settings. The code stands in for the old password, which an account may not have. */
 export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireAuth(request, "account");
+    const uid = await requireRegisteredSession(request);
     const input = (request.data ?? {}) as {code?: unknown; password?: unknown; language?: unknown};
     const code = readCode(input.code);
     const password = validateNewPassword(input.password);
@@ -560,15 +590,16 @@ export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
 /**
  * Moves an account to `email`, whose owner has been proven or vouched for by now.
  * The old address joins the account's former list, and leaves the index for
- * anyone else to take. `by` is who's acting, and an owner's own change starts the
- * month until the next: `enforceLimit` is off when staff step in.
+ * anyone else to take. `by` is who's acting. An `ownChange` is held to the month
+ * between changes, starts the next one, and can be undone from the old address
+ * (undoEmailChange); staff stepping in does none of that.
  */
 async function moveEmail(
     uid: string,
     email: string,
     by: {uid: string; name: string},
-    enforceLimit: boolean,
-): Promise<string> {
+    ownChange: boolean,
+): Promise<{oldEmail: string; undoToken: string | null}> {
     const userRef = db.collection("users").doc(uid);
 
     return db.runTransaction(async (txn) => {
@@ -579,7 +610,7 @@ async function moveEmail(
         ]);
         if (!user.exists) throw new HttpsError("not-found", "User not found.");
         if (held.exists) throw emailTaken();
-        if (enforceLimit) requireEmailChangeAllowed(user.data());
+        if (ownChange) requireEmailChangeAllowed(user.data());
 
         const oldEmail: string = user.get("email") ?? "";
         const oldIndex = oldEmail ? await txn.get(emailIndexRef(oldEmail)) : null;
@@ -594,7 +625,7 @@ async function moveEmail(
         txn.update(userRef, {
             email,
             formerEmails: [oldEmail, ...former].filter(a => a && a !== email).slice(0, FORMER_EMAILS_MAX),
-            ...(enforceLimit ? {emailChangedAt: FieldValue.serverTimestamp()} : {}),
+            ...(ownChange ? {emailChangedAt: FieldValue.serverTimestamp()} : {}),
         });
         txn.set(recordRef(), recordDoc("account-email-change", {
             performedBy: by.uid,
@@ -604,13 +635,30 @@ async function moveEmail(
             targetEmail: email,
             oldEmail,
         }));
-        return oldEmail;
+
+        const undoToken = ownChange && oldEmail ? newEmailUndoToken() : null;
+        if (undoToken) {
+            txn.set(emailUndoRef(undoToken), {
+                uid,
+                oldEmail,
+                newEmail: email,
+                expiresAt: Timestamp.fromMillis(Date.now() + EMAIL_UNDO_DAYS * 24 * HOUR_MS),
+            });
+        }
+        return {oldEmail, undoToken};
     });
 }
 
 /** The heads-up to the old address, and the attendance the new one was scanned into. */
-async function afterEmailMoved(uid: string, oldEmail: string, email: string, language: MailLanguage): Promise<void> {
-    if (oldEmail) await sendNotice(await emailChangedMail(oldEmail, email, language));
+async function afterEmailMoved(
+    uid: string,
+    oldEmail: string,
+    email: string,
+    language: MailLanguage,
+    undoToken: string | null = null,
+): Promise<void> {
+    const undoUrl = undoToken ? emailUndoUrl(undoToken) : undefined;
+    if (oldEmail) await sendNotice(await emailChangedMail(oldEmail, email, language, undoUrl));
     try {
         await creditScannedTickets(db.collection("users").doc(uid), email);
     } catch (err) {
@@ -620,7 +668,7 @@ async function afterEmailMoved(uid: string, oldEmail: string, email: string, lan
 }
 
 export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireAuth(request, "account");
+    const uid = await requireRegisteredSession(request);
     const input = (request.data ?? {}) as {email?: unknown; code?: unknown; language?: unknown};
     const email = validateEmail(input.email, "email");
     const code = readCode(input.code);
@@ -630,9 +678,86 @@ export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
     await requireEmailCode("email-change", email, code);
 
     const by = {uid, name: user.get("displayName") ?? ""};
-    const oldEmail = await moveEmail(uid, email, by, true);
-    await afterEmailMoved(uid, oldEmail, email, readMailLanguage(input.language));
+    const {oldEmail, undoToken} = await moveEmail(uid, email, by, true);
+    await afterEmailMoved(uid, oldEmail, email, readMailLanguage(input.language), undoToken);
     return {email};
+});
+
+/**
+ * The "This wasn't me" link: puts an account back on the address it moved off,
+ * and shuts every way in that the change could have opened. Someone who got in
+ * could have set a password on their own address, bound their own Google account,
+ * or asked for the account to be deleted, so all of that goes, and the new
+ * password set here is the only way in left. The address it moved to comes off
+ * the former list too, or tickets bought under it would stay on the account.
+ *
+ * The address must still be the one the link moved it to: once staff have stepped
+ * in, or the owner has moved on, this link is out of date. Nothing signs in here:
+ * every device is being signed out, and the one asking signs in fresh with the
+ * new password. The address it moved to is told, in case this link was the wrong
+ * person's: the old mailbox may be why the owner moved.
+ */
+export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
+    const input = (request.data ?? {}) as {token?: unknown; password?: unknown; language?: unknown};
+    await limitNetwork(request, "undo", UNDOS_PER_HOUR_PER_NETWORK, HOUR_MS);
+    if (!isEmailUndoToken(input.token)) throw badUndoLink();
+    const undoRef = emailUndoRef(input.token);
+    const password = validateNewPassword(input.password);
+    const passwordHash = await hashPassword(password);
+
+    const {uid, oldEmail, newEmail} = await db.runTransaction(async (txn) => {
+        const undo = await txn.get(undoRef);
+        const expiresAt: Timestamp | undefined = undo.get("expiresAt");
+        if (!expiresAt || expiresAt.toMillis() <= Date.now()) throw badUndoLink();
+        const uid: string = undo.get("uid");
+        const oldEmail: string = undo.get("oldEmail");
+        const newEmail: string = undo.get("newEmail");
+
+        const [user, credentials, oldHeld, newHeld] = await Promise.all([
+            txn.get(db.collection("users").doc(uid)),
+            txn.get(credentialsRef(uid)),
+            txn.get(emailIndexRef(oldEmail)),
+            txn.get(emailIndexRef(newEmail)),
+        ]);
+        if (!user.exists || user.get("email") !== newEmail) throw badUndoLink();
+        if (oldHeld.exists) throw emailTaken();
+
+        txn.delete(undoRef);
+        if (newHeld.get("uid") === uid) txn.delete(newHeld.ref);
+        txn.set(oldHeld.ref, {uid});
+
+        const former: string[] = user.get("formerEmails") ?? [];
+        txn.update(user.ref, {
+            email: oldEmail,
+            formerEmails: former.filter(a => a !== oldEmail && a !== newEmail),
+            emailChangedAt: FieldValue.delete(),
+            deleteAt: FieldValue.delete(),
+        });
+
+        const google = googleBindingOf(credentials);
+        if (google) txn.delete(googleIndexRef(google.sub));
+        txn.set(credentials.ref, {
+            passwordHash,
+            passwordChangedAt: FieldValue.serverTimestamp(),
+            google: null,
+        }, {merge: true});
+
+        const displayName: string = user.get("displayName") ?? "";
+        txn.set(recordRef(), recordDoc("account-email-undo", {
+            performedBy: uid,
+            performedByName: displayName,
+            targetUid: uid,
+            targetName: displayName,
+            targetEmail: oldEmail,
+            oldEmail: newEmail,
+        }));
+        return {uid, oldEmail, newEmail};
+    });
+
+    await endSessions(uid, null);
+    await unlinkFirebaseGoogle(uid);
+    await sendNotice(await emailChangeUndoneMail(newEmail, readMailLanguage(input.language)));
+    return {email: oldEmail};
 });
 
 /**
@@ -652,7 +777,7 @@ export const adminChangeEmail = onCall(ACCOUNT_CALL, async (request) => {
     if (!target.exists) throw new HttpsError("not-found", "User not found.");
     requireCanManage(caller.get("group"), target.get("group"));
 
-    const oldEmail = await moveEmail(targetUid, email, {uid, name: caller.get("displayName") ?? ""}, false);
+    const {oldEmail} = await moveEmail(targetUid, email, {uid, name: caller.get("displayName") ?? ""}, false);
     await sendNotice(await emailSetByStaffMail(email, language));
     await afterEmailMoved(targetUid, oldEmail, email, language);
     return {email};

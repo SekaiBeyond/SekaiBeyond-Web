@@ -189,6 +189,10 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             if (self) return isEnglish ? <>changed their email: {change}</> : <>更改了邮箱：{change}</>;
             return isEnglish ? <>changed {target}'s email: {change}</> : <>更改了 {target} 的邮箱：{change}</>;
         }
+        case 'account-email-undo':
+            return isEnglish
+                ? <>undid an email change from the link sent to their old address: {r.oldEmail} → {r.targetEmail}</>
+                : <>通过发送至原邮箱的链接撤销了邮箱更改：{r.oldEmail} → {r.targetEmail}</>;
         case 'account-google-bind':
             return isEnglish ? <>bound a Google account</> : <>绑定了 Google 账号</>;
         case 'account-google-unbind':

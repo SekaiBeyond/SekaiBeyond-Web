@@ -110,6 +110,7 @@ export type RecordType =
     | "account-google-bind"
     | "account-google-unbind"
     | "account-email-change"
+    | "account-email-undo"
     | "policy-update"
     | "config-update"
     | "con-content-update"

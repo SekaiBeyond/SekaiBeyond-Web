@@ -177,6 +177,10 @@ export const callChangePassword = (data: {code: string; password: string; langua
 export const callChangeEmail = (data: {email: string; code: string; language: Language}) =>
     httpsCallable<typeof data, {email: string}>(getFunctions(), 'changeEmail')(data);
 
+/** The "This wasn't me" link. Signs nobody in: the new password does that, once it's set. */
+export const callUndoEmailChange = (data: {token: string; password: string; language: Language}) =>
+    httpsCallable<typeof data, {email: string}>(getFunctions(), 'undoEmailChange')(data);
+
 export const callAdminChangeEmail = (data: {targetUid: string; email: string; language: Language}) =>
     httpsCallable<typeof data, {email: string}>(getFunctions(), 'adminChangeEmail')(data);
 

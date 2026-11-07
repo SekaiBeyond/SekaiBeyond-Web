@@ -127,6 +127,11 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
+        // "This wasn't me" links, stored hashed. Server-only.
+        match /emailUndos/{undoId} {
+            allow read, write: if false;
+        }
+
         // How many scans one client has already added to one QR code in the
         // current window, so a looped public scan endpoint can't run a counter up
         // forever. Server-only, and the ids are salted hashes — there is nothing

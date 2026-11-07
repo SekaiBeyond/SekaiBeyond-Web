@@ -7,6 +7,8 @@ export default [
     route("admin", "routes/admin.tsx"),
     route("claim", "routes/claim.tsx"),
     route("policy", "routes/policy.tsx"),
+    // Where the "This wasn't me" link in an email-changed notice lands.
+    route("undo-email", "routes/undoEmail.tsx"),
     // Short URL printed on physical passport stickers for easy manual entry.
     route("p/:passportId", "routes/passport.tsx"),
     route("qr", "routes/qr.tsx"),

@@ -2,6 +2,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { PUBLIC_ORIGIN, RESEND_DAILY_CAP } from "./config";
 import { maskEmail } from "./accountEmail";
 import { CODE_TTL_MINUTES, type CodePurpose } from "./emailCodes";
+import { EMAIL_UNDO_DAYS } from "./emailUndo";
 import { escapeHtml } from "./emailTemplate";
 import { db } from "./firebase";
 import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "./quota";
@@ -136,19 +137,54 @@ async function contactLine(language: MailLanguage): Promise<string> {
     return contact ? `If this wasn't you, contact ${contact} right away.` : "If this wasn't you, contact us right away.";
 }
 
-/** To the address an account has just left, which is how someone whose session was stolen finds out. */
-export async function emailChangedMail(to: string, newEmail: string, language: MailLanguage): Promise<ResendEnvelope> {
+/**
+ * To the address an account has just left, which is how someone whose session
+ * was stolen finds out. `undoUrl` is their way back without staff, on a change
+ * the account's owner made; a change staff made has none.
+ */
+export async function emailChangedMail(
+    to: string,
+    newEmail: string,
+    language: MailLanguage,
+    undoUrl?: string,
+): Promise<ResendEnvelope> {
     const masked = escapeHtml(maskEmail(newEmail));
     const contact = await contactLine(language);
+    const link = undoUrl ? escapeHtml(undoUrl) : "";
     return language === "zh" ? {
         to,
         subject: "您的 Sekai Beyond 账号邮箱已更改",
-        html: page("账号邮箱已更改", [`您的账号邮箱已更改为 ${masked}，此地址将不再用于登录。`, contact]),
+        html: page("账号邮箱已更改", [
+            `您的账号邮箱已更改为 ${masked}，此地址将不再用于登录。`,
+            ...(link ? [`不是您本人的操作？<a href="${link}">撤销此更改</a>。链接在 ${EMAIL_UNDO_DAYS} 天内有效，会恢复此邮箱、退出所有设备并移除已绑定的 Google 账号。`] : []),
+            contact,
+        ]),
     } : {
         to,
         subject: "Your Sekai Beyond email has changed",
         html: page("Your email has changed", [
             `Your account's email is now ${masked}, and this address no longer signs in to it.`,
+            ...(link ? [`Wasn't you? <a href="${link}">Undo this change</a>. The link works for ${EMAIL_UNDO_DAYS} days, and puts your account back on this address, signs out every device and removes any bound Google account.`] : []),
+            contact,
+        ]),
+    };
+}
+
+/** To the address an undone change had moved to, which no longer signs in. */
+export async function emailChangeUndoneMail(to: string, language: MailLanguage): Promise<ResendEnvelope> {
+    const contact = await contactLine(language);
+    return language === "zh" ? {
+        to,
+        subject: "您的 Sekai Beyond 邮箱更改已被撤销",
+        html: page("邮箱更改已撤销", [
+            "一个 Sekai Beyond 账号通过发送至原邮箱的链接撤销了邮箱更改，此地址将不再用于登录。",
+            contact,
+        ]),
+    } : {
+        to,
+        subject: "Your Sekai Beyond email change was undone",
+        html: page("Your email change was undone", [
+            "An account's email change was undone from the link sent to its old address, and this address no longer signs in to it.",
             contact,
         ]),
     };
