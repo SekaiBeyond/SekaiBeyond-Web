@@ -1,20 +1,17 @@
+import { createHash } from "node:crypto";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { db } from "./firebase";
 import { recordDoc, recordRef } from "./records";
 
 /**
- * An account is its uid, not its email: users/{uid}.email is a copy of the
- * Google account's address, which can change, so two accounts may hold the
- * same one, a live account and one its owner's Google account has since moved
- * off. Matching by email (a ticket's buyer to the account checked in) must
- * never pick one of two at random, so:
+ * An account is its uid, and its address is users/{uid}.email: ours, verified
+ * when it was set, and nothing a sign-in provider can change. emailIndex holds
+ * one doc per address in use, so that two accounts can't take the same one.
  *
- * - every sign-in brings the account's copy up to date and takes the address
- *   off any other account still holding it (claimAccountEmail), since Firebase
- *   Auth lets only one account sign in with an address at a time;
- * - a lookup names an account only when exactly one holds the address
- *   (accountByEmail), so a tie left from before credits nobody until one of
- *   the two signs in.
+ * An account keeps the addresses it has moved off in users/{uid}.formerEmails,
+ * since tickets are matched by address: one bought under an old address stays
+ * its holder's. Taking an address off one account's former list is part of
+ * another claiming it, so an address only ever leads to one account.
  *
  * Addresses are stored and matched trimmed and lowercased.
  */
@@ -38,22 +35,44 @@ export function maskEmail(email: string): string {
     return `${local.slice(0, local.length > 3 ? 2 : 1)}•••${email.slice(at)}`;
 }
 
-/** Holders past this are a corrupt list, not stale copies: claiming takes it off the first few. */
-const EMAIL_HOLDERS_MAX = 10;
+/** Old addresses an account remembers, the oldest going first. Well within a Firestore `in` query's 30. */
+export const FORMER_EMAILS_MAX = 10;
+
+/** The doc that says who holds `email`, named by a hash since an address can hold a "/". */
+export function emailIndexRef(email: string): FirebaseFirestore.DocumentReference {
+    return db.collection("emailIndex").doc(createHash("sha256").update(normalizeEmail(email)).digest("hex"));
+}
+
+/** Every address tickets may be matched to an account by, its own first. */
+export function accountEmails(user: FirebaseFirestore.DocumentData | undefined): string[] {
+    const former: unknown = user?.formerEmails;
+    return [user?.email, ...(Array.isArray(former) ? former : [])]
+        .filter((email): email is string => typeof email === "string" && email !== "");
+}
 
 /**
- * The one account holding `email`, or null when none does or more than one
- * does. Reads inside `txn` when given one, so a credit locks what it read.
+ * The account `email` leads to, its current holder before a former one, or null
+ * when none does or more than one does. Reads inside `txn` when given one, so a
+ * credit locks what it read.
  */
 export async function accountByEmail(
     email: string,
     txn?: FirebaseFirestore.Transaction,
 ): Promise<FirebaseFirestore.QueryDocumentSnapshot | null> {
     if (!email) return null;
-    const query = db.collection("users").where("email", "==", normalizeEmail(email)).limit(2);
-    const snap = txn ? await txn.get(query) : await query.get();
-    return snap.size === 1 ? snap.docs[0] : null;
+    const normalized = normalizeEmail(email);
+    const users = db.collection("users");
+    const read = (query: FirebaseFirestore.Query) => txn ? txn.get(query) : query.get();
+
+    const current = await read(users.where("email", "==", normalized).limit(2));
+    if (current.size > 0) return current.size === 1 ? current.docs[0] : null;
+
+    const former = await read(users.where("formerEmails", "array-contains", normalized).limit(2));
+    return former.size === 1 ? former.docs[0] : null;
 }
+
+/** Holders past this are a corrupt list, not stale copies: claiming takes it off the first few. */
+const EMAIL_HOLDERS_MAX = 10;
 
 /**
  * Makes `email` the address of `uid`'s account alone, in two steps so it fits

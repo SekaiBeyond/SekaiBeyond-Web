@@ -115,10 +115,10 @@ function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
     return out;
 }
 
-function toUserProfile(data: DocumentData, email: string): UserProfile {
+function toUserProfile(data: DocumentData): UserProfile {
     return {
         displayName: data.displayName,
-        email,
+        email: data.email ?? '',
         photoURL: data.photoURL,
         bannerURL: data.bannerURL ?? '',
         joinedAt: toDate(data.joinedAt) ?? new Date(),
@@ -227,7 +227,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                             throw new Error('Profile creation succeeded but document was not found.');
                         }
                     }
-                    const loaded = toUserProfile(data, firebaseUser.email ?? '');
+                    const loaded = toUserProfile(data);
                     setProfile(loaded);
                     cachePhoto(firebaseUser.uid, loaded.photoURL);
                 } else {
@@ -286,7 +286,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         const userRef = doc(getFirebaseDb(), 'users', user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
-            const loaded = toUserProfile(userSnap.data(), user.email ?? '');
+            const loaded = toUserProfile(userSnap.data());
             setProfile(loaded);
             cachePhoto(user.uid, loaded.photoURL);
         }

@@ -799,12 +799,12 @@ export const callGetPublicProfile = (data: {uid: string}) =>
     }>(getFunctions(), 'getPublicProfile')(data);
 
 /**
- * A user's Google account name and photo, for staff+. `signUpName` is the name
- * the profile started as, `name` Google's latest; both cleaned as a stored
- * displayName is, so they compare directly.
+ * The name and photo of the Google account bound to a user, for staff+, or null
+ * without one. `signUpName` is the name it was bound with, `name` Google's
+ * latest; both cleaned as a stored displayName is, so they compare directly.
  */
 export const callGetGoogleProfile = (data: {uid: string}) =>
-    httpsCallable<typeof data, {name: string; signUpName: string; photoURL: string}>(
+    httpsCallable<typeof data, {name: string; signUpName: string; photoURL: string} | null>(
         getFunctions(), 'getGoogleProfile')(data);
 
 // Callables carry JSON, so an uploaded file travels as bare base64.

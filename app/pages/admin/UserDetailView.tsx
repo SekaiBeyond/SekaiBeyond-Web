@@ -440,8 +440,8 @@ export const UserDetailView = ({
 
     const deletePhoto = async () => {
         if (!confirm(isEnglish
-            ? `Remove ${userRecord.displayName}'s profile photo? It will revert to their Google account photo.`
-            : `删除 ${userRecord.displayName} 的头像？将恢复为其 Google 账户的头像。`
+            ? `Remove ${userRecord.displayName}'s profile photo? It goes back to their Google account photo if one is bound.`
+            : `删除 ${userRecord.displayName} 的头像？如已绑定 Google 账号，将恢复为其头像。`
         )) return;
         setPhotoBusy(true);
         try {

@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { getAuth, type UserRecord } from "firebase-admin/auth";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     ADMIN_GROUPS,
@@ -16,6 +16,7 @@ import {
 } from "../utils/auth";
 import { claimAccountEmail, normalizeEmail, verifiedEmail } from "../utils/accountEmail";
 import { deletionExpiresAt } from "../utils/config";
+import { credentialsRef, googleBindingOf } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
@@ -182,36 +183,28 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
 });
 
 /**
- * The name and photo a user's Google account gives, so the admin user page can
- * tell a name or photo set on the site from the Google one the profile started
- * with. Staff+ only, as they can already read the profile it's compared with.
+ * The name and photo of the Google account bound to a user, so the admin user
+ * page can tell a name or photo set on the site from the Google one the profile
+ * started with. Null when none is bound. Staff+ only, as they can already read
+ * the profile it's compared with.
  *
  * Two names, since the profile copied the sign-up one and Google's may have
- * changed since: `signUpName` is the Auth record's, `name` the Google
- * provider's latest. Both come cleaned as createUserProfile cleans them, so
- * they compare with displayName as stored.
+ * changed since: `signUpName` is the one it was bound with, `name` the latest.
+ * Both come cleaned as a stored displayName is, so they compare directly.
  */
 export const getGoogleProfile = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     await requireStaff(uid);
 
     const targetUid = validateDocId((request.data as {uid?: string})?.uid, "uid");
-    let record: UserRecord;
-    try {
-        record = await getAuth().getUser(targetUid);
-    } catch (err: unknown) {
-        if ((err as {code?: string})?.code === "auth/user-not-found") {
-            throw new HttpsError("not-found", "User not found.");
-        }
-        throw err;
-    }
+    const google = googleBindingOf(await credentialsRef(targetUid).get());
+    if (!google) return null;
 
-    const google = record.providerData.find(p => p.providerId === "google.com");
-    const clean = (name: string | undefined) => sanitizeDisplayText(name ?? "").slice(0, 50);
+    const clean = (name: string) => sanitizeDisplayText(name).slice(0, 50);
     return {
-        name: clean(google?.displayName ?? record.displayName),
-        signUpName: clean(record.displayName),
-        photoURL: (google?.photoURL ?? record.photoURL ?? "").slice(0, 500),
+        name: clean(google.name),
+        signUpName: clean(google.signUpName),
+        photoURL: google.photoURL.slice(0, 500),
     };
 });
 
@@ -306,14 +299,10 @@ async function saveProfileImage(path: string, buffer: Buffer, contentType: strin
     return `${await saveUpload(path, buffer, contentType)}&t=${Date.now()}`;
 }
 
-// The photo a user reverts to without an uploaded avatar, from their auth
-// record.
+// The photo a user reverts to without an uploaded avatar: their Google
+// account's, if one is bound.
 async function googlePhotoURL(uid: string): Promise<string> {
-    try {
-        return (await getAuth().getUser(uid)).photoURL ?? "";
-    } catch {
-        return "";
-    }
+    return googleBindingOf(await credentialsRef(uid).get())?.photoURL ?? "";
 }
 
 export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
@@ -395,10 +384,7 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
 
     await getStorage().bucket().file(`avatars/${targetUid}`).delete({ignoreNotFound: true});
 
-    const googlePhoto = isSelf
-        ? (request.auth!.token.picture ?? "")
-        : await googlePhotoURL(targetUid);
-    const photoURL = googlePhoto.slice(0, 500);
+    const photoURL = (await googlePhotoURL(targetUid)).slice(0, 500);
     await db.collection("users").doc(targetUid).update({photoURL});
 
     if (!isSelf) {
