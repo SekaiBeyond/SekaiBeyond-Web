@@ -1,3 +1,4 @@
+import { defineSecret } from "firebase-functions/params";
 import { db } from "./firebase";
 
 /**
@@ -32,4 +33,16 @@ export function googleIndexRef(sub: string): FirebaseFirestore.DocumentReference
 export function googleBindingOf(snap: FirebaseFirestore.DocumentSnapshot): GoogleBinding | null {
     const google: unknown = snap.get("google");
     return google && typeof google === "object" ? google as GoogleBinding : null;
+}
+
+// Mixed into every password hash and email code, and kept out of the database:
+// a copy of Firestore alone can't be used to guess either.
+export const PASSWORD_PEPPER = defineSecret("PASSWORD_PEPPER");
+
+/** The pepper. The emulator has a stand-in, so a fresh checkout needs no secrets. */
+export function accountPepper(): string {
+    if (process.env.FUNCTIONS_EMULATOR === "true") return "emulator-pepper";
+    const pepper = PASSWORD_PEPPER.value();
+    if (!pepper) throw new Error("PASSWORD_PEPPER is not set on this function.");
+    return pepper;
 }
