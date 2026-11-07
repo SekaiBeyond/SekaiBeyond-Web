@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
-import type { DecodedIdToken } from "firebase-admin/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firebase";
-import { recordDoc, recordRef } from "./records";
 import { isApiOrder, isScannedTicket } from "./tickets";
 
 /**
@@ -19,11 +17,6 @@ import { isApiOrder, isScannedTicket } from "./tickets";
  */
 
 export const normalizeEmail = (email: string): string => email.trim().toLowerCase();
-
-/** The token's address, normalized, once Google says it's the holder's; "" otherwise. */
-export function verifiedEmail(token: DecodedIdToken): string {
-    return token.email && token.email_verified === true ? normalizeEmail(token.email) : "";
-}
 
 /**
  * An address shown to someone who may not own it, such as whoever holds a
@@ -71,36 +64,6 @@ export async function accountByEmail(
 
     const former = await read(users.where("formerEmails", "array-contains", normalized).limit(2));
     return former.size === 1 ? former.docs[0] : null;
-}
-
-/** Holders past this are a corrupt list, not stale copies: claiming takes it off the first few. */
-const EMAIL_HOLDERS_MAX = 10;
-
-/**
- * Makes `email` the address of `uid`'s account alone, in two steps so it fits
- * a transaction's reads-then-writes: this reads the other accounts holding it,
- * and the function it returns writes. Each account it's taken off gets a
- * record, as nobody asked for that.
- */
-export async function claimAccountEmail(
-    txn: FirebaseFirestore.Transaction,
-    uid: string,
-    email: string,
-): Promise<(callerName: string) => void> {
-    const snap = await txn.get(db.collection("users").where("email", "==", email).limit(EMAIL_HOLDERS_MAX));
-    const others = snap.docs.filter(doc => doc.id !== uid);
-    return (callerName: string) => {
-        for (const other of others) {
-            txn.update(other.ref, {email: ""});
-            txn.set(recordRef(), recordDoc("account-email-release", {
-                performedBy: uid,
-                performedByName: callerName,
-                targetUid: other.id,
-                targetName: other.data().displayName ?? "",
-                targetEmail: email,
-            }));
-        }
-    };
 }
 
 /**

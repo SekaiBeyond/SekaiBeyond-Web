@@ -73,6 +73,14 @@
     background: #ddd;
 }
 
+/* Holds Google's button, which it draws in an iframe at the width it was given. */
+.auth-google {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+}
+
 .auth-note {
     margin: 0;
     color: #666;

@@ -14,9 +14,9 @@ import {
     requireCanManage,
     requireStaff,
 } from "../utils/auth";
-import { claimAccountEmail, creditScannedTickets, normalizeEmail, verifiedEmail } from "../utils/accountEmail";
+import { emailIndexRef } from "../utils/accountEmail";
 import { deletionExpiresAt } from "../utils/config";
-import { credentialsRef, googleBindingOf } from "../utils/credentials";
+import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
@@ -26,66 +26,6 @@ import { sanitizeDisplayText, validateBoolean, validateDocId, validateInstant } 
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
 import { sessionsRef } from "../utils/sessions";
-
-export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
-    const uid = await requireAuth(request);
-
-    // ID tokens outlive account deletion by up to an hour, so a deleted user's
-    // client could recreate the doc after onUserDeleted ran; only Auth knows
-    // the account is gone.
-    try {
-        await getAuth().getUser(uid);
-    } catch (err: unknown) {
-        if ((err as {code?: string})?.code === "auth/user-not-found") {
-            throw new HttpsError("failed-precondition", "Account has been deleted.");
-        }
-        throw err;
-    }
-
-    const userRef = db.collection("users").doc(uid);
-
-    const rawName = request.auth!.token.name ?? "";
-    const email = normalizeEmail(request.auth!.token.email ?? "");
-    const verified = verifiedEmail(request.auth!.token);
-    const photoURL = request.auth!.token.picture ?? "";
-
-    const displayName = sanitizeDisplayText(typeof rawName === "string" ? rawName : "").slice(0, 50);
-
-    let alreadyExists = false;
-
-    await db.runTransaction(async (txn) => {
-        const snap = await txn.get(userRef);
-        if (snap.exists) {
-            alreadyExists = true;
-            return;
-        }
-        // The address is this account's now, off any other still holding it:
-        // Auth signs in one account per address (see utils/accountEmail.ts).
-        const releaseOthers = verified ? await claimAccountEmail(txn, uid, verified) : null;
-        releaseOthers?.(displayName);
-        txn.set(userRef, {
-            displayName,
-            email,
-            photoURL: photoURL.slice(0, 500),
-            joinedAt: FieldValue.serverTimestamp(),
-            attendedEvents: [],
-            badges: [],
-            group: "user",
-            eventStaffEvents: [],
-        });
-    });
-
-    if (!alreadyExists && verified) {
-        try {
-            await creditScannedTickets(userRef, verified);
-        } catch (err) {
-            // The profile exists either way; a missed credit must not fail sign-up.
-            console.error(`createUserProfile: ticket credit failed for ${uid}`, err);
-        }
-    }
-
-    return {alreadyExists};
-});
 
 export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     const callerUid = await requireAuth(request);
@@ -703,9 +643,9 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
 
     return {cancelled: true};
 });
-// retry: a dropped event would leave the Auth account alive with no user doc,
-// undoing the deletion at next sign-in. Re-runs are safe: every step tolerates
-// what's already gone, and the record has a fixed id.
+// retry: a dropped event would leave a sign-in that still works for an account
+// that's gone. Re-runs are safe: every step tolerates what's already gone, and
+// the record has a fixed id.
 export const onUserDeleted = onDocumentDeleted(
     {document: "users/{uid}", maxInstances: 10, retry: true},
     async (event) => {
@@ -722,11 +662,17 @@ export const onUserDeleted = onDocumentDeleted(
             }
         }
 
-        // The client can recreate the doc between the TTL delete and the Auth
-        // deletion above. Deleting a missing doc fires nothing, so this
-        // re-triggers only for a doc that really came back, and that run's
-        // delete ends the chain. Errors propagate so retry re-delivers.
-        await db.collection("users").doc(uid).delete();
+        // Frees the address and the Google account for use again. One batch, as
+        // the credentials doc is the only thing that names the Google account.
+        const credentials = await credentialsRef(uid).get();
+        const sub = googleBindingOf(credentials)?.sub;
+        const emailRef = data?.email ? emailIndexRef(data.email) : null;
+        const holdsEmail = emailRef ? (await emailRef.get()).get("uid") === uid : false;
+        const release = db.batch();
+        release.delete(credentials.ref);
+        if (sub) release.delete(googleIndexRef(sub));
+        if (emailRef && holdsEmail) release.delete(emailRef);
+        await release.commit();
 
         for (const path of [`avatars/${uid}`, `banners/${uid}`]) {
             try {

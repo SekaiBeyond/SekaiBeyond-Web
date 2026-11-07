@@ -183,6 +183,10 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 : <>以 {r.targetEmail} 登录，该邮箱已从 {target} 的账号中移除（其 Google 账号已不再使用此邮箱）</>;
         case 'account-password-set':
             return isEnglish ? <>set a new password</> : <>设置了新密码</>;
+        case 'account-google-bind':
+            return isEnglish ? <>bound a Google account</> : <>绑定了 Google 账号</>;
+        case 'account-google-unbind':
+            return isEnglish ? <>unbound their Google account</> : <>解绑了 Google 账号</>;
         case 'code-create':
             if (r.eventId) {
                 return isEnglish

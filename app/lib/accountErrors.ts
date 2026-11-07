@@ -9,6 +9,12 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
             return isEnglish ? 'That code isn’t right, or it has expired.' : '验证码不正确或已过期。';
         case 'email-taken':
             return isEnglish ? 'That email already has an account.' : '此邮箱已有账号。';
+        case 'google-taken':
+            return isEnglish ? 'That Google account is bound to another account.' : '此 Google 账号已绑定其他账号。';
+        case 'google-already-bound':
+            return isEnglish ? 'This account already has a Google account bound.' : '此账号已绑定 Google 账号。';
+        case 'bad-google-token':
+            return isEnglish ? 'Google sign-in didn’t work or has expired. Please try again.' : 'Google 登录失败或已过期，请重试。';
         case 'weak-password':
             return isEnglish ? 'Passwords need at least 8 characters.' : '密码至少需要 8 个字符。';
         case 'no-name':

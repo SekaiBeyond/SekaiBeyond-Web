@@ -4,9 +4,7 @@ import {
     type Auth,
     connectAuthEmulator,
     getAuth,
-    GoogleAuthProvider,
     signInWithCustomToken,
-    signInWithPopup,
     signOut as firebaseSignOut,
 } from "firebase/auth";
 import { connectFirestoreEmulator, type Firestore, getFirestore } from "firebase/firestore";
@@ -49,7 +47,7 @@ const firebaseConfig = {
 // Points the site at the local emulators (Auth, Firestore and Functions on their
 // default ports), as npm run dev does through .env.emulator. App Check stays
 // off, and the emulated functions don't enforce it.
-const USE_EMULATORS = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true';
+export const USE_EMULATORS = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true';
 
 // Whether a URL is a file uploaded to Storage, rather than, say, a Google photo.
 // The Storage emulator serves its files from its own port.
@@ -112,9 +110,6 @@ function getFunctions() {
     return functions;
 }
 
-export const callCreateUserProfile = () =>
-    httpsCallable<Record<string, never>, {alreadyExists: boolean}>(getFunctions(), 'createUserProfile')({});
-
 type Language = 'en' | 'zh';
 
 /** Emails a code proving an address. Answers the same whether or not it has an account. */
@@ -129,6 +124,25 @@ export const callSignInWithPassword = (data: {email: string; password: string}) 
 
 export const callResetPassword = (data: {email: string; code: string; password: string; language: Language}) =>
     httpsCallable<typeof data, {token: string}>(getFunctions(), 'resetPassword')(data);
+
+export type GoogleSignIn =
+    | {status: 'signed-in'; token: string}
+    | {status: 'needs-account'; name: string; email: string; emailVerified: boolean; emailTaken: boolean};
+
+/** Signs in with a bound Google account, or says it needs an account made or bound first. */
+export const callSignInWithGoogle = (data: {idToken: string}) =>
+    httpsCallable<typeof data, GoogleSignIn>(getFunctions(), 'signInWithGoogle')(data);
+
+export const callCreateAccountWithGoogle = (data: {
+    idToken: string;
+    displayName: string;
+    email: string;
+    code?: string;
+    password?: string;
+}) => httpsCallable<typeof data, {token: string}>(getFunctions(), 'createAccountWithGoogle')(data);
+
+export const callBindGoogleWithPassword = (data: {idToken: string; email: string; password: string}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'bindGoogleWithPassword')(data);
 
 export const callTouchSession = () =>
     httpsCallable<Record<string, never>, {registered: boolean}>(getFunctions(), 'touchSession')({});
@@ -903,14 +917,6 @@ export const errorSuffix = (err: unknown, isEnglish: boolean): string => {
 /** The error's own message when it has one, else `fallback`. */
 export const errorMessage = (err: unknown, fallback: string): string =>
     err instanceof Error && err.message ? err.message : fallback;
-
-const googleProvider = new GoogleAuthProvider();
-// Always show the account chooser: signOut() doesn't end the browser's Google
-// session, so otherwise the popup silently picks the same account again and
-// switching accounts is impossible.
-googleProvider.setCustomParameters({prompt: 'select_account'});
-
-export const signInWithGoogle = () => signInWithPopup(getFirebaseAuth(), googleProvider);
 
 /** Starts a session with the token one of the account callables answered with. */
 export const signInWithToken = (token: string) => signInWithCustomToken(getFirebaseAuth(), token);

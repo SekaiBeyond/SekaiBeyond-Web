@@ -1,6 +1,9 @@
 import { Timestamp } from "firebase-admin/firestore";
 
 export const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN ?? "https://sekaibeyond.com";
+// The site's OAuth client, which a Google sign-in's token must have been issued
+// for. Public, like the copy the site is built with (VITE_GOOGLE_CLIENT_ID).
+export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
 // Resend's daily cap, a sliding 24-hour window on their side; the used count is
 // read from Resend (fetchProviderUsage) and cached in system/resendQuota.
 export const RESEND_DAILY_CAP = Number(process.env.RESEND_DAILY_CAP) || 100;

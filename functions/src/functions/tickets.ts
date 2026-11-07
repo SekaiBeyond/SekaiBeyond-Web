@@ -928,7 +928,7 @@ interface HeldTicket {
  * published events are searched.
  *
  * A redeemed ticket also backfills attendance, for someone who signed up after
- * being scanned and whose sign-up credit (createUserProfile) failed.
+ * being scanned and whose sign-up credit (createAccount) failed.
  */
 export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);

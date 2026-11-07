@@ -2,7 +2,6 @@ import { createContext, type FC, type ReactNode, useContext, useEffect, useRef, 
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, type DocumentData, getDoc, Timestamp } from 'firebase/firestore';
 import {
-    callCreateUserProfile,
     callDeleteAvatar,
     callDeleteBanner,
     callEndOwnSession,
@@ -219,14 +218,12 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     const userRef = doc(getFirebaseDb(), 'users', firebaseUser.uid);
                     const userSnap = await getDoc(userRef);
 
-                    let data = userSnap.data();
+                    const data = userSnap.data();
                     if (!data) {
-                        await callCreateUserProfile();
-                        const freshSnap = await getDoc(userRef);
-                        data = freshSnap.data();
-                        if (!data) {
-                            throw new Error('Profile creation succeeded but document was not found.');
-                        }
+                        // A login with no account behind it: one that's been
+                        // deleted. Every account exists before its first login.
+                        await firebaseSignOut();
+                        return;
                     }
                     const loaded = toUserProfile(data);
                     setProfile(loaded);
@@ -246,8 +243,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         return () => unsubscribe();
     }, []);
 
-    // Waits for the profile, so a new account's user doc is there for
-    // touchSession to find.
+    // Waits for the profile, as there's no device list for a login with no account.
     const hasProfile = !!profile;
     useEffect(() => {
         if (!user || !hasProfile) {
