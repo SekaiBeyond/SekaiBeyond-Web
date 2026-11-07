@@ -41,6 +41,7 @@ import { ImageCropModal } from './ImageCropModal';
 import { MembershipSection } from './MembershipSection';
 import { PassportPageTag, PassportRow } from './passports/PassportSearch';
 import { UserAvatar } from './UserRow';
+import { UserSignInSection } from './UserSignInSection';
 
 /**
  * A badge or past event the user has or hasn't: a Grant or Revoke button, or for
@@ -713,6 +714,13 @@ export const UserDetailView = ({
             </div>
 
             <MembershipSection
+                user={userRecord}
+                canManage={!readOnly && canManage}
+                onUpdated={onUpdateUser}
+                showToast={showToast}
+            />
+
+            <UserSignInSection
                 user={userRecord}
                 canManage={!readOnly && canManage}
                 onUpdated={onUpdateUser}

@@ -113,7 +113,11 @@ function getFunctions() {
 type Language = 'en' | 'zh';
 
 /** Emails a code proving an address. Answers the same whether or not it has an account. */
-export const callSendEmailCode = (data: {purpose: 'signup' | 'password'; email: string; language: Language}) =>
+export const callSendEmailCode = (data: {
+    purpose: 'signup' | 'password' | 'email-change';
+    email: string;
+    language: Language;
+}) =>
     httpsCallable<typeof data, {sent: boolean}>(getFunctions(), 'sendEmailCode')(data);
 
 export const callSignUpWithEmail = (data: {email: string; code: string; displayName: string; password: string}) =>
@@ -143,6 +147,33 @@ export const callCreateAccountWithGoogle = (data: {
 
 export const callBindGoogleWithPassword = (data: {idToken: string; email: string; password: string}) =>
     httpsCallable<typeof data, {token: string}>(getFunctions(), 'bindGoogleWithPassword')(data);
+
+export const callBindGoogle = (data: {idToken: string}) =>
+    httpsCallable<typeof data, {bound: boolean}>(getFunctions(), 'bindGoogle')(data);
+
+export const callUnbindGoogle = () =>
+    httpsCallable<Record<string, never>, {unbound: boolean}>(getFunctions(), 'unbindGoogle')({});
+
+export interface SignInMethods {
+    hasPassword: boolean;
+    /** The address of the bound Google account, or null with none bound. */
+    googleEmail: string | null;
+    /** ISO time the address may next change, or null if it may now. */
+    emailChangeAllowedAt: string | null;
+}
+
+/** How an account signs in: the caller's own, or anyone's for staff+. */
+export const callGetSignInMethods = (data: {uid?: string} = {}) =>
+    httpsCallable<typeof data, SignInMethods>(getFunctions(), 'getSignInMethods')(data);
+
+export const callChangePassword = (data: {code: string; password: string; language: Language}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'changePassword')(data);
+
+export const callChangeEmail = (data: {email: string; code: string; language: Language}) =>
+    httpsCallable<typeof data, {email: string}>(getFunctions(), 'changeEmail')(data);
+
+export const callAdminChangeEmail = (data: {targetUid: string; email: string; language: Language}) =>
+    httpsCallable<typeof data, {email: string}>(getFunctions(), 'adminChangeEmail')(data);
 
 export const callTouchSession = () =>
     httpsCallable<Record<string, never>, {registered: boolean}>(getFunctions(), 'touchSession')({});

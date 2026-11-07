@@ -154,6 +154,23 @@ export async function emailChangedMail(to: string, newEmail: string, language: M
     };
 }
 
+/** To the address staff have just put an account on, which can sign in to it from now on. */
+export async function emailSetByStaffMail(to: string, language: MailLanguage): Promise<ResendEnvelope> {
+    const contact = await contactLine(language);
+    return language === "zh" ? {
+        to,
+        subject: "此地址已成为您的 Sekai Beyond 账号邮箱",
+        html: page("账号邮箱已设置", ["Sekai Beyond 工作人员已将此地址设为一个账号的邮箱，可用它登录。", contact]),
+    } : {
+        to,
+        subject: "This address now signs in to Sekai Beyond",
+        html: page("Your account email is set", [
+            "Sekai Beyond staff have made this the email of an account, and it can now sign in to it.",
+            contact,
+        ]),
+    };
+}
+
 export async function passwordChangedMail(to: string, language: MailLanguage): Promise<ResendEnvelope> {
     const contact = await contactLine(language);
     return language === "zh" ? {

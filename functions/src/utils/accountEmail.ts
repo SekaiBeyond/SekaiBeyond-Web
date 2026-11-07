@@ -38,6 +38,19 @@ export function emailIndexRef(email: string): FirebaseFirestore.DocumentReferenc
     return db.collection("emailIndex").doc(createHash("sha256").update(normalizeEmail(email)).digest("hex"));
 }
 
+/**
+ * When an address changed at `changedAt` may change again: a calendar month on,
+ * or the last day of a shorter month, so January 31 gives February 28.
+ */
+export function nextEmailChangeAt(changedAt: Date): Date {
+    const year = changedAt.getUTCFullYear();
+    const month = changedAt.getUTCMonth() + 1;
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const next = new Date(changedAt);
+    next.setUTCFullYear(year, month, Math.min(changedAt.getUTCDate(), lastDay));
+    return next;
+}
+
 /** Every address tickets may be matched to an account by, its own first. */
 export function accountEmails(user: FirebaseFirestore.DocumentData | undefined): string[] {
     const former: unknown = user?.formerEmails;

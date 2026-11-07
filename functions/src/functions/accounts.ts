@@ -2,9 +2,19 @@ import { type CallableOptions, type CallableRequest, HttpsError, onCall } from "
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { setTimeout as sleep } from "node:timers/promises";
-import { addressTakenMail, codeMail, type MailLanguage, passwordChangedMail, readMailLanguage, sendAccountMail, sendNotice } from "../utils/accountMail";
-import { creditScannedTickets, emailIndexRef } from "../utils/accountEmail";
-import { consumeRateLimit } from "../utils/auth";
+import {
+    addressTakenMail,
+    codeMail,
+    emailChangedMail,
+    emailSetByStaffMail,
+    type MailLanguage,
+    passwordChangedMail,
+    readMailLanguage,
+    sendAccountMail,
+    sendNotice,
+} from "../utils/accountMail";
+import { creditScannedTickets, emailIndexRef, FORMER_EMAILS_MAX, nextEmailChangeAt } from "../utils/accountEmail";
+import { consumeRateLimit, requireAdmin, requireAuth, requireCanManage, requireStaff } from "../utils/auth";
 import { credentialsRef, type GoogleBinding, googleBindingOf, googleIndexRef, PASSWORD_PEPPER } from "../utils/credentials";
 import { type CodePurpose, consumeEmailCode, dropEmailCode, issueEmailCode } from "../utils/emailCodes";
 import { db } from "../utils/firebase";
@@ -13,8 +23,8 @@ import { hashPassword, readPasswordAttempt, validateNewPassword, verifyPassword 
 import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, type ResendEnvelope } from "../utils/resendClient";
 import { callerAddressKey } from "../utils/scans";
-import { sessionsRef } from "../utils/sessions";
-import { sanitizeDisplayText, validateEmail } from "../utils/validation";
+import { sessionIdOf, sessionsRef } from "../utils/sessions";
+import { sanitizeDisplayText, validateDocId, validateEmail } from "../utils/validation";
 
 /**
  * Our own accounts. Signing in happens here: these check an email and password,
@@ -64,6 +74,24 @@ const emailTaken = () =>
 
 const googleTaken = () =>
     new HttpsError("already-exists", "That Google account is bound to another account.", {code: "google-taken"});
+
+/** When the account in `user` may next change its address, or null if it may now. */
+function emailChangeLockedUntil(user: FirebaseFirestore.DocumentData | undefined): Date | null {
+    const changedAt: Date | undefined = user?.emailChangedAt?.toDate?.();
+    if (!changedAt) return null;
+    const next = nextEmailChangeAt(changedAt);
+    return next.getTime() > Date.now() ? next : null;
+}
+
+function requireEmailChangeAllowed(user: FirebaseFirestore.DocumentData | undefined): void {
+    const lockedUntil = emailChangeLockedUntil(user);
+    if (lockedUntil) {
+        throw new HttpsError("failed-precondition", "Your email can only change once a month.", {
+            code: "email-change-locked",
+            allowedAt: lockedUntil.toISOString(),
+        });
+    }
+}
 
 function readCode(value: unknown): string {
     if (typeof value !== "string" || !/^\d{6}$/.test(value.trim())) throw badCode();
@@ -120,6 +148,16 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
         } else {
             await sleep(SEND_TIME_MS + Math.random() * SEND_TIME_JITTER_MS);
         }
+    } else if (input.purpose === "email-change") {
+        const uid = await requireAuth(request);
+        const email = validateEmail(input.email, "email");
+        const user = (await db.collection("users").doc(uid).get()).data();
+        requireEmailChangeAllowed(user);
+        if (email === user?.email) {
+            throw new HttpsError("invalid-argument", "That's already your email.", {code: "same-email"});
+        }
+        const taken = (await emailIndexRef(email).get()).exists;
+        await mailCode("email-change", email, language, taken ? addressTakenMail(email, language) : undefined);
     } else {
         throw new HttpsError("invalid-argument", "Invalid purpose.");
     }
@@ -417,4 +455,187 @@ export const bindGoogleWithPassword = onCall(ACCOUNT_CALL, async (request) => {
 
     await bindGoogleTo(uid, google);
     return {token: await getAuth().createCustomToken(uid)};
+});
+
+/** For a signed-in account, from Settings. */
+export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
+    const uid = await requireAuth(request);
+    const google = await verifyGoogleToken((request.data as {idToken?: unknown} | null)?.idToken);
+    await bindGoogleTo(uid, google);
+    return {bound: true};
+});
+
+/**
+ * Takes the Google account off the caller's account, which needs a password to
+ * still be signed in to. Also off the Firebase Auth record an older account has,
+ * since Firebase's own Google sign-in would otherwise work until it's turned off.
+ */
+export const unbindGoogle = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    await db.runTransaction(async (txn) => {
+        const [credentials, user] = await Promise.all([
+            txn.get(credentialsRef(uid)),
+            txn.get(db.collection("users").doc(uid)),
+        ]);
+        const google = googleBindingOf(credentials);
+        if (!google) return;
+        if (!credentials.get("passwordHash")) {
+            throw new HttpsError("failed-precondition", "Set a password before unbinding Google.", {
+                code: "needs-password",
+            });
+        }
+
+        txn.update(credentials.ref, {google: null});
+        txn.delete(googleIndexRef(google.sub));
+        const displayName: string = user.get("displayName") ?? "";
+        txn.set(recordRef(), recordDoc("account-google-unbind", {
+            performedBy: uid,
+            performedByName: displayName,
+            targetUid: uid,
+            targetName: displayName,
+        }));
+    });
+
+    await getAuth().updateUser(uid, {providersToUnlink: ["google.com"]}).catch((err: unknown) => {
+        if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
+    });
+    return {unbound: true};
+});
+
+/**
+ * How an account signs in, without anything that signs it in: for its owner's
+ * Settings tab, and for staff on the admin user page.
+ */
+export const getSignInMethods = onCall({maxInstances: 20}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    const raw = (request.data as {uid?: unknown} | null)?.uid;
+    const targetUid = raw === undefined ? uid : validateDocId(raw, "uid");
+    if (targetUid !== uid) await requireStaff(uid);
+
+    const [user, credentials] = await Promise.all([
+        db.collection("users").doc(targetUid).get(),
+        credentialsRef(targetUid).get(),
+    ]);
+    const google = googleBindingOf(credentials);
+    return {
+        hasPassword: !!credentials.get("passwordHash"),
+        googleEmail: google ? google.email : null,
+        emailChangeAllowedAt: emailChangeLockedUntil(user.data())?.toISOString() ?? null,
+    };
+});
+
+/** Changes a password from Settings. The code stands in for the old password, which an account may not have. */
+export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
+    const uid = await requireAuth(request);
+    const input = (request.data ?? {}) as {code?: unknown; password?: unknown; language?: unknown};
+    const code = readCode(input.code);
+    const password = validateNewPassword(input.password);
+    const email: string = (await db.collection("users").doc(uid).get()).get("email") ?? "";
+
+    await requireEmailCode("password", email, code);
+    await setPassword(uid, email, password, sessionIdOf(request.auth!.token), readMailLanguage(input.language));
+    // This device's sign-in was revoked with the rest, so it gets a new one.
+    return {token: await getAuth().createCustomToken(uid)};
+});
+
+/**
+ * Moves an account to `email`, whose owner has been proven or vouched for by now.
+ * The old address joins the account's former list, and leaves the index for
+ * anyone else to take. `by` is who's acting, and an owner's own change starts the
+ * month until the next: `enforceLimit` is off when staff step in.
+ */
+async function moveEmail(
+    uid: string,
+    email: string,
+    by: {uid: string; name: string},
+    enforceLimit: boolean,
+): Promise<string> {
+    const userRef = db.collection("users").doc(uid);
+
+    return db.runTransaction(async (txn) => {
+        const [user, held, formerHolders] = await Promise.all([
+            txn.get(userRef),
+            txn.get(emailIndexRef(email)),
+            txn.get(db.collection("users").where("formerEmails", "array-contains", email)),
+        ]);
+        if (!user.exists) throw new HttpsError("not-found", "User not found.");
+        if (held.exists) throw emailTaken();
+        if (enforceLimit) requireEmailChangeAllowed(user.data());
+
+        const oldEmail: string = user.get("email") ?? "";
+        const oldIndex = oldEmail ? await txn.get(emailIndexRef(oldEmail)) : null;
+
+        if (oldIndex?.get("uid") === uid) txn.delete(oldIndex.ref);
+        txn.set(emailIndexRef(email), {uid});
+        for (const holder of formerHolders.docs) {
+            if (holder.id !== uid) txn.update(holder.ref, {formerEmails: FieldValue.arrayRemove(email)});
+        }
+
+        const former: string[] = user.get("formerEmails") ?? [];
+        txn.update(userRef, {
+            email,
+            formerEmails: [oldEmail, ...former].filter(a => a && a !== email).slice(0, FORMER_EMAILS_MAX),
+            ...(enforceLimit ? {emailChangedAt: FieldValue.serverTimestamp()} : {}),
+        });
+        txn.set(recordRef(), recordDoc("account-email-change", {
+            performedBy: by.uid,
+            performedByName: by.name,
+            targetUid: uid,
+            targetName: user.get("displayName") ?? "",
+            targetEmail: email,
+            oldEmail,
+        }));
+        return oldEmail;
+    });
+}
+
+/** The heads-up to the old address, and the attendance the new one was scanned into. */
+async function afterEmailMoved(uid: string, oldEmail: string, email: string, language: MailLanguage): Promise<void> {
+    if (oldEmail) await sendNotice(await emailChangedMail(oldEmail, email, language));
+    try {
+        await creditScannedTickets(db.collection("users").doc(uid), email);
+    } catch (err) {
+        // The address has moved either way; getMyTickets backfills while the event runs.
+        console.error(`afterEmailMoved: ticket credit failed for ${uid}`, err);
+    }
+}
+
+export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
+    const uid = await requireAuth(request);
+    const input = (request.data ?? {}) as {email?: unknown; code?: unknown; language?: unknown};
+    const email = validateEmail(input.email, "email");
+    const code = readCode(input.code);
+
+    const user = await db.collection("users").doc(uid).get();
+    requireEmailChangeAllowed(user.data());
+    await requireEmailCode("email-change", email, code);
+
+    const by = {uid, name: user.get("displayName") ?? ""};
+    const oldEmail = await moveEmail(uid, email, by, true);
+    await afterEmailMoved(uid, oldEmail, email, readMailLanguage(input.language));
+    return {email};
+});
+
+/**
+ * Staff moving an account to a new address, for someone who has lost their
+ * mailbox and so can't get a code. Core staff can do this to anyone they can
+ * manage, so it's on the Records tab and both addresses are told.
+ */
+export const adminChangeEmail = onCall(ACCOUNT_CALL, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    const input = (request.data ?? {}) as {targetUid?: unknown; email?: unknown; language?: unknown};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const email = validateEmail(input.email, "email");
+    const language = readMailLanguage(input.language);
+
+    const caller = await requireAdmin(uid);
+    const target = await db.collection("users").doc(targetUid).get();
+    if (!target.exists) throw new HttpsError("not-found", "User not found.");
+    requireCanManage(caller.get("group"), target.get("group"));
+
+    const oldEmail = await moveEmail(targetUid, email, {uid, name: caller.get("displayName") ?? ""}, false);
+    await sendNotice(await emailSetByStaffMail(email, language));
+    await afterEmailMoved(targetUid, oldEmail, email, language);
+    return {email};
 });

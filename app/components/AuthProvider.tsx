@@ -5,11 +5,13 @@ import {
     callDeleteAvatar,
     callDeleteBanner,
     callEndOwnSession,
+    callEndSession,
     callUpdateDisplayName,
     callUploadAvatar,
     callUploadBanner,
     getFirebaseAuth,
     getFirebaseDb,
+    signInWithToken,
     signOut as firebaseSignOut
 } from '~/lib/firebase';
 import { toDate } from '~/lib/collectionCache';
@@ -148,6 +150,8 @@ interface AuthContextType {
     /** Opens the sign-in modal. */
     signIn: () => void;
     signOut: () => Promise<void>;
+    /** Moves this device onto the new sign-in a password change answers with. */
+    replaceSession: (token: string) => Promise<void>;
     refreshProfile: () => Promise<void>;
     updateProfile: (updates: {
         displayName?: string;
@@ -276,6 +280,21 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         setProfile(null);
     };
 
+    // The same uid signing in again fires no auth state change, so the new user
+    // is set here, which starts watching the new session. The old row is ended
+    // after: this device is the one that would notice.
+    const replaceSession = async (token: string) => {
+        const oldSessionId = sessionId;
+        stopWatchingSession.current?.();
+        stopWatchingSession.current = null;
+        const credential = await signInWithToken(token);
+        setUser(credential.user);
+        if (oldSessionId) {
+            await callEndSession({sessionId: oldSessionId}).catch(() => {
+            });
+        }
+    };
+
     const refreshProfile = async () => {
         if (!user) return;
         const userRef = doc(getFirebaseDb(), 'users', user.uid);
@@ -330,6 +349,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         sessionId,
         signIn,
         signOut,
+        replaceSession,
         refreshProfile,
         updateProfile,
     };

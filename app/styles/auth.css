@@ -88,3 +88,30 @@
     line-height: 1.5;
     text-align: center;
 }
+
+/* A form opened from a row in the account section of Settings. */
+.settings-row--account {
+    flex-wrap: wrap;
+}
+
+.settings-account-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-basis: 100%;
+    max-width: 360px;
+}
+
+.settings-account-form .redeem-error-text {
+    text-align: left;
+}
+
+.settings-account-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.settings-google-bind {
+    flex-basis: 100%;
+    max-width: 280px;
+}
