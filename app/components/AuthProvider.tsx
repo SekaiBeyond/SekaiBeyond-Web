@@ -2,20 +2,21 @@ import { createContext, type FC, type ReactNode, useContext, useEffect, useRef, 
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, type DocumentData, getDoc, Timestamp } from 'firebase/firestore';
 import {
-    callCreateUserProfile,
     callDeleteAvatar,
     callDeleteBanner,
     callEndOwnSession,
+    callEndSession,
     callUpdateDisplayName,
     callUploadAvatar,
     callUploadBanner,
     getFirebaseAuth,
     getFirebaseDb,
-    signInWithGoogle as firebaseSignIn,
+    signInWithToken,
     signOut as firebaseSignOut
 } from '~/lib/firebase';
 import { toDate } from '~/lib/collectionCache';
 import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
+import { openSignInModal } from '~/lib/signInModal';
 import { currentSessionId, watchOwnSession } from '~/lib/sessions';
 
 // `group` is a role ladder only; membership lives in membershipExpiresAt.
@@ -115,10 +116,10 @@ function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
     return out;
 }
 
-function toUserProfile(data: DocumentData, email: string): UserProfile {
+function toUserProfile(data: DocumentData): UserProfile {
     return {
         displayName: data.displayName,
-        email,
+        email: data.email ?? '',
         photoURL: data.photoURL,
         bannerURL: data.bannerURL ?? '',
         joinedAt: toDate(data.joinedAt) ?? new Date(),
@@ -146,8 +147,11 @@ interface AuthContextType {
     cachedPhotoURL: string;
     /** This device's row in the device list, once known. */
     sessionId: string | null;
-    signIn: () => Promise<void>;
+    /** Opens the sign-in modal. */
+    signIn: () => void;
     signOut: () => Promise<void>;
+    /** Moves this device onto the new sign-in a password change answers with. */
+    replaceSession: (token: string) => Promise<void>;
     refreshProfile: () => Promise<void>;
     updateProfile: (updates: {
         displayName?: string;
@@ -218,16 +222,14 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     const userRef = doc(getFirebaseDb(), 'users', firebaseUser.uid);
                     const userSnap = await getDoc(userRef);
 
-                    let data = userSnap.data();
+                    const data = userSnap.data();
                     if (!data) {
-                        await callCreateUserProfile();
-                        const freshSnap = await getDoc(userRef);
-                        data = freshSnap.data();
-                        if (!data) {
-                            throw new Error('Profile creation succeeded but document was not found.');
-                        }
+                        // A login with no account behind it: one that's been
+                        // deleted. Every account exists before its first login.
+                        await firebaseSignOut();
+                        return;
                     }
-                    const loaded = toUserProfile(data, firebaseUser.email ?? '');
+                    const loaded = toUserProfile(data);
                     setProfile(loaded);
                     cachePhoto(firebaseUser.uid, loaded.photoURL);
                 } else {
@@ -245,8 +247,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         return () => unsubscribe();
     }, []);
 
-    // Waits for the profile, so a new account's user doc is there for
-    // touchSession to find.
+    // Waits for the profile, as there's no device list for a login with no account.
     const hasProfile = !!profile;
     useEffect(() => {
         if (!user || !hasProfile) {
@@ -266,9 +267,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         };
     }, [user, hasProfile]);
 
-    const signIn = async () => {
-        await firebaseSignIn();
-    };
+    const signIn = () => openSignInModal();
 
     const signOut = async () => {
         // Stops watching first, or the removed row would be put back. Signing
@@ -281,12 +280,27 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         setProfile(null);
     };
 
+    // The same uid signing in again fires no auth state change, so the new user
+    // is set here, which starts watching the new session. The old row is ended
+    // after: this device is the one that would notice.
+    const replaceSession = async (token: string) => {
+        const oldSessionId = sessionId;
+        stopWatchingSession.current?.();
+        stopWatchingSession.current = null;
+        const credential = await signInWithToken(token);
+        setUser(credential.user);
+        if (oldSessionId) {
+            await callEndSession({sessionId: oldSessionId}).catch(() => {
+            });
+        }
+    };
+
     const refreshProfile = async () => {
         if (!user) return;
         const userRef = doc(getFirebaseDb(), 'users', user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
-            const loaded = toUserProfile(userSnap.data(), user.email ?? '');
+            const loaded = toUserProfile(userSnap.data());
             setProfile(loaded);
             cachePhoto(user.uid, loaded.photoURL);
         }
@@ -335,6 +349,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         sessionId,
         signIn,
         signOut,
+        replaceSession,
         refreshProfile,
         updateProfile,
     };

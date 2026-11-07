@@ -106,7 +106,11 @@ export type RecordType =
     | "avatar-set"
     | "avatar-remove"
     | "banner-remove"
-    | "account-email-release"
+    | "account-password-set"
+    | "account-google-bind"
+    | "account-google-unbind"
+    | "account-email-change"
+    | "account-email-undo"
     | "policy-update"
     | "config-update"
     | "con-content-update"
@@ -124,6 +128,8 @@ export interface RecordFields {
     targetUid?: string | null;
     targetName?: string;
     targetEmail?: string;
+    /** An email change: the address it moved off. `targetEmail` is the new one. */
+    oldEmail?: string;
     eventId?: string;
     eventTitle?: string;
     badgeId?: string;

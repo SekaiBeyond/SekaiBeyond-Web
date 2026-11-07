@@ -1,0 +1,123 @@
+/* The sign-in modal, and the forms in the account section of Settings. */
+
+.modal-content.auth-modal {
+    box-sizing: border-box;
+    width: 400px;
+    max-width: calc(100% - 32px);
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.auth-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.auth-code-input {
+    text-align: center;
+    letter-spacing: 6px;
+    font-variant-numeric: tabular-nums;
+}
+
+.auth-submit {
+    width: 100%;
+    margin-top: 2px;
+}
+
+.auth-links {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.auth-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-primary);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.auth-link:hover {
+    color: #c77dff;
+    text-decoration: underline;
+}
+
+.auth-link:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+    color: #888;
+    font-size: 13px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #ddd;
+}
+
+/* Holds Google's button, which it draws in an iframe at the width it was given. */
+.auth-google {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+}
+
+.auth-note {
+    margin: 0;
+    color: #666;
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+/* A form opened from a row in the account section of Settings. */
+.settings-row--account {
+    flex-wrap: wrap;
+}
+
+.settings-account-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-basis: 100%;
+    max-width: 360px;
+}
+
+.settings-account-form .redeem-error-text {
+    text-align: left;
+}
+
+.settings-account-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.settings-google-bind {
+    flex-basis: 100%;
+    max-width: 280px;
+}
+
+.settings-row--account .profile-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    transform: none;
+}

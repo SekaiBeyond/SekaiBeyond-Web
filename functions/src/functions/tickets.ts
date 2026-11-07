@@ -31,7 +31,7 @@ import {
     validateOptionalEmail,
     validateStr,
 } from "../utils/validation";
-import { accountByEmail, verifiedEmail } from "../utils/accountEmail";
+import { accountByEmail, accountEmails } from "../utils/accountEmail";
 import { contactEmailFor, EMAIL_HTML_SANITIZE_OPTIONS, readSavedTemplate } from "../utils/emailTemplate";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
 import {
@@ -918,21 +918,24 @@ interface HeldTicket {
  * it went to (see creditedEmail).
  *
  * Attendee docs are keyed by purchase email and closed to everyone but staff, so
- * this is the only way holders reach their tickets. The email comes from the ID
- * token, and only once it is verified, so nobody can read someone else's tickets
- * through a profile field or an unowned sign-up address.
+ * this is the only way holders reach their tickets. They're matched by the
+ * account's addresses, current and former: each was verified when it was set, so
+ * nobody can read someone else's tickets through an address they don't own, and
+ * changing address doesn't lose the tickets bought under the old one.
  *
  * The cut is the event's end, not the scan: a scanned ticket stays visible while
  * the event runs, and once `endAt` passes nothing comes back. Only paid,
  * published events are searched.
  *
  * A redeemed ticket also backfills attendance, for someone who signed up after
- * being scanned and whose sign-up credit (createUserProfile) failed.
+ * being scanned and whose sign-up credit (createAccount) failed.
  */
 export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
-    const email = verifiedEmail(request.auth!.token);
-    if (!email) return {events: []};
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    const emails = accountEmails(userSnap.data());
+    if (emails.length === 0) return {events: []};
 
     // endAt alone stays on the automatic single-field index; there are only a
     // handful of live events to filter in memory.
@@ -945,7 +948,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
 
     const found = await Promise.all(liveEvents.map(async (eventDoc) => {
         const attendeeSnap = await eventDoc.ref.collection("attendees")
-            .where("email", "==", email).get();
+            .where("email", "in", emails).get();
         if (attendeeSnap.empty) return null;
 
         // One doc per HomeTown ticket, or per imported email.
@@ -991,8 +994,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
         .map(e => e.eventId);
     if (scannedInto.length > 0) {
         try {
-            const userRef = db.collection("users").doc(uid);
-            const attended: string[] = (await userRef.get()).data()?.attendedEvents ?? [];
+            const attended: string[] = userSnap.data()?.attendedEvents ?? [];
             const missing = scannedInto.filter(id => !attended.includes(id));
             if (missing.length > 0) {
                 await userRef.update({attendedEvents: FieldValue.arrayUnion(...missing)});

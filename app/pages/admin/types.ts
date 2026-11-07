@@ -111,7 +111,9 @@ export const RECORD_CATEGORIES = {
     account: {
         en: 'Account', zh: '账号',
         types: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
-            'name-set', 'avatar-set', 'avatar-remove', 'banner-remove', 'account-email-release'],
+            'name-set', 'avatar-set', 'avatar-remove', 'banner-remove', 'account-email-release',
+            'account-password-set', 'account-google-bind', 'account-google-unbind', 'account-email-change',
+            'account-email-undo'],
     },
     config: {
         en: 'Config', zh: '配置',
@@ -140,6 +142,7 @@ export interface ActivityRecord {
     targetUid?: string;
     targetName?: string;
     targetEmail?: string;
+    oldEmail?: string;
     eventTitle?: string;
     eventId?: string;
     badgeId?: string;

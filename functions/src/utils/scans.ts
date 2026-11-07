@@ -42,6 +42,21 @@ export function scanClientKey(req: ScanRequestLike | undefined): string {
         .slice(0, 32);
 }
 
+/**
+ * A rate limit's key for the network a callable came from, hashed like
+ * scanClientKey. Stricter than it, for limits that protect accounts: the user
+ * agent is the caller's to choose, so it's left out, and the address is the last
+ * X-Forwarded-For entry, which Google's front end added. Anything before that
+ * the caller wrote themselves. Callables are reached directly, never through
+ * Hosting, so there's no other proxy after it.
+ */
+export function callerAddressKey(req: ScanRequestLike | undefined): string {
+    const forwarded = req?.headers?.["x-forwarded-for"];
+    const chain = Array.isArray(forwarded) ? forwarded.join(",") : (forwarded ?? "");
+    const address = chain.split(",").pop()?.trim() || req?.ip || "unknown";
+    return createHash("sha256").update(`${CLIENT_SALT}|${narrowAddress(address)}`).digest("hex").slice(0, 32);
+}
+
 /** An IPv6 client typically owns a whole /64, so the suffix is theirs to vary. */
 function narrowAddress(address: string): string {
     if (!address.includes(":")) return address;

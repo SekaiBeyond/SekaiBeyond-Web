@@ -304,8 +304,8 @@ export const RedeemModal = () => {
                         </p>
                         <p className="redeem-mismatch-hint">
                             {isEnglish
-                                ? 'If it’s a gift, or this is the account you want it on, go ahead. To put it on the account it was emailed to instead, sign out, sign in with that Google account and redeem the key again.'
-                                : '如果这是别人赠送的，或您确实想激活到此账号，请继续。如需激活到收件邮箱对应的账号，请退出登录，用该 Google 账号登录后重新兑换。'}
+                                ? 'If it’s a gift, or this is the account you want it on, go ahead. To put it on the account it was emailed to instead, sign out, sign in to that account and redeem the key again.'
+                                : '如果这是别人赠送的，或您确实想激活到此账号，请继续。如需激活到收件邮箱对应的账号，请退出登录，登录该账号后重新兑换。'}
                         </p>
                         <label className="redeem-mismatch-check">
                             <input

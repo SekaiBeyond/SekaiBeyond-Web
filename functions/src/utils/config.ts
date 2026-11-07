@@ -1,6 +1,9 @@
 import { Timestamp } from "firebase-admin/firestore";
 
 export const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN ?? "https://sekaibeyond.com";
+// The site's OAuth client, which a Google sign-in's token must have been issued
+// for. Public, like the copy the site is built with (VITE_GOOGLE_CLIENT_ID).
+export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
 // Resend's daily cap, a sliding 24-hour window on their side; the used count is
 // read from Resend (fetchProviderUsage) and cached in system/resendQuota.
 export const RESEND_DAILY_CAP = Number(process.env.RESEND_DAILY_CAP) || 100;
@@ -31,6 +34,13 @@ function envCount(name: string, fallback: number): number {
     const raw = Number(process.env[name]);
     return process.env[name] && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : fallback;
 }
+
+// Held back from ticket and passport mail, so a big send can't stop someone
+// getting a sign-up code: a code can't wait out the overflow queue. At most half
+// the cap, so a small cap isn't all reserve.
+export const ACCOUNT_MAIL_RESERVE = Math.min(envCount("ACCOUNT_MAIL_RESERVE", 20), Math.floor(RESEND_DAILY_CAP / 2));
+// What ticket and passport mail may use. Account mail may use all of RESEND_DAILY_CAP.
+export const BULK_MAIL_CAP = RESEND_DAILY_CAP - ACCOUNT_MAIL_RESERVE;
 
 // Wallet passes made in a calendar month (UTC), after which Add to Wallet says
 // so until the 1st; WalletWallet's own plan limit applies too, whichever is

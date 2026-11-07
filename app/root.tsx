@@ -5,6 +5,7 @@ import "./app.css";
 import { LanguageProvider } from "~/components/LanguageContextProvider";
 import { AuthProvider } from "~/components/AuthProvider";
 import { RedeemModal } from "~/components/RedeemModal";
+import { SignInModal } from "~/components/SignInModal";
 import type { ReactNode } from "react";
 
 // Unknown paths are still served with a 200 (the SPA fallback), so this keeps
@@ -29,6 +30,7 @@ export function Layout({children}: {children: ReactNode}) {
         <body>
         <LanguageProvider>
             <AuthProvider>
+                <SignInModal/>
                 <RedeemModal/>
                 {children}
             </AuthProvider>

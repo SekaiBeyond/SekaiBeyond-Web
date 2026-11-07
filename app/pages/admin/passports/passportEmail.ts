@@ -37,7 +37,7 @@ export const DEFAULT_PASSPORT_EMAIL_BODY = `<div style="font-family:-apple-syste
             <p style="margin:0 0 12px;color:#ff6b9d;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">How
                 to activate</p>
             <ul style="margin:0;padding-left:20px;color:#4a4a4a;font-size:14px;line-height:1.6;">
-                <li style="margin-bottom:8px;">Press <strong>Activate my passport</strong> and sign in with Google.
+                <li style="margin-bottom:8px;">Press <strong>Activate my passport</strong> and sign in.
                     The key is filled in for you; press <strong>Redeem</strong> to finish.
                 </li>
                 <li style="margin-bottom:8px;">Or sign in on our website, open the menu under your profile picture,

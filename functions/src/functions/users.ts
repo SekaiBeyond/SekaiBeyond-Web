@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { getAuth, type UserRecord } from "firebase-admin/auth";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     ADMIN_GROUPS,
@@ -14,8 +14,9 @@ import {
     requireCanManage,
     requireStaff,
 } from "../utils/auth";
-import { claimAccountEmail, normalizeEmail, verifiedEmail } from "../utils/accountEmail";
+import { emailIndexRef } from "../utils/accountEmail";
 import { deletionExpiresAt } from "../utils/config";
+import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
@@ -25,100 +26,6 @@ import { sanitizeDisplayText, validateBoolean, validateDocId, validateInstant } 
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
 import { sessionsRef } from "../utils/sessions";
-import { isApiOrder, isScannedTicket } from "../utils/tickets";
-
-export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
-    const uid = await requireAuth(request);
-
-    // ID tokens outlive account deletion by up to an hour, so a deleted user's
-    // client could recreate the doc after onUserDeleted ran; only Auth knows
-    // the account is gone.
-    try {
-        await getAuth().getUser(uid);
-    } catch (err: unknown) {
-        if ((err as {code?: string})?.code === "auth/user-not-found") {
-            throw new HttpsError("failed-precondition", "Account has been deleted.");
-        }
-        throw err;
-    }
-
-    const userRef = db.collection("users").doc(uid);
-
-    const rawName = request.auth!.token.name ?? "";
-    const email = normalizeEmail(request.auth!.token.email ?? "");
-    const verified = verifiedEmail(request.auth!.token);
-    const photoURL = request.auth!.token.picture ?? "";
-
-    const displayName = sanitizeDisplayText(typeof rawName === "string" ? rawName : "").slice(0, 50);
-
-    let alreadyExists = false;
-
-    await db.runTransaction(async (txn) => {
-        const snap = await txn.get(userRef);
-        if (snap.exists) {
-            alreadyExists = true;
-            return;
-        }
-        // The address is this account's now, off any other still holding it:
-        // Auth signs in one account per address (see utils/accountEmail.ts).
-        const releaseOthers = verified ? await claimAccountEmail(txn, uid, verified) : null;
-        releaseOthers?.(displayName);
-        txn.set(userRef, {
-            displayName,
-            email,
-            photoURL: photoURL.slice(0, 500),
-            joinedAt: FieldValue.serverTimestamp(),
-            attendedEvents: [],
-            badges: [],
-            group: "user",
-            eventStaffEvents: [],
-        });
-    });
-
-    if (!alreadyExists && verified) {
-        try {
-            await creditScannedTickets(userRef, verified);
-        } catch (err) {
-            // The profile exists either way; a missed credit must not fail sign-up.
-            console.error(`createUserProfile: ticket credit failed for ${uid}`, err);
-        }
-    }
-
-    return {alreadyExists};
-});
-
-/**
- * Credit a new account with the paid events its email was scanned into. The
- * scanner only credits accounts that already existed, and getMyTickets only
- * while the event is live, so a sign-up after the event ends is caught here.
- *
- * Only a verified email may claim its tickets, so the caller checks the token.
- * The collection-group query uses the attendees.email override in
- * firestore.indexes.json.
- */
-async function creditScannedTickets(
-    userRef: FirebaseFirestore.DocumentReference,
-    email: string,
-): Promise<void> {
-    const snap = await db.collectionGroup("attendees").where("email", "==", email).get();
-    const eventRefs = new Map<string, FirebaseFirestore.DocumentReference>();
-    for (const doc of snap.docs) {
-        // An app order is its app user's, not the account's (see creditedEmail).
-        if (isApiOrder(doc.data())) continue;
-        const eventRef = doc.ref.parent.parent;
-        const root = eventRef?.parent.id;
-        if (!eventRef || (root !== "pastEvents" && root !== "upcomingEvents")) continue;
-        const tickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
-        if (tickets.some(isScannedTicket)) eventRefs.set(eventRef.id, eventRef);
-    }
-    if (eventRefs.size === 0) return;
-
-    // A deleted event's tickets outlive it when its cleanup fails; a gone event
-    // must not land in attendedEvents.
-    const events = await db.getAll(...eventRefs.values());
-    const ids = events.filter(e => e.exists).map(e => e.id);
-    if (ids.length > 0) await userRef.update({attendedEvents: FieldValue.arrayUnion(...ids)});
-}
 
 export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     const callerUid = await requireAuth(request);
@@ -182,36 +89,28 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
 });
 
 /**
- * The name and photo a user's Google account gives, so the admin user page can
- * tell a name or photo set on the site from the Google one the profile started
- * with. Staff+ only, as they can already read the profile it's compared with.
+ * The name and photo of the Google account bound to a user, so the admin user
+ * page can tell a name or photo set on the site from the Google one the profile
+ * started with. Null when none is bound. Staff+ only, as they can already read
+ * the profile it's compared with.
  *
  * Two names, since the profile copied the sign-up one and Google's may have
- * changed since: `signUpName` is the Auth record's, `name` the Google
- * provider's latest. Both come cleaned as createUserProfile cleans them, so
- * they compare with displayName as stored.
+ * changed since: `signUpName` is the one it was bound with, `name` the latest.
+ * Both come cleaned as a stored displayName is, so they compare directly.
  */
 export const getGoogleProfile = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     await requireStaff(uid);
 
     const targetUid = validateDocId((request.data as {uid?: string})?.uid, "uid");
-    let record: UserRecord;
-    try {
-        record = await getAuth().getUser(targetUid);
-    } catch (err: unknown) {
-        if ((err as {code?: string})?.code === "auth/user-not-found") {
-            throw new HttpsError("not-found", "User not found.");
-        }
-        throw err;
-    }
+    const google = googleBindingOf(await credentialsRef(targetUid).get());
+    if (!google) return null;
 
-    const google = record.providerData.find(p => p.providerId === "google.com");
-    const clean = (name: string | undefined) => sanitizeDisplayText(name ?? "").slice(0, 50);
+    const clean = (name: string) => sanitizeDisplayText(name).slice(0, 50);
     return {
-        name: clean(google?.displayName ?? record.displayName),
-        signUpName: clean(record.displayName),
-        photoURL: (google?.photoURL ?? record.photoURL ?? "").slice(0, 500),
+        name: clean(google.name),
+        signUpName: clean(google.signUpName),
+        photoURL: google.photoURL.slice(0, 500),
     };
 });
 
@@ -306,14 +205,10 @@ async function saveProfileImage(path: string, buffer: Buffer, contentType: strin
     return `${await saveUpload(path, buffer, contentType)}&t=${Date.now()}`;
 }
 
-// The photo a user reverts to without an uploaded avatar, from their auth
-// record.
+// The photo a user reverts to without an uploaded avatar: their Google
+// account's, if one is bound.
 async function googlePhotoURL(uid: string): Promise<string> {
-    try {
-        return (await getAuth().getUser(uid)).photoURL ?? "";
-    } catch {
-        return "";
-    }
+    return googleBindingOf(await credentialsRef(uid).get())?.photoURL ?? "";
 }
 
 export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
@@ -395,10 +290,7 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
 
     await getStorage().bucket().file(`avatars/${targetUid}`).delete({ignoreNotFound: true});
 
-    const googlePhoto = isSelf
-        ? (request.auth!.token.picture ?? "")
-        : await googlePhotoURL(targetUid);
-    const photoURL = googlePhoto.slice(0, 500);
+    const photoURL = (await googlePhotoURL(targetUid)).slice(0, 500);
     await db.collection("users").doc(targetUid).update({photoURL});
 
     if (!isSelf) {
@@ -751,9 +643,9 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
 
     return {cancelled: true};
 });
-// retry: a dropped event would leave the Auth account alive with no user doc,
-// undoing the deletion at next sign-in. Re-runs are safe: every step tolerates
-// what's already gone, and the record has a fixed id.
+// retry: a dropped event would leave a sign-in that still works for an account
+// that's gone. Re-runs are safe: every step tolerates what's already gone, and
+// the record has a fixed id.
 export const onUserDeleted = onDocumentDeleted(
     {document: "users/{uid}", maxInstances: 10, retry: true},
     async (event) => {
@@ -770,11 +662,17 @@ export const onUserDeleted = onDocumentDeleted(
             }
         }
 
-        // The client can recreate the doc between the TTL delete and the Auth
-        // deletion above. Deleting a missing doc fires nothing, so this
-        // re-triggers only for a doc that really came back, and that run's
-        // delete ends the chain. Errors propagate so retry re-delivers.
-        await db.collection("users").doc(uid).delete();
+        // Frees the address and the Google account for use again. One batch, as
+        // the credentials doc is the only thing that names the Google account.
+        const credentials = await credentialsRef(uid).get();
+        const sub = googleBindingOf(credentials)?.sub;
+        const emailRef = data?.email ? emailIndexRef(data.email) : null;
+        const holdsEmail = emailRef ? (await emailRef.get()).get("uid") === uid : false;
+        const release = db.batch();
+        release.delete(credentials.ref);
+        if (sub) release.delete(googleIndexRef(sub));
+        if (emailRef && holdsEmail) release.delete(emailRef);
+        await release.commit();
 
         for (const path of [`avatars/${uid}`, `banners/${uid}`]) {
             try {

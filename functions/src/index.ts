@@ -4,6 +4,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 // enforcing it refuses a request with no token even when emulated.
 setGlobalOptions({enforceAppCheck: process.env.FUNCTIONS_EMULATOR !== "true"});
 
+export * from "./functions/accounts";
 export * from "./functions/users";
 export * from "./functions/sessions";
 export * from "./functions/events";
