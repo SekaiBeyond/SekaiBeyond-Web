@@ -145,14 +145,19 @@ export const callCreateAccountWithGoogle = (data: {
     password?: string;
 }) => httpsCallable<typeof data, {token: string}>(getFunctions(), 'createAccountWithGoogle')(data);
 
-export const callBindGoogleWithPassword = (data: {idToken: string; email: string; password: string}) =>
+export const callBindGoogleWithPassword = (data: {
+    idToken: string;
+    email: string;
+    password: string;
+    language: Language;
+}) =>
     httpsCallable<typeof data, {token: string}>(getFunctions(), 'bindGoogleWithPassword')(data);
 
-export const callBindGoogle = (data: {idToken: string}) =>
+export const callBindGoogle = (data: {idToken: string; language: Language}) =>
     httpsCallable<typeof data, {bound: boolean}>(getFunctions(), 'bindGoogle')(data);
 
-export const callUnbindGoogle = () =>
-    httpsCallable<Record<string, never>, {unbound: boolean}>(getFunctions(), 'unbindGoogle')({});
+export const callUnbindGoogle = (data: {language: Language}) =>
+    httpsCallable<typeof data, {unbound: boolean}>(getFunctions(), 'unbindGoogle')(data);
 
 export interface SignInMethods {
     hasPassword: boolean;

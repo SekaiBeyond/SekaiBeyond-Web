@@ -137,7 +137,7 @@ export const SignInModal = () => {
 
     const bindGoogle = submit(async () => {
         if (!pendingGoogle) return;
-        const {data} = await callBindGoogleWithPassword({idToken: pendingGoogle.idToken, email, password});
+        const {data} = await callBindGoogleWithPassword({idToken: pendingGoogle.idToken, email, password, language});
         await signInWithToken(data.token);
     });
 

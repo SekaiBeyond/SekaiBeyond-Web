@@ -216,6 +216,7 @@ const Row = ({title, help, state, action, children}: {
  */
 export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
+    const language = isEnglish ? 'en' : 'zh';
     const {user, profile} = useAuth();
     const [methods, setMethods] = useState<SignInMethods | null>(null);
     const [failed, setFailed] = useState(false);
@@ -245,7 +246,7 @@ export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
     const bind = async (idToken: string) => {
         setGoogleBusy(true);
         try {
-            await callBindGoogle({idToken});
+            await callBindGoogle({idToken, language});
             setBindingGoogle(false);
             await load();
             showToast(isEnglish ? 'Google account bound.' : '已绑定 Google 账号。', 'success');
@@ -265,7 +266,7 @@ export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
         if (!confirmed) return;
         setGoogleBusy(true);
         try {
-            await callUnbindGoogle();
+            await callUnbindGoogle({language});
             await load();
             showToast(isEnglish ? 'Google account unbound.' : '已解绑 Google 账号。', 'success');
         } catch (err) {

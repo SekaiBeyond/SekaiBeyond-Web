@@ -7,6 +7,7 @@ import {
     codeMail,
     emailChangedMail,
     emailSetByStaffMail,
+    googleChangedMail,
     type MailLanguage,
     passwordChangedMail,
     readMailLanguage,
@@ -418,9 +419,13 @@ export const createAccountWithGoogle = onCall(ACCOUNT_CALL, async (request) => {
     return {token: await getAuth().createCustomToken(uid)};
 });
 
-/** Binds a Google account to `uid`, which may only have the one. */
-async function bindGoogleTo(uid: string, google: GoogleIdentity): Promise<void> {
-    await db.runTransaction(async (txn) => {
+/**
+ * Binds a Google account to `uid`, which may only have the one, and tells the
+ * account's address: a binding outlives a password reset, so someone who got
+ * into the account briefly could otherwise keep a way back in unnoticed.
+ */
+async function bindGoogleTo(uid: string, google: GoogleIdentity, language: MailLanguage): Promise<void> {
+    const notifyEmail = await db.runTransaction(async (txn) => {
         const [held, credentials, user] = await Promise.all([
             txn.get(googleIndexRef(google.sub)),
             txn.get(credentialsRef(uid)),
@@ -443,25 +448,33 @@ async function bindGoogleTo(uid: string, google: GoogleIdentity): Promise<void> 
             targetUid: uid,
             targetName: displayName,
         }));
+        return bound ? "" : (user.get("email") as string | undefined) ?? "";
     });
+    if (notifyEmail) await sendNotice(await googleChangedMail(notifyEmail, google.email, true, language));
 }
 
 /** The prompt's "I already have an account": signs in with a password and binds the Google account to it. */
 export const bindGoogleWithPassword = onCall(ACCOUNT_CALL, async (request) => {
-    const input = (request.data ?? {}) as {idToken?: unknown; email?: unknown; password?: unknown};
+    const input = (request.data ?? {}) as {
+        idToken?: unknown;
+        email?: unknown;
+        password?: unknown;
+        language?: unknown;
+    };
     const google = await verifyGoogleToken(input.idToken);
     const email = validateEmail(input.email, "email");
     const uid = await checkPassword(request, email, readPasswordAttempt(input.password));
 
-    await bindGoogleTo(uid, google);
+    await bindGoogleTo(uid, google, readMailLanguage(input.language));
     return {token: await getAuth().createCustomToken(uid)};
 });
 
 /** For a signed-in account, from Settings. */
 export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireAuth(request, "account");
-    const google = await verifyGoogleToken((request.data as {idToken?: unknown} | null)?.idToken);
-    await bindGoogleTo(uid, google);
+    const input = (request.data ?? {}) as {idToken?: unknown; language?: unknown};
+    const google = await verifyGoogleToken(input.idToken);
+    await bindGoogleTo(uid, google, readMailLanguage(input.language));
     return {bound: true};
 });
 
@@ -470,16 +483,17 @@ export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
  * still be signed in to. Also off the Firebase Auth record an older account has,
  * since Firebase's own Google sign-in would otherwise work until it's turned off.
  */
-export const unbindGoogle = onCall({maxInstances: 10}, async (request) => {
+export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireAuth(request, "account");
+    const language = readMailLanguage((request.data as {language?: unknown} | null)?.language);
 
-    await db.runTransaction(async (txn) => {
+    const unbound = await db.runTransaction(async (txn) => {
         const [credentials, user] = await Promise.all([
             txn.get(credentialsRef(uid)),
             txn.get(db.collection("users").doc(uid)),
         ]);
         const google = googleBindingOf(credentials);
-        if (!google) return;
+        if (!google) return null;
         if (!credentials.get("passwordHash")) {
             throw new HttpsError("failed-precondition", "Set a password before unbinding Google.", {
                 code: "needs-password",
@@ -495,11 +509,15 @@ export const unbindGoogle = onCall({maxInstances: 10}, async (request) => {
             targetUid: uid,
             targetName: displayName,
         }));
+        return {email: (user.get("email") as string | undefined) ?? "", googleEmail: google.email};
     });
 
     await getAuth().updateUser(uid, {providersToUnlink: ["google.com"]}).catch((err: unknown) => {
         if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
     });
+    if (unbound?.email) {
+        await sendNotice(await googleChangedMail(unbound.email, unbound.googleEmail, false, language));
+    }
     return {unbound: true};
 });
 

@@ -171,6 +171,42 @@ export async function emailSetByStaffMail(to: string, language: MailLanguage): P
     };
 }
 
+/**
+ * Whenever a Google account goes on or comes off an account. Being bound is a
+ * way in that outlasts a password reset, so its owner has to hear about it.
+ */
+export async function googleChangedMail(
+    to: string,
+    googleEmail: string,
+    bound: boolean,
+    language: MailLanguage,
+): Promise<ResendEnvelope> {
+    const masked = escapeHtml(maskEmail(googleEmail));
+    const contact = await contactLine(language);
+    if (language === "zh") {
+        return {
+            to,
+            subject: bound ? "您的 Sekai Beyond 账号绑定了 Google 账号" : "您的 Sekai Beyond 账号解绑了 Google 账号",
+            html: page(bound ? "已绑定 Google 账号" : "已解绑 Google 账号", [
+                bound
+                    ? `Google 账号 ${masked} 已绑定到您的账号，现在可用它登录。可在“设置”中解绑。`
+                    : `Google 账号 ${masked} 已从您的账号解绑，不再能用它登录。`,
+                contact,
+            ]),
+        };
+    }
+    return {
+        to,
+        subject: bound ? "A Google account was bound to your Sekai Beyond account" : "A Google account was unbound from your Sekai Beyond account",
+        html: page(bound ? "Google account bound" : "Google account unbound", [
+            bound
+                ? `The Google account ${masked} can now sign in to your account. You can unbind it in Settings.`
+                : `The Google account ${masked} can no longer sign in to your account.`,
+            contact,
+        ]),
+    };
+}
+
 export async function passwordChangedMail(to: string, language: MailLanguage): Promise<ResendEnvelope> {
     const contact = await contactLine(language);
     return language === "zh" ? {
