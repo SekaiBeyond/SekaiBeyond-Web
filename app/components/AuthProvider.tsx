@@ -11,11 +11,11 @@ import {
     callUploadBanner,
     getFirebaseAuth,
     getFirebaseDb,
-    signInWithGoogle as firebaseSignIn,
     signOut as firebaseSignOut
 } from '~/lib/firebase';
 import { toDate } from '~/lib/collectionCache';
 import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
+import { openSignInModal } from '~/lib/signInModal';
 import { currentSessionId, watchOwnSession } from '~/lib/sessions';
 
 // `group` is a role ladder only; membership lives in membershipExpiresAt.
@@ -146,7 +146,8 @@ interface AuthContextType {
     cachedPhotoURL: string;
     /** This device's row in the device list, once known. */
     sessionId: string | null;
-    signIn: () => Promise<void>;
+    /** Opens the sign-in modal. */
+    signIn: () => void;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
     updateProfile: (updates: {
@@ -266,9 +267,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         };
     }, [user, hasProfile]);
 
-    const signIn = async () => {
-        await firebaseSignIn();
-    };
+    const signIn = () => openSignInModal();
 
     const signOut = async () => {
         // Stops watching first, or the removed row would be put back. Signing

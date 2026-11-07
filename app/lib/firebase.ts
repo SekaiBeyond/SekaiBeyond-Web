@@ -5,6 +5,7 @@ import {
     connectAuthEmulator,
     getAuth,
     GoogleAuthProvider,
+    signInWithCustomToken,
     signInWithPopup,
     signOut as firebaseSignOut,
 } from "firebase/auth";
@@ -113,6 +114,21 @@ function getFunctions() {
 
 export const callCreateUserProfile = () =>
     httpsCallable<Record<string, never>, {alreadyExists: boolean}>(getFunctions(), 'createUserProfile')({});
+
+type Language = 'en' | 'zh';
+
+/** Emails a code proving an address. Answers the same whether or not it has an account. */
+export const callSendEmailCode = (data: {purpose: 'signup' | 'password'; email: string; language: Language}) =>
+    httpsCallable<typeof data, {sent: boolean}>(getFunctions(), 'sendEmailCode')(data);
+
+export const callSignUpWithEmail = (data: {email: string; code: string; displayName: string; password: string}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'signUpWithEmail')(data);
+
+export const callSignInWithPassword = (data: {email: string; password: string}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'signInWithPassword')(data);
+
+export const callResetPassword = (data: {email: string; code: string; password: string; language: Language}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'resetPassword')(data);
 
 export const callTouchSession = () =>
     httpsCallable<Record<string, never>, {registered: boolean}>(getFunctions(), 'touchSession')({});
@@ -895,5 +911,8 @@ const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({prompt: 'select_account'});
 
 export const signInWithGoogle = () => signInWithPopup(getFirebaseAuth(), googleProvider);
+
+/** Starts a session with the token one of the account callables answered with. */
+export const signInWithToken = (token: string) => signInWithCustomToken(getFirebaseAuth(), token);
 
 export const signOut = () => firebaseSignOut(getFirebaseAuth());

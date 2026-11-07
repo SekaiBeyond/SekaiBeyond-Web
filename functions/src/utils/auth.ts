@@ -42,18 +42,22 @@ export async function checkApiKeyRateLimit(keyId: string): Promise<void> {
 }
 
 /**
- * Counts a call against a budget of `max` a minute, one doc per budget per
- * minute. An increment and then a read rather than a transaction: calls made
- * at once on one budget would fight over a transaction's lock, and the losers
- * fail with ABORTED instead of a rate limit. A refused call still counts,
- * which only holds until the minute is up.
+ * Counts a call against a budget of `max` a window (a minute unless given), one
+ * doc per budget per window. An increment and then a read rather than a
+ * transaction: calls made at once on one budget would fight over a transaction's
+ * lock, and the losers fail with ABORTED instead of a rate limit. A refused call
+ * still counts, which only holds until the window is up.
  */
-async function consumeRateLimit(docId: string, max: number): Promise<void> {
+export async function consumeRateLimit(
+    docId: string,
+    max: number,
+    windowMs: number = RATE_LIMIT_WINDOW_MS,
+): Promise<void> {
     const now = Date.now();
-    const windowStart = now - now % RATE_LIMIT_WINDOW_MS;
+    const windowStart = now - now % windowMs;
     const ref = db.collection("rateLimits").doc(`${docId}_${windowStart}`);
     // expiresAt lets the TTL policy in firestore.indexes.json delete stale documents.
-    const expiresAt = new Date(windowStart + RATE_LIMIT_WINDOW_MS * 2);
+    const expiresAt = new Date(windowStart + windowMs * 2);
 
     await ref.set({count: FieldValue.increment(1), expiresAt}, {merge: true});
     const count = (await ref.get()).get("count");
@@ -61,7 +65,7 @@ async function consumeRateLimit(docId: string, max: number): Promise<void> {
         // retryAfterMs: until the window reopens, so a caller can say how long to wait.
         throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {
             code: "rate-limited",
-            retryAfterMs: windowStart + RATE_LIMIT_WINDOW_MS - now,
+            retryAfterMs: windowStart + windowMs - now,
         });
     }
 }

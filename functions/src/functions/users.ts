@@ -14,7 +14,7 @@ import {
     requireCanManage,
     requireStaff,
 } from "../utils/auth";
-import { claimAccountEmail, normalizeEmail, verifiedEmail } from "../utils/accountEmail";
+import { claimAccountEmail, creditScannedTickets, normalizeEmail, verifiedEmail } from "../utils/accountEmail";
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
@@ -26,7 +26,6 @@ import { sanitizeDisplayText, validateBoolean, validateDocId, validateInstant } 
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
 import { sessionsRef } from "../utils/sessions";
-import { isApiOrder, isScannedTicket } from "../utils/tickets";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
@@ -87,39 +86,6 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
 
     return {alreadyExists};
 });
-
-/**
- * Credit a new account with the paid events its email was scanned into. The
- * scanner only credits accounts that already existed, and getMyTickets only
- * while the event is live, so a sign-up after the event ends is caught here.
- *
- * Only a verified email may claim its tickets, so the caller checks the token.
- * The collection-group query uses the attendees.email override in
- * firestore.indexes.json.
- */
-async function creditScannedTickets(
-    userRef: FirebaseFirestore.DocumentReference,
-    email: string,
-): Promise<void> {
-    const snap = await db.collectionGroup("attendees").where("email", "==", email).get();
-    const eventRefs = new Map<string, FirebaseFirestore.DocumentReference>();
-    for (const doc of snap.docs) {
-        // An app order is its app user's, not the account's (see creditedEmail).
-        if (isApiOrder(doc.data())) continue;
-        const eventRef = doc.ref.parent.parent;
-        const root = eventRef?.parent.id;
-        if (!eventRef || (root !== "pastEvents" && root !== "upcomingEvents")) continue;
-        const tickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
-        if (tickets.some(isScannedTicket)) eventRefs.set(eventRef.id, eventRef);
-    }
-    if (eventRefs.size === 0) return;
-
-    // A deleted event's tickets outlive it when its cleanup fails; a gone event
-    // must not land in attendedEvents.
-    const events = await db.getAll(...eventRefs.values());
-    const ids = events.filter(e => e.exists).map(e => e.id);
-    if (ids.length > 0) await userRef.update({attendedEvents: FieldValue.arrayUnion(...ids)});
-}
 
 export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     const callerUid = await requireAuth(request);
