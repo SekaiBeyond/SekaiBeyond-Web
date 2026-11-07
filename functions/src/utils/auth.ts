@@ -14,12 +14,17 @@ const RATE_LIMIT_MAX = 10;
  * panel make many calls a minute, account lookups and quota checks among them.
  *
  * The shared budget is there to stop code guessing, so the calls anyone can
- * make keep it; the staff one is only a ceiling on a runaway loop.
+ * make keep it, account calls aside; the staff one is only a ceiling on a
+ * runaway loop.
  */
 const RATE_LIMIT_BUCKETS = {
     scan: 60,
     "hometown-import": 60,
     staff: 120,
+    // The Settings tab loads an account's sign-in methods each time it opens, so
+    // this keeps reloading it from spending what a redeem code needs. What these
+    // calls protect has limits of its own (utils/emailCodes.ts).
+    account: 60,
 };
 export type RateLimitBucket = keyof typeof RATE_LIMIT_BUCKETS;
 

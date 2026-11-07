@@ -149,7 +149,7 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
             await sleep(SEND_TIME_MS + Math.random() * SEND_TIME_JITTER_MS);
         }
     } else if (input.purpose === "email-change") {
-        const uid = await requireAuth(request);
+        const uid = await requireAuth(request, "account");
         const email = validateEmail(input.email, "email");
         const user = (await db.collection("users").doc(uid).get()).data();
         requireEmailChangeAllowed(user);
@@ -459,7 +459,7 @@ export const bindGoogleWithPassword = onCall(ACCOUNT_CALL, async (request) => {
 
 /** For a signed-in account, from Settings. */
 export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "account");
     const google = await verifyGoogleToken((request.data as {idToken?: unknown} | null)?.idToken);
     await bindGoogleTo(uid, google);
     return {bound: true};
@@ -471,7 +471,7 @@ export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
  * since Firebase's own Google sign-in would otherwise work until it's turned off.
  */
 export const unbindGoogle = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "account");
 
     await db.runTransaction(async (txn) => {
         const [credentials, user] = await Promise.all([
@@ -508,7 +508,7 @@ export const unbindGoogle = onCall({maxInstances: 10}, async (request) => {
  * Settings tab, and for staff on the admin user page.
  */
 export const getSignInMethods = onCall({maxInstances: 20}, async (request) => {
-    const uid = await requireAuth(request, "staff");
+    const uid = await requireAuth(request, "account");
     const raw = (request.data as {uid?: unknown} | null)?.uid;
     const targetUid = raw === undefined ? uid : validateDocId(raw, "uid");
     if (targetUid !== uid) await requireStaff(uid);
@@ -527,7 +527,7 @@ export const getSignInMethods = onCall({maxInstances: 20}, async (request) => {
 
 /** Changes a password from Settings. The code stands in for the old password, which an account may not have. */
 export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "account");
     const input = (request.data ?? {}) as {code?: unknown; password?: unknown; language?: unknown};
     const code = readCode(input.code);
     const password = validateNewPassword(input.password);
@@ -602,7 +602,7 @@ async function afterEmailMoved(uid: string, oldEmail: string, email: string, lan
 }
 
 export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "account");
     const input = (request.data ?? {}) as {email?: unknown; code?: unknown; language?: unknown};
     const email = validateEmail(input.email, "email");
     const code = readCode(input.code);

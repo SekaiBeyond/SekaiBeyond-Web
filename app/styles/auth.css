@@ -115,3 +115,9 @@
     flex-basis: 100%;
     max-width: 280px;
 }
+
+.settings-row--account .profile-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    transform: none;
+}
