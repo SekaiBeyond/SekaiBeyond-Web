@@ -12,9 +12,20 @@ import { db } from "./firebase";
  * Firebase Auth can only revoke every one of an account's sign-ins at once, so
  * signing one device out is done here: its doc is kept with `endedAt` set, the
  * device watches its doc and signs itself out, and requireAuth refuses any
- * call it makes after. The doc stays for good, since its refresh token never
- * expires on its own.
+ * call it makes after, as firestore.rules (liveSession) refuses its reads. The
+ * doc stays for good, since its refresh token never expires on its own.
+ *
+ * A sign-in with no doc is refused the same way once UNLISTED_GRACE_SECONDS
+ * have passed, or one that never listed itself, such as a stolen token, would
+ * be out of reach of signing other devices out.
  */
+
+/**
+ * How long a new sign-in may go without a doc. A device lists itself once it
+ * has loaded (touchSession), so a real one is listed within seconds. Written
+ * into firestore.rules (liveSession) as well, so keep the two the same.
+ */
+export const UNLISTED_GRACE_SECONDS = 10 * 60;
 
 /** The session a token belongs to, or null for a token without auth_time. */
 export function sessionIdOf(token: DecodedIdToken): string | null {

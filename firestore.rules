@@ -21,13 +21,31 @@ service cloud.firestore {
             return eventId in callerEventStaffEvents();
         }
 
+        // The caller's sign-in, as a row in their device list: users/{uid}/sessions,
+        // named by the token's auth_time (see functions/src/utils/sessions.ts).
+        // Signing a device out only marks its row, and its token goes on working
+        // with Firebase Auth, so reads check the row here as requireAuth does for
+        // calls: refused once it's ended, and refused without one once 600 seconds
+        // (UNLISTED_GRACE_SECONDS) have passed since signing in, the time a new
+        // device has to list itself (touchSession).
+        function liveSession() {
+            let session = /databases/$(database)/documents/users/$(request.auth.uid)/sessions/$(string(request.auth.token.auth_time));
+            return exists(session)
+                ? get(session).data.get('endedAt', null) == null
+                : request.time.toMillis() < (request.auth.token.auth_time + 600) * 1000;
+        }
+
+        function signedIn() {
+            return request.auth != null && liveSession();
+        }
+
         match /users/{userId} {
             // Users can read their own profile; staff+ can read any profile.
             // Event-staff can read profiles of users who share at least one staff event with them
             // (needed for the event staff list in the admin panel).
             // Other users' public data is served via the getPublicProfile Cloud Function
             // to avoid exposing email to all authenticated users.
-            allow read: if request.auth != null
+            allow read: if signedIn()
                 && (request.auth.uid == userId
                     || isStaffOrAbove()
                     || (callerEventStaffEvents().size() > 0
@@ -38,8 +56,10 @@ service cloud.firestore {
 
             // The devices signed in to this account. Only the owner reads them:
             // the Settings tab lists them, and each device watches its own so it
-            // signs out when ended from another. Writes via Cloud Functions
-            // (touchSession, endSession, endOtherSessions, endAllSessions) only.
+            // signs out when ended from another, which is why this alone doesn't
+            // ask for signedIn(): an ended device has to read its row to see it.
+            // Writes via Cloud Functions (touchSession, endSession,
+            // endOtherSessions, endAllSessions) only.
             match /sessions/{sessionId} {
                 allow read: if request.auth != null && request.auth.uid == userId;
             }
@@ -47,30 +67,30 @@ service cloud.firestore {
 
         // Activity records — staff+ can read only; all writes via Cloud Functions
         match /records/{recordId} {
-            allow read: if request.auth != null
+            allow read: if signedIn()
                 && isStaffOrAbove();
         }
 
         // Event check-in codes — staff+ can read only; all mutations via Cloud Functions
         match /claimCodes/{codeId} {
-            allow read: if request.auth != null
+            allow read: if signedIn()
                 && isStaffOrAbove();
         }
 
         // Achievement badge definitions — readable by any logged-in user; all writes via Cloud Functions
         match /badges/{badgeId} {
-            allow read: if request.auth != null;
+            allow read: if signedIn();
         }
 
         // Badge activation codes — core-staff+ can read only; all mutations via Cloud Functions
         match /badgeActivationCodes/{codeId} {
-            allow read: if request.auth != null
+            allow read: if signedIn()
                 && isCoreStaffOrAbove();
         }
 
         // Staff claim codes — core-staff+ can read only; all mutations via Cloud Functions
         match /staffClaimCodes/{codeId} {
-            allow read: if request.auth != null
+            allow read: if signedIn()
                 && isCoreStaffOrAbove();
         }
 
@@ -87,11 +107,11 @@ service cloud.firestore {
             // Staff+ read every event's attendees (staff read-only in the panel);
             // event-staff read only their own events'.
             match /attendees/{attendeeId} {
-                allow read: if request.auth != null
+                allow read: if signedIn()
                     && (isStaffOrAbove() || isEventStaffFor(eventId));
             }
             match /emailTemplate/{docId} {
-                allow read: if request.auth != null
+                allow read: if signedIn()
                     && isCoreStaffOrAbove();
             }
         }
@@ -144,7 +164,7 @@ service cloud.firestore {
         // writes via Cloud Functions only. Drained every 30 minutes by the
         // scheduledMailDrain function.
         match /scheduledMail/{docId} {
-            allow read: if request.auth != null
+            allow read: if signedIn()
                 && isCoreStaffOrAbove();
         }
 
@@ -153,23 +173,23 @@ service cloud.firestore {
         // All writes via Cloud Functions.
         match /upcomingEvents/{eventId} {
             allow read: if resource.data.published == true
-                || (request.auth != null && isStaffOrAbove())
-                || (request.auth != null && isEventStaffFor(eventId));
+                || (signedIn() && isStaffOrAbove())
+                || (signedIn() && isEventStaffFor(eventId));
 
             // Paid event subcollections. Staff+ read every event's attendees
             // (staff read-only in the panel); event-staff read only their own events'.
             match /attendees/{attendeeId} {
-                allow read: if request.auth != null
+                allow read: if signedIn()
                     && (isStaffOrAbove() || isEventStaffFor(eventId));
             }
             match /emailTemplate/{docId} {
-                allow read: if request.auth != null
+                allow read: if signedIn()
                     && isCoreStaffOrAbove();
             }
             // Door settings, kept off the public event doc. Read by whoever
             // scans, so the scanner can say how unlisted tickets are treated.
             match /settings/{docId} {
-                allow read: if request.auth != null
+                allow read: if signedIn()
                     && (isStaffOrAbove() || isEventStaffFor(eventId));
             }
         }
@@ -192,7 +212,7 @@ service cloud.firestore {
             allow read: if true;
         }
         match /conContent/draft {
-            allow read: if request.auth != null
+            allow read: if signedIn()
                 && isStaffOrAbove();
         }
 
@@ -229,11 +249,11 @@ service cloud.firestore {
         // Cloud Function, which returns the redirect target. All writes (and the
         // scan counters) go through Cloud Functions.
         match /qrCodes/{qrId} {
-            allow read: if request.auth != null && isStaffOrAbove();
+            allow read: if signedIn() && isStaffOrAbove();
 
             // Per-scan events backing the trend charts.
             match /scans/{scanId} {
-                allow read: if request.auth != null && isStaffOrAbove();
+                allow read: if signedIn() && isStaffOrAbove();
             }
         }
 
@@ -244,7 +264,7 @@ service cloud.firestore {
         // getPassportPublicProfile, which resolves the sticker server-side.
         // All writes (status, ownerUid) go through Cloud Functions.
         match /passports/{passportId} {
-            allow read: if request.auth != null
+            allow read: if signedIn()
                 && (isStaffOrAbove() || resource.data.ownerUid == request.auth.uid);
         }
 
@@ -260,7 +280,7 @@ service cloud.firestore {
         // the passport because its holder can read that; staff+ read these
         // (staff read-only in the panel), and writes go through the functions.
         match /passportNotes/{passportId} {
-            allow read: if request.auth != null && isStaffOrAbove();
+            allow read: if signedIn() && isStaffOrAbove();
         }
 
         // Passport designs — a name, a year, and cover art; a year can have
@@ -274,7 +294,7 @@ service cloud.firestore {
         // The email that sends a passport's key — core-staff+ can read, like
         // the ticket templates; writes via updatePassportEmailTemplate only.
         match /passportEmailTemplate/{docId} {
-            allow read: if request.auth != null
+            allow read: if signedIn()
                 && isCoreStaffOrAbove();
         }
 
@@ -282,7 +302,7 @@ service cloud.firestore {
         // Only consumed in the admin UI (staff+), never by public scanners; all
         // writes go through Cloud Functions.
         match /socialPlatforms/{platformId} {
-            allow read: if request.auth != null && isStaffOrAbove();
+            allow read: if signedIn() && isStaffOrAbove();
         }
 
         // Deny all access to unlisted paths (safety net — Firestore denies by default,

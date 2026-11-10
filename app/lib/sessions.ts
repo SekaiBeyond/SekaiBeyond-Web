@@ -34,6 +34,21 @@ export async function currentSessionId(user: User): Promise<string | null> {
 }
 
 /**
+ * Whether the server has refused this sign-in for good: signed out from another
+ * device, or never listed in time. firestore.rules refuses its reads too, and
+ * touchSession tells that apart from anything else going wrong, listing it
+ * instead if it can be.
+ */
+export async function sessionEnded(): Promise<boolean> {
+    try {
+        await callTouchSession();
+        return false;
+    } catch (err) {
+        return functionsErrorCode(err) === 'session-ended';
+    }
+}
+
+/**
  * Keeps this device in its account's device list while it's signed in: adds
  * it, marks it active on load and when its tab comes back after a while, and
  * calls `onEnded` once it has been signed out from another device. Returns a

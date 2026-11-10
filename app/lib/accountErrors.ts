@@ -24,6 +24,12 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
             return isEnglish ? 'Your email can only change once a month.' : '邮箱每月只能更改一次。';
         case 'weak-password':
             return isEnglish ? 'Passwords need at least 8 characters.' : '密码至少需要 8 个字符。';
+        case 'breached-password':
+            return isEnglish
+                ? 'That password has appeared in a data breach, so it’s among the first anyone would guess. Please choose another.'
+                : '该密码曾出现在数据泄露中，很容易被猜到，请换一个。';
+        case 'deletion-by-staff':
+            return isEnglish ? 'Staff scheduled this deletion, so only staff can cancel it.' : '此删除由工作人员安排，只有工作人员可以取消。';
         case 'no-name':
             return isEnglish ? 'Please enter a name.' : '请输入名称。';
         case 'rate-limited':

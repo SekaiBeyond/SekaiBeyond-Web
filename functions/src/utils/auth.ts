@@ -2,7 +2,7 @@ import { type CallableRequest, HttpsError } from "firebase-functions/v2/https";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firebase";
-import { sessionIdOf, sessionRef } from "./sessions";
+import { sessionIdOf, sessionRef, UNLISTED_GRACE_SECONDS } from "./sessions";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
@@ -46,33 +46,61 @@ export async function checkApiKeyRateLimit(keyId: string): Promise<void> {
     await consumeRateLimit(`apiKey_${keyId}`, API_KEY_RATE_LIMIT_MAX);
 }
 
+const rateLimitRef = (docId: string, windowStart: number) =>
+    db.collection("rateLimits").doc(`${docId}_${windowStart}`);
+
 /**
  * Counts a call against a budget of `max` a window (a minute unless given), one
- * doc per budget per window. An increment and then a read rather than a
+ * doc per budget per window, and says whether it's within it and, if not, how
+ * long until the window reopens. An increment and then a read rather than a
  * transaction: calls made at once on one budget would fight over a transaction's
  * lock, and the losers fail with ABORTED instead of a rate limit. A refused call
  * still counts, which only holds until the window is up.
+ *
+ * consumeRateLimit refuses for you; this is for a caller that refuses in its
+ * own words.
  */
-export async function consumeRateLimit(
+export async function chargeRateLimit(
     docId: string,
     max: number,
     windowMs: number = RATE_LIMIT_WINDOW_MS,
-): Promise<void> {
+): Promise<{allowed: boolean; retryAfterMs: number}> {
     const now = Date.now();
     const windowStart = now - now % windowMs;
-    const ref = db.collection("rateLimits").doc(`${docId}_${windowStart}`);
+    const ref = rateLimitRef(docId, windowStart);
     // expiresAt lets the TTL policy in firestore.indexes.json delete stale documents.
     const expiresAt = new Date(windowStart + windowMs * 2);
 
     await ref.set({count: FieldValue.increment(1), expiresAt}, {merge: true});
     const count = (await ref.get()).get("count");
-    if (typeof count === "number" && count > max) {
+    return {allowed: !(typeof count === "number" && count > max), retryAfterMs: windowStart + windowMs - now};
+}
+
+/** Counts a call against a budget (see chargeRateLimit), refusing it once over. */
+export async function consumeRateLimit(
+    docId: string,
+    max: number,
+    windowMs: number = RATE_LIMIT_WINDOW_MS,
+): Promise<void> {
+    const {allowed, retryAfterMs} = await chargeRateLimit(docId, max, windowMs);
+    if (!allowed) {
         // retryAfterMs: until the window reopens, so a caller can say how long to wait.
         throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {
             code: "rate-limited",
-            retryAfterMs: windowStart + windowMs - now,
+            retryAfterMs,
         });
     }
+}
+
+/** Whether a budget kept by chargeRateLimit has room for one more call, without using any. */
+export async function rateLimitHasRoom(
+    docId: string,
+    max: number,
+    windowMs: number = RATE_LIMIT_WINDOW_MS,
+): Promise<boolean> {
+    const now = Date.now();
+    const count = (await rateLimitRef(docId, now - now % windowMs).get()).get("count");
+    return !(typeof count === "number" && count >= max);
 }
 
 export const ADMIN_GROUPS = ["core-staff", "president"];
@@ -110,27 +138,58 @@ export function requireCanManage(callerGroup: unknown, targetGroup: unknown): vo
     }
 }
 
-export async function requireAuth(request: CallableRequest<unknown>, bucket?: RateLimitBucket): Promise<string> {
+/** The caller, and whether their device is on the account's device list yet. */
+async function authenticate(
+    request: CallableRequest<unknown>,
+    bucket?: RateLimitBucket,
+): Promise<{uid: string; listed: boolean}> {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
     }
     const uid = request.auth.uid;
-    await Promise.all([checkRateLimit(uid, bucket), requireLiveSession(uid, request.auth.token)]);
+    const [, listed] = await Promise.all([checkRateLimit(uid, bucket), requireLiveSession(uid, request.auth.token)]);
+    return {uid, listed};
+}
+
+export async function requireAuth(request: CallableRequest<unknown>, bucket?: RateLimitBucket): Promise<string> {
+    return (await authenticate(request, bucket)).uid;
+}
+
+/**
+ * The caller, for a call that changes how an account signs in or ends it, which
+ * only a device on the account's list may make. requireAuth gives a new sign-in
+ * a few minutes to list itself (touchSession); here it has to have, as one that
+ * hasn't is one its owner can't see to sign out. Any real device has by the time
+ * it can open Settings.
+ */
+export async function requireRegisteredSession(
+    request: CallableRequest<unknown>,
+    bucket?: RateLimitBucket,
+): Promise<string> {
+    const {uid, listed} = await authenticate(request, bucket);
+    if (!listed) {
+        throw new HttpsError("unauthenticated", "This device isn't signed in properly.", {code: "session-ended"});
+    }
     return uid;
 }
 
 /**
  * Refuses a call from a device signed out from the device list, whose token
- * still works with Firebase Auth. A sign-in with no session doc yet passes:
- * the device registers itself once it has loaded (touchSession).
+ * still works with Firebase Auth, or from a sign-in that has gone unlisted for
+ * longer than a new device needs to list itself (UNLISTED_GRACE_SECONDS).
+ * firestore.rules holds reads to the same (liveSession). Says whether the
+ * device is listed.
  */
-async function requireLiveSession(uid: string, token: DecodedIdToken): Promise<void> {
+async function requireLiveSession(uid: string, token: DecodedIdToken): Promise<boolean> {
     const sessionId = sessionIdOf(token);
-    if (!sessionId) return;
-    const snap = await sessionRef(uid, sessionId).get();
-    if (snap.data()?.endedAt) {
+    const snap = sessionId ? await sessionRef(uid, sessionId).get() : null;
+    const live = snap?.exists
+        ? !snap.get("endedAt")
+        : !!sessionId && Date.now() / 1000 - token.auth_time < UNLISTED_GRACE_SECONDS;
+    if (!live) {
         throw new HttpsError("unauthenticated", "This device has been signed out.", {code: "session-ended"});
     }
+    return !!snap?.exists;
 }
 
 export async function requireAdmin(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {

@@ -1,12 +1,14 @@
 import { HttpsError } from "firebase-functions/v2/https";
-import { PUBLIC_ORIGIN, RESEND_DAILY_CAP } from "./config";
+import { chargeRateLimit, rateLimitHasRoom } from "./auth";
+import { CODE_MAIL_HOURLY_CAP, NOTICE_MAIL_RESERVE, PUBLIC_ORIGIN, RESEND_DAILY_CAP } from "./config";
 import { maskEmail } from "./accountEmail";
 import { CODE_TTL_MINUTES, type CodePurpose } from "./emailCodes";
 import { EMAIL_UNDO_DAYS } from "./emailUndo";
 import { escapeHtml } from "./emailTemplate";
 import { db } from "./firebase";
-import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "./quota";
+import { computeEmailQuotaDetail, computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation, } from "./quota";
 import { type ResendEnvelope, ResendSendError, sendEmails } from "./resendClient";
+import { SITE_TIME_ZONE } from "./siteTime";
 
 /**
  * The emails an account gets. Fixed here rather than saved in the admin panel
@@ -25,14 +27,34 @@ const mailUnavailable = () =>
     new HttpsError("unavailable", "Couldn't send the email. Please try again later.", {code: "mail-unavailable"});
 
 /**
- * Sends one email straight away, skipping the overflow queue: it's no use to
- * someone waiting on a code half an hour later. May use the whole daily cap, so
- * the reserve kept from bulk mail is what's left when a big send has run.
+ * A code, or what's sent in place of one, which anyone can ask for; or a notice
+ * of something that has happened to an account, which only that account's
+ * changes send.
  */
-export async function sendAccountMail(envelope: ResendEnvelope): Promise<void> {
+export type AccountMailKind = "code" | "notice";
+
+const HOUR_MS = 60 * 60_000;
+
+// Every code email the site sends, in rateLimits like any other budget.
+const CODE_MAIL_BUDGET = "codeMail";
+
+/** How much of Resend's day mail of `kind` may take: codes leave NOTICE_MAIL_RESERVE for notices. */
+const dailyLimit = (kind: AccountMailKind): number =>
+    kind === "code" ? RESEND_DAILY_CAP - NOTICE_MAIL_RESERVE : RESEND_DAILY_CAP;
+
+/**
+ * Sends one email straight away, skipping the overflow queue: it's no use to
+ * someone waiting on a code half an hour later. A notice may use the whole
+ * daily cap, so the reserve kept from bulk mail is what's left when a big send
+ * has run; codes stop short of it, and at CODE_MAIL_HOURLY_CAP an hour.
+ */
+export async function sendAccountMail(envelope: ResendEnvelope, kind: AccountMailKind): Promise<void> {
+    if (kind === "code" && !(await chargeRateLimit(CODE_MAIL_BUDGET, CODE_MAIL_HOURLY_CAP, HOUR_MS)).allowed) {
+        throw mailUnavailable();
+    }
     const allowed = await db.runTransaction(async (txn) => {
         const {sentToday, reserved} = await computeEmailQuotaInTxn(txn);
-        if (sentToday >= RESEND_DAILY_CAP) return false;
+        if (sentToday >= dailyLimit(kind)) return false;
         reserveQuotaInTxn(txn, 1, reserved);
         return true;
     });
@@ -48,10 +70,23 @@ export async function sendAccountMail(envelope: ResendEnvelope): Promise<void> {
     }
 }
 
+/**
+ * Refuses as sending a code would when none could go out now, without sending
+ * or using up anything: for a request that sends nothing, which has to be
+ * refused alike or the difference gives away why it sent nothing.
+ */
+export async function requireCodeMailRoom(): Promise<void> {
+    const [{sentToday}, roomThisHour] = await Promise.all([
+        computeEmailQuotaDetail(),
+        rateLimitHasRoom(CODE_MAIL_BUDGET, CODE_MAIL_HOURLY_CAP, HOUR_MS),
+    ]);
+    if (sentToday >= dailyLimit("code") || !roomThisHour) throw mailUnavailable();
+}
+
 /** For a heads-up after the fact: what it's about has happened, so a failure stops at the log. */
 export async function sendNotice(envelope: ResendEnvelope): Promise<void> {
     try {
-        await sendAccountMail(envelope);
+        await sendAccountMail(envelope, "notice");
     } catch (err) {
         console.error("sendNotice: not sent", err);
     }
@@ -238,6 +273,42 @@ export async function googleChangedMail(
             bound
                 ? `The Google account ${masked} can now sign in to your account. You can unbind it in Settings.`
                 : `The Google account ${masked} can no longer sign in to your account.`,
+            contact,
+        ]),
+    };
+}
+
+/**
+ * When an account asks for itself to be deleted, which anyone signed in to it can
+ * do: its owner has until `deleteAt` to stop it from Settings. A deletion staff
+ * asked for sends none, and only staff can cancel it.
+ */
+export async function accountDeletionMail(
+    to: string,
+    deleteAt: Date,
+    language: MailLanguage,
+): Promise<ResendEnvelope> {
+    const settings = escapeHtml(`${PUBLIC_ORIGIN}/profile?tab=settings`);
+    const contact = await contactLine(language);
+    const when = escapeHtml(deleteAt.toLocaleString(language === "zh" ? "zh-CN" : "en-US", {
+        dateStyle: "long",
+        timeStyle: "short",
+        timeZone: SITE_TIME_ZONE,
+    }));
+    return language === "zh" ? {
+        to,
+        subject: "您的 Sekai Beyond 账号即将被删除",
+        html: page("账号即将被删除", [
+            `有人在您的账号中申请了删除账号。自 ${when} 起，账号及其中的所有内容将被永久删除。`,
+            `不是您本人的操作？请<a href="${settings}">登录并在“设置”中取消删除</a>，然后更改密码，以退出其他设备。无法登录时，可在登录窗口中使用“忘记密码”。`,
+            contact,
+        ]),
+    } : {
+        to,
+        subject: "Your Sekai Beyond account is due to be deleted",
+        html: page("Your account is due to be deleted", [
+            `Someone signed in to your account asked for it to be deleted. From ${when}, it and everything in it will be gone for good.`,
+            `Wasn't you? <a href="${settings}">Sign in and cancel it in Settings</a>, then change your password to sign out your other devices. If you can't sign in, use Forgot password.`,
             contact,
         ]),
     };

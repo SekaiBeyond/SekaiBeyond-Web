@@ -12,11 +12,19 @@ import {
     type MailLanguage,
     passwordChangedMail,
     readMailLanguage,
+    requireCodeMailRoom,
     sendAccountMail,
     sendNotice,
 } from "../utils/accountMail";
 import { creditScannedTickets, emailIndexRef, FORMER_EMAILS_MAX, nextEmailChangeAt } from "../utils/accountEmail";
-import { consumeRateLimit, requireAdmin, requireAuth, requireCanManage, requireStaff } from "../utils/auth";
+import {
+    consumeRateLimit,
+    requireAdmin,
+    requireAuth,
+    requireCanManage,
+    requireRegisteredSession,
+    requireStaff,
+} from "../utils/auth";
 import {
     credentialsRef,
     type GoogleBinding,
@@ -28,11 +36,11 @@ import { type CodePurpose, consumeEmailCode, dropEmailCode, issueEmailCode } fro
 import { EMAIL_UNDO_DAYS, emailUndoRef, emailUndoUrl, isEmailUndoToken, newEmailUndoToken } from "../utils/emailUndo";
 import { db } from "../utils/firebase";
 import { type GoogleIdentity, verifyGoogleToken } from "../utils/google";
-import { hashPassword, readPasswordAttempt, validateNewPassword, verifyPassword } from "../utils/passwords";
+import { checkNewPassword, hashPassword, readPasswordAttempt, verifyPassword } from "../utils/passwords";
 import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, type ResendEnvelope } from "../utils/resendClient";
 import { callerAddressKey } from "../utils/scans";
-import { endSessions, sessionIdOf, sessionRef } from "../utils/sessions";
+import { endSessions, sessionIdOf } from "../utils/sessions";
 import { sanitizeDisplayText, validateDocId, validateEmail } from "../utils/validation";
 
 /**
@@ -62,10 +70,14 @@ const UNDOS_PER_HOUR_PER_NETWORK = 30;
 
 // Password tries on one address, by anyone and whether or not it has an account,
 // so being stopped says nothing about it. Enough for someone working out which
-// password they used, and far too few to guess one. Forgot Password still works
-// while this is in force, so nobody can lock a person out by trying their address.
+// password they used, and far too few to guess one: the daily ceiling keeps a
+// guesser who waits out each window to a few thousand tries a year. Forgot
+// Password and Google still sign in while either is in force, so nobody can lock
+// a person out by trying their address.
 const SIGN_INS_PER_ADDRESS = 10;
 const SIGN_INS_PER_ADDRESS_WINDOW_MS = 15 * MINUTE_MS;
+const SIGN_INS_PER_ADDRESS_PER_DAY = 30;
+const DAY_MS = 24 * HOUR_MS;
 
 // What a code email takes to send, roughly, for when there's nothing to send.
 const SEND_TIME_MS = 150;
@@ -117,23 +129,6 @@ function readDisplayName(value: unknown): string {
     return name;
 }
 
-/**
- * The caller, for a call that changes how an account signs in. Signing a device
- * out marks its row in the device list, so a token that never registered a row
- * has nothing to mark, and would outlive a password reset or an undo for up to
- * an hour. requireAuth lets those through, as a device registers once it has
- * loaded; here the row has to be there. Any real device's is by the time it can
- * open Settings.
- */
-async function requireRegisteredSession(request: CallableRequest): Promise<string> {
-    const uid = await requireAuth(request, "account");
-    const sessionId = sessionIdOf(request.auth!.token);
-    if (!sessionId || !(await sessionRef(uid, sessionId).get()).exists) {
-        throw new HttpsError("unauthenticated", "This device isn't signed in properly.", {code: "session-ended"});
-    }
-    return uid;
-}
-
 /** Throws unless `code` is the live one. Goes last in a call, as it uses the code up. */
 async function requireEmailCode(purpose: CodePurpose, email: string, code: string): Promise<void> {
     if (!await consumeEmailCode(purpose, email, code)) throw badCode();
@@ -149,7 +144,7 @@ async function mailCode(
     const code = await issueEmailCode(purpose, email);
     if (!code) return;
     try {
-        await sendAccountMail(instead ?? codeMail(email, purpose, code, language));
+        await sendAccountMail(instead ?? codeMail(email, purpose, code, language), "code");
     } catch (err) {
         await dropEmailCode(purpose, email).catch(() => {
         });
@@ -173,13 +168,16 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
         await mailCode("signup", email, language, taken ? addressTakenMail(email, language) : undefined);
     } else if (input.purpose === "password") {
         const email = validateEmail(input.email, "email");
+        // Refused alike when no code could go out now, or a full mailbag would
+        // tell an address with an account from one without.
+        await requireCodeMailRoom();
         if ((await emailIndexRef(email).get()).exists) {
             await mailCode("password", email, language);
         } else {
             await sleep(SEND_TIME_MS + Math.random() * SEND_TIME_JITTER_MS);
         }
     } else if (input.purpose === "email-change") {
-        const uid = await requireRegisteredSession(request);
+        const uid = await requireRegisteredSession(request, "account");
         const email = validateEmail(input.email, "email");
         const user = (await db.collection("users").doc(uid).get()).data();
         requireEmailChangeAllowed(user);
@@ -260,7 +258,7 @@ export const signUpWithEmail = onCall(ACCOUNT_CALL, async (request) => {
     const email = validateEmail(input.email, "email");
     const code = readCode(input.code);
     const displayName = readDisplayName(input.displayName);
-    const password = validateNewPassword(input.password);
+    const password = await checkNewPassword(input.password);
 
     await requireEmailCode("signup", email, code);
     const passwordHash = await hashPassword(password);
@@ -271,11 +269,9 @@ export const signUpWithEmail = onCall(ACCOUNT_CALL, async (request) => {
 /** The account `password` opens at `email`, or a refusal that doesn't say which part was wrong. */
 async function checkPassword(request: CallableRequest, email: string, password: string): Promise<string> {
     await limitNetwork(request, "signin", SIGN_INS_PER_MINUTE_PER_NETWORK, MINUTE_MS);
-    await consumeRateLimit(
-        `signin_${emailIndexRef(email).id}`,
-        SIGN_INS_PER_ADDRESS,
-        SIGN_INS_PER_ADDRESS_WINDOW_MS,
-    );
+    const address = emailIndexRef(email).id;
+    await consumeRateLimit(`signin_${address}`, SIGN_INS_PER_ADDRESS, SIGN_INS_PER_ADDRESS_WINDOW_MS);
+    await consumeRateLimit(`signin_day_${address}`, SIGN_INS_PER_ADDRESS_PER_DAY, DAY_MS);
 
     const uid: string | undefined = (await emailIndexRef(email).get()).get("uid");
     const stored: string | null | undefined = uid ? (await credentialsRef(uid).get()).get("passwordHash") : null;
@@ -324,7 +320,7 @@ export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
     const input = (request.data ?? {}) as {email?: unknown; code?: unknown; password?: unknown; language?: unknown};
     const email = validateEmail(input.email, "email");
     const code = readCode(input.code);
-    const password = validateNewPassword(input.password);
+    const password = await checkNewPassword(input.password);
 
     await requireEmailCode("password", email, code);
     const uid: string | undefined = (await emailIndexRef(email).get()).get("uid");
@@ -420,7 +416,7 @@ export const createAccountWithGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const google = await verifyGoogleToken(input.idToken);
     const displayName = readDisplayName(input.displayName);
     const email = validateEmail(input.email, "email");
-    const password = input.password ? validateNewPassword(input.password) : null;
+    const password = input.password ? await checkNewPassword(input.password) : null;
 
     if (email !== google.email || !google.emailVerified) {
         await requireEmailCode("signup", email, readCode(input.code));
@@ -482,7 +478,7 @@ export const bindGoogleWithPassword = onCall(ACCOUNT_CALL, async (request) => {
 
 /** For a signed-in account, from Settings. */
 export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireRegisteredSession(request);
+    const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {idToken?: unknown; language?: unknown};
     const google = await verifyGoogleToken(input.idToken);
     await bindGoogleTo(uid, google, readMailLanguage(input.language));
@@ -504,7 +500,7 @@ async function unlinkFirebaseGoogle(uid: string): Promise<void> {
  * still be signed in to.
  */
 export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireRegisteredSession(request);
+    const uid = await requireRegisteredSession(request, "account");
     const language = readMailLanguage((request.data as {language?: unknown} | null)?.language);
 
     const unbound = await db.runTransaction(async (txn) => {
@@ -563,10 +559,10 @@ export const getSignInMethods = onCall({maxInstances: 20}, async (request) => {
 
 /** Changes a password from Settings. The code stands in for the old password, which an account may not have. */
 export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireRegisteredSession(request);
+    const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {code?: unknown; password?: unknown; language?: unknown};
     const code = readCode(input.code);
-    const password = validateNewPassword(input.password);
+    const password = await checkNewPassword(input.password);
     const email: string = (await db.collection("users").doc(uid).get()).get("email") ?? "";
 
     await requireEmailCode("password", email, code);
@@ -656,7 +652,7 @@ async function afterEmailMoved(
 }
 
 export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
-    const uid = await requireRegisteredSession(request);
+    const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {email?: unknown; code?: unknown; language?: unknown};
     const email = validateEmail(input.email, "email");
     const code = readCode(input.code);
@@ -690,7 +686,7 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
     await limitNetwork(request, "undo", UNDOS_PER_HOUR_PER_NETWORK, HOUR_MS);
     if (!isEmailUndoToken(input.token)) throw badUndoLink();
     const undoRef = emailUndoRef(input.token);
-    const password = validateNewPassword(input.password);
+    const password = await checkNewPassword(input.password);
     const passwordHash = await hashPassword(password);
 
     const {uid, oldEmail, newEmail} = await db.runTransaction(async (txn) => {
@@ -720,6 +716,7 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
             formerEmails: former.filter(a => a !== oldEmail && a !== newEmail),
             emailChangedAt: FieldValue.delete(),
             deleteAt: FieldValue.delete(),
+            deletionRequestedBy: FieldValue.delete(),
         });
 
         const google = googleBindingOf(credentials);

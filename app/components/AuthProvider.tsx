@@ -1,4 +1,5 @@
 import { createContext, type FC, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { FirebaseError } from 'firebase/app';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, type DocumentData, getDoc, Timestamp } from 'firebase/firestore';
 import {
@@ -18,7 +19,7 @@ import {
 import { toDate } from '~/lib/collectionCache';
 import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
 import { openSignInModal } from '~/lib/signInModal';
-import { currentSessionId, watchOwnSession } from '~/lib/sessions';
+import { currentSessionId, sessionEnded, watchOwnSession } from '~/lib/sessions';
 
 // `group` is a role ladder only; membership lives in membershipExpiresAt.
 export type UserGroup = 'user' | 'staff' | 'core-staff' | 'president';
@@ -106,6 +107,10 @@ export interface UserProfile {
     title?: string;
     titleCn?: string;
     eventStaffEvents: string[];
+    /** When the account is due to be deleted, or null when it isn't. */
+    deleteAt: Date | null;
+    /** Who asked for that: the account itself, or the staff member's uid. "" when not due. */
+    deletionRequestedBy: string;
 }
 
 function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
@@ -135,6 +140,8 @@ function toUserProfile(data: DocumentData): UserProfile {
         title: data.title ?? '',
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],
+        deleteAt: toDate(data.deleteAt),
+        deletionRequestedBy: typeof data.deletionRequestedBy === 'string' ? data.deletionRequestedBy : '',
     };
 }
 
@@ -240,6 +247,14 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     clearCachedPhoto();
                 }
             } catch (error) {
+                // A sign-in that has been signed out, or never listed itself in
+                // time, can't read even its own profile (liveSession in
+                // firestore.rules), so it signs out rather than sit half in.
+                if (firebaseUser && error instanceof FirebaseError && error.code === 'permission-denied'
+                    && await sessionEnded()) {
+                    await firebaseSignOut();
+                    return;
+                }
                 console.error('AuthProvider: failed to load or create user profile', error);
                 setProfile(null);
             } finally {

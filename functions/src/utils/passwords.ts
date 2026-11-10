@@ -1,4 +1,4 @@
-import { argon2, randomBytes, timingSafeEqual } from "node:crypto";
+import { argon2, createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { HttpsError } from "firebase-functions/v2/https";
 import { accountPepper } from "./credentials";
 
@@ -58,14 +58,59 @@ export async function verifyPassword(password: string, stored: string | null | u
     return !!stored && timingSafeEqual(actual, expected);
 }
 
+const BREACH_RANGE_URL = "https://api.pwnedpasswords.com/range/";
+const BREACH_CHECK_TIMEOUT_MS = 3_000;
+
+/**
+ * Whether `password` is on Have I Been Pwned's list of passwords from known
+ * breaches, which is the first thing anyone guessing tries. Only the first 5
+ * characters of its SHA-1 leave here (their k-anonymity range search), padded so
+ * the answer's size says nothing either. Says no when the list can't be reached
+ * in time: it's a guard against a bad choice, and nobody should be stuck at
+ * sign-up over it.
+ */
+async function isBreached(password: string): Promise<boolean> {
+    const hash = createHash("sha1").update(password, "utf8").digest("hex").toUpperCase();
+    const suffix = hash.slice(5);
+    try {
+        const response = await fetch(BREACH_RANGE_URL + hash.slice(0, 5), {
+            headers: {"Add-Padding": "true"},
+            signal: AbortSignal.timeout(BREACH_CHECK_TIMEOUT_MS),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        // One "SUFFIX:COUNT" a line; padding lines have a count of 0.
+        return (await response.text()).split("\n").some(line => {
+            const [candidate, count] = line.trim().split(":");
+            return candidate === suffix && Number(count) > 0;
+        });
+    } catch (err) {
+        console.warn("isBreached: breach list unavailable, password allowed", err);
+        return false;
+    }
+}
+
 /** The password to set, refused unless it's a string of a sensible length. */
-export function validateNewPassword(value: unknown): string {
+function validateNewPassword(value: unknown): string {
     if (typeof value !== "string" || value.length < MIN_LENGTH || value.length > MAX_LENGTH) {
         throw new HttpsError("invalid-argument", `Passwords are ${MIN_LENGTH} to ${MAX_LENGTH} characters.`, {
             code: "weak-password",
         });
     }
     return value;
+}
+
+/**
+ * The password to set: a string of a sensible length that isn't known from a
+ * breach. Checked as it will be hashed (see derive).
+ */
+export async function checkNewPassword(value: unknown): Promise<string> {
+    const password = validateNewPassword(value);
+    if (await isBreached(password.normalize("NFKC"))) {
+        throw new HttpsError("invalid-argument", "That password has appeared in a data breach. Please choose another.", {
+            code: "breached-password",
+        });
+    }
+    return password;
 }
 
 /** A password being tried, which only has to fit what hashing will accept. */

@@ -5,6 +5,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { accountErrorMessage } from '~/lib/accountErrors';
 import {
     callBindGoogle,
+    callCancelAccountDeletion,
     callChangeEmail,
     callChangePassword,
     callGetSignInMethods,
@@ -210,6 +211,59 @@ const Row = ({title, help, state, action, children}: {
 );
 
 /**
+ * An account due to be deleted, which says so and, when the account asked for it
+ * itself, has the way to stop it: the email that goes out sends its owner here,
+ * for when the asking was done with a stolen sign-in. One staff asked for only
+ * staff can cancel.
+ */
+const DeletionRow = ({deleteAt, ownRequest, showToast}: {
+    deleteAt: Date;
+    ownRequest: boolean;
+    showToast: ShowToast;
+}) => {
+    const {isEnglish} = useLanguage();
+    const {refreshProfile} = useAuth();
+    const [busy, setBusy] = useState(false);
+    const when = deleteAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {dateStyle: 'long', timeStyle: 'short'});
+
+    const cancel = async () => {
+        setBusy(true);
+        try {
+            await callCancelAccountDeletion();
+            await refreshProfile().catch(() => {
+            });
+            showToast(
+                isEnglish
+                    ? 'Deletion cancelled. If you didn’t ask for it, change your password now.'
+                    : '已取消删除。如果不是您本人申请的，请立即更改密码。',
+                'success',
+            );
+        } catch (err) {
+            showToast(accountErrorMessage(err, isEnglish), 'error');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Row
+            title={isEnglish ? 'Due to be deleted' : '即将删除'}
+            help={isEnglish
+                ? `From ${when}, your account and everything in it will be gone for good.`
+                : `自 ${when} 起，您的账号及其中的所有内容将被永久删除。`}
+            state={ownRequest ? undefined : (isEnglish
+                ? 'Staff scheduled this. Contact us if you think it’s a mistake.'
+                : '此删除由工作人员安排。如认为有误，请联系我们。')}
+            action={ownRequest && (
+                <button type="button" className="profile-action" disabled={busy} onClick={() => void cancel()}>
+                    {isEnglish ? 'Cancel Deletion' : '取消删除'}
+                </button>
+            )}
+        />
+    );
+};
+
+/**
  * /profile's Settings tab: the account's address and how it signs in. Everything
  * here is enforced server-side, the month between email changes included; the
  * buttons only spare someone a refused call.
@@ -292,6 +346,16 @@ export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
                     ? 'Your email is how you sign in and how your tickets find you. Tickets bought under an old address stay yours.'
                     : '邮箱用于登录，也用于匹配您的门票。用旧邮箱购买的门票仍归您所有。'}
             </p>
+
+            {profile.deleteAt && (
+                <div className="settings-rows">
+                    <DeletionRow
+                        deleteAt={profile.deleteAt}
+                        ownRequest={profile.deletionRequestedBy === user?.uid}
+                        showToast={showToast}
+                    />
+                </div>
+            )}
 
             {failed ? (
                 <p className="settings-row-help">

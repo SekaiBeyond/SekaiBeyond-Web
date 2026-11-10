@@ -12,9 +12,12 @@ import {
     normalizeGroup,
     requireAuth,
     requireCanManage,
+    requireRegisteredSession,
     requireStaff,
 } from "../utils/auth";
 import { emailIndexRef } from "../utils/accountEmail";
+import { accountDeletionMail, readMailLanguage, sendNotice } from "../utils/accountMail";
+import { RESEND_API_KEY } from "../utils/resendClient";
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
@@ -566,14 +569,22 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
         return {granted: grant};
     });
 });
-export const requestAccountDeletion = onCall({maxInstances: 10}, async (request) => {
-    const callerUid = await requireAuth(request);
-    const inputTarget = (request.data as {targetUid?: string})?.targetUid;
-    const targetUid = inputTarget ? validateDocId(inputTarget, "targetUid") : callerUid;
+/**
+ * Schedules an account's deletion, for `deleteAt`'s TTL policy to carry out.
+ * Anyone may ask for their own, from a device on its list, and its address is
+ * told at once, with the way to cancel: otherwise someone with a stolen sign-in
+ * could quietly delete it. `deletionRequestedBy` says whose request it is, which
+ * decides who may cancel it (cancelAccountDeletion).
+ */
+export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND_API_KEY]}, async (request) => {
+    const input = (request.data ?? {}) as {targetUid?: string; language?: unknown};
+    const ownAccount = !input.targetUid || input.targetUid === request.auth?.uid;
+    const callerUid = ownAccount ? await requireRegisteredSession(request) : await requireAuth(request);
+    const targetUid = input.targetUid ? validateDocId(input.targetUid, "targetUid") : callerUid;
 
     const deleteAt = deletionExpiresAt();
 
-    await db.runTransaction(async (txn) => {
+    const notifyEmail = await db.runTransaction(async (txn) => {
         const [callerSnap, targetSnap] = await Promise.all([
             txn.get(db.collection("users").doc(callerUid)),
             txn.get(db.collection("users").doc(targetUid)),
@@ -596,15 +607,19 @@ export const requestAccountDeletion = onCall({maxInstances: 10}, async (request)
             ? (callerSnap.data()!.displayName ?? "")
             : (targetData.displayName ?? "");
 
-        txn.update(db.collection("users").doc(targetUid), {deleteAt});
+        txn.update(db.collection("users").doc(targetUid), {deleteAt, deletionRequestedBy: callerUid});
         txn.set(recordRef(), recordDoc("account-deletion-requested", {
             performedBy: callerUid,
             performedByName: callerName,
             targetUid,
             targetName: targetData.displayName ?? "",
         }));
+        return callerUid === targetUid ? (targetData.email as string | undefined) ?? "" : "";
     });
 
+    if (notifyEmail) {
+        await sendNotice(await accountDeletionMail(notifyEmail, deleteAt.toDate(), readMailLanguage(input.language)));
+    }
     return {deleteAt: deleteAt.toDate().toISOString()};
 });
 export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) => {
@@ -626,13 +641,24 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
             throw new HttpsError("not-found", "No pending deletion.");
         }
 
-        if (callerUid !== targetUid) requireAdminOver(callerSnap, targetData);
+        // Staff may cancel any they could have asked for. An owner may cancel only
+        // their own request, so someone staff are removing can't keep the account.
+        if (callerUid !== targetUid) {
+            requireAdminOver(callerSnap, targetData);
+        } else if (targetData.deletionRequestedBy !== callerUid) {
+            throw new HttpsError("permission-denied", "Only staff can cancel this deletion.", {
+                code: "deletion-by-staff",
+            });
+        }
 
         const callerName = callerSnap.exists
             ? (callerSnap.data()!.displayName ?? "")
             : (targetData.displayName ?? "");
 
-        txn.update(db.collection("users").doc(targetUid), {deleteAt: FieldValue.delete()});
+        txn.update(db.collection("users").doc(targetUid), {
+            deleteAt: FieldValue.delete(),
+            deletionRequestedBy: FieldValue.delete(),
+        });
         txn.set(recordRef(), recordDoc("account-deletion-cancelled", {
             performedBy: callerUid,
             performedByName: callerName,
