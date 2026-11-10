@@ -1,5 +1,5 @@
-import { type Localized, useT } from '~/pages/con/i18n';
-import { SectionHeader } from '~/pages/con/SectionHeader';
+import { type Localized, useT } from '~/pages/convention/i18n';
+import { SectionHeader } from '~/pages/convention/SectionHeader';
 
 const PARAGRAPHS: Localized[] = [
     {

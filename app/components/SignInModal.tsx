@@ -263,7 +263,8 @@ export const SignInModal = () => {
                         <h2 className="redeem-heading">{isEnglish ? 'Create Account' : '创建账号'}</h2>
                         <p className="redeem-subtitle">
                             {isEnglish
-                                ? <>We sent a code to <strong>{email}</strong>. If that address already has an account, we’ve told you there instead.</>
+                                ? <>We sent a code to <strong>{email}</strong>. If that address already has an account,
+                                    we’ve told you there instead.</>
                                 : <>验证码已发送至 <strong>{email}</strong>。如果此邮箱已有账号，您会收到相关提醒。</>}
                         </p>
                         <form className="auth-form" onSubmit={signUp}>
@@ -366,7 +367,8 @@ export const SignInModal = () => {
                                 <>
                                     <p className="auth-note">
                                         {isEnglish
-                                            ? <>We sent a code to <strong>{email}</strong>. If that address already has an account, we’ve told you there instead.</>
+                                            ? <>We sent a code to <strong>{email}</strong>. If that address already has
+                                                an account, we’ve told you there instead.</>
                                             : <>验证码已发送至 <strong>{email}</strong>。如果此邮箱已有账号，您会收到相关提醒。</>}
                                     </p>
                                     {codeField}
@@ -411,8 +413,10 @@ export const SignInModal = () => {
                         <p className="redeem-subtitle">
                             {pendingGoogle.emailTaken
                                 ? (isEnglish
-                                    ? <>An account already uses <strong>{pendingGoogle.email}</strong>. Sign in to bind this Google account to it.</>
-                                    : <>已有账号使用 <strong>{pendingGoogle.email}</strong>。请登录以绑定此 Google 账号。</>)
+                                    ? <>An account already uses <strong>{pendingGoogle.email}</strong>. Sign in to bind
+                                        this Google account to it.</>
+                                    : <>已有账号使用 <strong>{pendingGoogle.email}</strong>。请登录以绑定此 Google
+                                        账号。</>)
                                 : (isEnglish
                                     ? 'Sign in to the account you want to sign in to with Google from now on.'
                                     : '请登录您希望今后使用 Google 登录的账号。')}
@@ -444,7 +448,9 @@ export const SignInModal = () => {
                 )}
 
                 {/* Last, so a form's first field takes the focus when the modal opens. */}
-                <button className="modal-close" onClick={close} type="button" aria-label={isEnglish ? 'Close' : '关闭'}>×</button>
+                <button className="modal-close" onClick={close} type="button"
+                        aria-label={isEnglish ? 'Close' : '关闭'}>×
+                </button>
             </div>
         </div>
     );

@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ConContent } from '~/lib/conContent';
-import { byHallOrder, HALL_ROWS, HALL_TABLES, type HallRow, rowOf } from '~/pages/con/hall';
-import { HallMap } from '~/pages/con/HallMap';
+import { byHallOrder, HALL_ROWS, HALL_TABLES, type HallRow, rowOf } from '~/pages/convention/hall';
+import { HallMap } from '~/pages/convention/HallMap';
 import { LocalizedField, type SectionProps, SectionShell, useSectionEditor, } from './conContentShared';
 
 type VendorDraft = ConContent['vendors']['tables'][number];

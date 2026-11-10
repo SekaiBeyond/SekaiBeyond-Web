@@ -11,7 +11,7 @@ import { siteDay, toDatetimeLocal } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { isGarage, type UwLot, type UwParkingData, type WalkingTime } from '~/lib/uwParking';
 import { hasCoordinates, haversineMiles, type Venue } from '~/lib/venues';
-import type { Localized } from '~/pages/con/i18n';
+import type { Localized } from '~/pages/convention/i18n';
 
 /** An event the guide can show parking for: an upcoming event, the con's among them. */
 export interface GuideEvent {

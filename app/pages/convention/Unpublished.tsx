@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { useT } from '~/pages/con/i18n';
+import { useT } from '~/pages/convention/i18n';
 
 /**
  * What the public sees while the con page is off. Says nothing about the

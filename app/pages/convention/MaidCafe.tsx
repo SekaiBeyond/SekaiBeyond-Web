@@ -3,9 +3,9 @@ import { LuChevronLeft, LuChevronRight, LuClock, LuMapPin, LuX } from 'react-ico
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent } from '~/lib/conContent';
 import { useModalEffects } from '~/lib/useModalEffects';
-import { useT } from '~/pages/con/i18n';
-import { SectionHeader } from '~/pages/con/SectionHeader';
-import { formatClockTime } from '~/pages/con/utils';
+import { useT } from '~/pages/convention/i18n';
+import { SectionHeader } from '~/pages/convention/SectionHeader';
+import { formatClockTime } from '~/pages/convention/utils';
 
 interface Poster {
     src: string;

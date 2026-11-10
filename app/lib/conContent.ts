@@ -5,8 +5,8 @@ import { getFirebaseDb } from './firebase';
 import { toDatetimeLocal } from './siteTime';
 import { useAllUpcomingEvents, useUpcomingEvents } from './upcomingEvents';
 import { resolveVenueById, useVenues } from './venues';
-import { isHallTable } from '~/pages/con/hall';
-import type { Localized } from '~/pages/con/i18n';
+import { isHallTable } from '~/pages/convention/hall';
+import type { Localized } from '~/pages/convention/i18n';
 
 /* Admin-editable /con content: saved to staff-only `conContent/draft` and mirrored
    to public `conContent/main` while published. */

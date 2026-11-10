@@ -3,10 +3,10 @@ import { Link } from 'react-router';
 import { LuArrowUpRight, LuCalendar, LuClock, LuMapPin, LuSquareParking } from 'react-icons/lu';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { CON_NAME, useConContent, useConListing, useConVenue } from '~/lib/conContent';
-import { useT } from '~/pages/con/i18n';
-import { useConEnded, useMediaQuery } from '~/pages/con/hooks';
-import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
-import { Countdown } from '~/pages/con/Countdown';
+import { useT } from '~/pages/convention/i18n';
+import { useConEnded, useMediaQuery } from '~/pages/convention/hooks';
+import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/convention/utils';
+import { Countdown } from '~/pages/convention/Countdown';
 import type { ParkingGuideState } from '~/pages/parking';
 
 /**

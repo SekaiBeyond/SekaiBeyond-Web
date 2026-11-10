@@ -56,8 +56,11 @@ export const UndoEmailPage = () => {
                             <h2>{isEnglish ? 'Your Account Is Back' : '账号已恢复'}</h2>
                             <p>
                                 {isEnglish
-                                    ? <>Your account’s email is <strong>{restoredEmail}</strong> again, and every device has been signed out. Sign in with your new password. You can bind Google again in Settings.</>
-                                    : <>您的账号邮箱已恢复为 <strong>{restoredEmail}</strong>，所有设备均已退出登录。请使用新密码登录，之后可在设置中重新绑定 Google。</>}
+                                    ? <>Your account’s email is <strong>{restoredEmail}</strong> again, and every device
+                                        has been signed out. Sign in with your new password. You can bind Google again
+                                        in Settings.</>
+                                    : <>您的账号邮箱已恢复为 <strong>{restoredEmail}</strong>，所有设备均已退出登录。请使用新密码登录，之后可在设置中重新绑定
+                                        Google。</>}
                             </p>
                             <button onClick={signIn} className="profile-sign-in-btn">
                                 {isEnglish ? 'Sign In' : '登录'}

@@ -1,8 +1,8 @@
 import { shownCountdownSegments } from '~/lib/countdown';
 import { useConListing } from '~/lib/conContent';
-import { useCountdown } from '~/pages/con/hooks';
-import { useT } from '~/pages/con/i18n';
-import { pad } from '~/pages/con/utils';
+import { useCountdown } from '~/pages/convention/hooks';
+import { useT } from '~/pages/convention/i18n';
+import { pad } from '~/pages/convention/utils';
 
 export const Countdown = () => {
     const t = useT();

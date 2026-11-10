@@ -17,7 +17,13 @@ import {
 } from "../utils/accountMail";
 import { creditScannedTickets, emailIndexRef, FORMER_EMAILS_MAX, nextEmailChangeAt } from "../utils/accountEmail";
 import { consumeRateLimit, requireAdmin, requireAuth, requireCanManage, requireStaff } from "../utils/auth";
-import { credentialsRef, type GoogleBinding, googleBindingOf, googleIndexRef, PASSWORD_PEPPER } from "../utils/credentials";
+import {
+    credentialsRef,
+    type GoogleBinding,
+    googleBindingOf,
+    googleIndexRef,
+    PASSWORD_PEPPER
+} from "../utils/credentials";
 import { type CodePurpose, consumeEmailCode, dropEmailCode, issueEmailCode } from "../utils/emailCodes";
 import { EMAIL_UNDO_DAYS, emailUndoRef, emailUndoUrl, isEmailUndoToken, newEmailUndoToken } from "../utils/emailUndo";
 import { db } from "../utils/firebase";

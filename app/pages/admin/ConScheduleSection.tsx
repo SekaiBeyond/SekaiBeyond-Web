@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ConContent } from '~/lib/conContent';
-import { useT } from '~/pages/con/i18n';
+import { useT } from '~/pages/convention/i18n';
 import {
     AddButton,
     BLANK,

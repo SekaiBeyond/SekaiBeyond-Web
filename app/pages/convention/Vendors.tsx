@@ -2,10 +2,10 @@ import { useMemo, useRef, useState } from 'react';
 import { LuArrowUpRight, LuMail, LuSearch, LuX } from 'react-icons/lu';
 import { useConContent } from '~/lib/conContent';
 import { useSiteConfig } from '~/lib/siteConfig';
-import { HALL_ROWS, type HallRow, rowOf } from '~/pages/con/hall';
-import { HallMap } from '~/pages/con/HallMap';
-import { useT } from '~/pages/con/i18n';
-import { SectionHeader } from '~/pages/con/SectionHeader';
+import { HALL_ROWS, type HallRow, rowOf } from '~/pages/convention/hall';
+import { HallMap } from '~/pages/convention/HallMap';
+import { useT } from '~/pages/convention/i18n';
+import { SectionHeader } from '~/pages/convention/SectionHeader';
 
 /** "a 1", "A-1" and "a1" all read as table A1. */
 const asTableQuery = (query: string) => query.replace(/[\s-]/g, '').toUpperCase();
