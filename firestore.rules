@@ -261,6 +261,107 @@ service cloud.firestore {
             allow read: if request.auth != null && isStaffOrAbove();
         }
 
+        // BEGIN SKBY MANAGER
+        function managerAccess() {
+            return request.auth != null
+                && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.group
+                    in ['core-staff', 'president'];
+        }
+        function managerText(value) {
+            return value is string && value.matches('(?s).*\\S.*');
+        }
+        function managerId(value) {
+            return managerText(value) && value.size() <= 120;
+        }
+        function managerPosition(data) {
+            return data.position is int && data.position >= 0;
+        }
+        function managerDate(value) {
+            return value is string && (value == '' || managerCalendarDate(value));
+        }
+        function managerCalendarDate(value) {
+            let parts = value.split('-');
+            let year = int(parts[0]);
+            let month = int(parts[1]);
+            let day = int(parts[2]);
+            let leap = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+            let days = [0, 31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 31, 30, 31];
+            return value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+                && year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= days[month];
+        }
+        function managerProjectValid(data) {
+            return data.keys().hasOnly(['id', 'name', 'theme', 'position', 'revision', 'member_count', 'task_count'])
+                && managerId(data.id) && managerText(data.name) && data.theme in ['skby', 'arkonly']
+                && managerPosition(data) && data.revision is int && data.revision >= 0
+                && data.member_count is int && data.member_count >= 0
+                && data.task_count is int && data.task_count >= 0;
+        }
+        function managerProjectChanged(project) {
+            let path = /databases/$(database)/documents/managerProjects/$(project);
+            return getAfter(path).data.revision == get(path).data.revision + 1;
+        }
+        function managerMemberValid(data) {
+            return data.keys().hasOnly(['_id', 'position', '部门', '层级', '人员', '角色', '职责', '依赖部门', '备注'])
+                && managerId(data._id) && managerPosition(data)
+                && managerText(data['部门']) && managerText(data['人员']) && data['层级'] in ['部门', '组']
+                && data['角色'] is string && data['职责'] is string && data['依赖部门'] is string && data['备注'] is string;
+        }
+        function managerTaskValid(data) {
+            return data.keys().hasOnly(['ID', 'position', '部门', '分类', '任务', '负责人', '前置任务', '截止日期', '状态', '备注'])
+                && managerId(data.ID) && managerPosition(data) && managerText(data['任务'])
+                && data['部门'] is string && data['分类'] is string && data['负责人'] is string
+                && data['前置任务'] is string && managerDate(data['截止日期']) && data['备注'] is string
+                && data['状态'] in ['未开始', '进行中', '已完成', '废弃'];
+        }
+        function managerCoreValid(data) {
+            return data.keys().hasOnly(['_id', 'position', '姓名', '备注'])
+                && managerId(data._id) && managerPosition(data) && managerText(data['姓名']) && data['备注'] is string;
+        }
+        match /managerProjects/{project} {
+            allow read: if managerAccess();
+            allow create: if managerAccess() && managerProjectValid(request.resource.data)
+                && request.resource.data.revision == 0
+                && request.resource.data.member_count == 0 && request.resource.data.task_count == 0;
+            allow update: if managerAccess() && managerProjectValid(request.resource.data)
+                && request.resource.data.id == resource.data.id
+                && request.resource.data.position == resource.data.position
+                && request.resource.data.revision == resource.data.revision + 1;
+            match /members/{member} {
+                allow read: if managerAccess();
+                allow create: if managerAccess() && managerProjectChanged(project) && managerMemberValid(request.resource.data);
+                allow update: if managerAccess() && managerProjectChanged(project) && managerMemberValid(request.resource.data)
+                    && request.resource.data._id == resource.data._id && request.resource.data.position == resource.data.position;
+                allow delete: if managerAccess() && managerProjectChanged(project);
+            }
+            match /tasks/{task} {
+                allow read: if managerAccess();
+                allow create: if managerAccess() && managerProjectChanged(project) && managerTaskValid(request.resource.data);
+                allow update: if managerAccess() && managerProjectChanged(project) && managerTaskValid(request.resource.data)
+                    && request.resource.data.ID == resource.data.ID && request.resource.data.position == resource.data.position;
+                allow delete: if managerAccess() && managerProjectChanged(project);
+            }
+        }
+        match /managerCoreMembers/{member} {
+            function changed() {
+                let path = /databases/$(database)/documents/managerSettings/core;
+                return getAfter(path).data.revision == get(path).data.revision + 1;
+            }
+            allow read: if managerAccess();
+            allow create: if managerAccess() && changed() && managerCoreValid(request.resource.data);
+            allow update: if managerAccess() && changed() && managerCoreValid(request.resource.data)
+                && request.resource.data._id == resource.data._id && request.resource.data.position == resource.data.position;
+            allow delete: if managerAccess() && changed();
+        }
+        match /managerSettings/core {
+            allow read: if managerAccess();
+            allow update: if managerAccess() && request.resource.data.keys().hasOnly(['revision'])
+                && request.resource.data.revision == resource.data.revision + 1;
+        }
+        match /managerSettings/appearance {
+            allow read: if managerAccess();
+        }
+        // END SKBY MANAGER
+
         // Deny all access to unlisted paths (safety net — Firestore denies by default,
         // but an explicit rule prevents accidental exposure if new paths are added)
         match /{document=**} {
