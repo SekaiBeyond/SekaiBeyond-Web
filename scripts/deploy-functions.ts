@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -19,8 +19,17 @@ if (local.length === 0) {
 const batches: string[][] = [];
 for (let i = 0; i < local.length; i += batchSize) batches.push(local.slice(i, i + batchSize));
 
-const firebase = (args: string[]) => spawnSync("firebase", args, {stdio: "inherit"}).status === 0;
+// Through a shell, since npm installs the CLI on Windows as firebase.cmd, which Node can't start on its own. Every
+// argument is a flag or a function name, so none needs quoting.
+const firebaseCommand = (args: string[]) => ["firebase", ...args].join(" ");
+const firebase = (args: string[]) => spawnSync(firebaseCommand(args), {stdio: "inherit", shell: true}).status === 0;
 const deployArgs = (batch: string[]) => ["deploy", "--only", batch.map((name) => `functions:${name}`).join(",")];
+
+// Otherwise a missing CLI fails every batch in turn, a minute apart.
+if (spawnSync(firebaseCommand(["--version"]), {stdio: "ignore", shell: true}).status !== 0) {
+    console.error("Can't run the Firebase CLI. Install it with `npm install -g firebase-tools`, then run `firebase login`.");
+    process.exit(1);
+}
 
 const failed: string[][] = [];
 for (const [i, batch] of batches.entries()) {
@@ -34,7 +43,7 @@ for (const [i, batch] of batches.entries()) {
 
 // A filtered deploy never deletes anything, so offer to delete deployed functions no longer in the source,
 // as a full deploy would. functions:delete asks before deleting.
-const listing = JSON.parse(execFileSync("firebase", ["functions:list", "--json"], {encoding: "utf-8"})) as {
+const listing = JSON.parse(execSync(firebaseCommand(["functions:list", "--json"]), {encoding: "utf-8"})) as {
     result: {id: string}[];
 };
 const stale = [...new Set(listing.result.map((fn) => fn.id))].filter((id) => !local.includes(id));
