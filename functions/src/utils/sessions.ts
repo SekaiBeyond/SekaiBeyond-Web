@@ -1,4 +1,5 @@
-import type { DecodedIdToken } from "firebase-admin/auth";
+import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
+import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firebase";
 
 /**
@@ -30,6 +31,26 @@ export function sessionsRef(uid: string): FirebaseFirestore.CollectionReference 
 
 export function sessionRef(uid: string, sessionId: string): FirebaseFirestore.DocumentReference {
     return sessionsRef(uid).doc(sessionId);
+}
+
+/**
+ * Signs out every device but `keepSession`, or every one with null, and
+ * revokes the Firebase sessions behind them, which also reaches a sign-in the
+ * list never caught. The kept device needs a new sign-in after, as its refresh
+ * token goes too. An account that has never signed in has no Firebase record
+ * to revoke.
+ */
+export async function endSessions(uid: string, keepSession: string | null): Promise<void> {
+    const live = await sessionsRef(uid).where("endedAt", "==", null).get();
+    const others = live.docs.filter(doc => doc.id !== keepSession);
+    // A person has a handful of devices, far under a batch's 500 writes.
+    const batch = db.batch();
+    for (const doc of others) batch.update(doc.ref, {endedAt: FieldValue.serverTimestamp()});
+    if (others.length > 0) await batch.commit();
+
+    await getAuth().revokeRefreshTokens(uid).catch((err: unknown) => {
+        if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
+    });
 }
 
 export interface DeviceInfo {

@@ -4,6 +4,7 @@ import { doc, type DocumentData, getDoc, Timestamp } from 'firebase/firestore';
 import {
     callDeleteAvatar,
     callDeleteBanner,
+    callEndAllSessions,
     callEndOwnSession,
     callEndSession,
     callUpdateDisplayName,
@@ -150,6 +151,8 @@ interface AuthContextType {
     /** Opens the sign-in modal. */
     signIn: () => void;
     signOut: () => Promise<void>;
+    /** Signs out every device on the account, this one too. Throws, still signed in, if that fails. */
+    signOutEverywhere: () => Promise<void>;
     /** Moves this device onto the new sign-in a password change answers with. */
     replaceSession: (token: string) => Promise<void>;
     refreshProfile: () => Promise<void>;
@@ -280,6 +283,15 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         setProfile(null);
     };
 
+    const signOutEverywhere = async () => {
+        // This device's row is ended with the rest, so its watcher may sign it
+        // out before the call answers; signing out again does no harm.
+        await callEndAllSessions();
+        stopWatchingSession.current?.();
+        await firebaseSignOut();
+        setProfile(null);
+    };
+
     // The same uid signing in again fires no auth state change, so the new user
     // is set here, which starts watching the new session. The old row is ended
     // after: this device is the one that would notice.
@@ -349,6 +361,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         sessionId,
         signIn,
         signOut,
+        signOutEverywhere,
         replaceSession,
         refreshProfile,
         updateProfile,

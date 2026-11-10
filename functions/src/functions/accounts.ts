@@ -32,7 +32,7 @@ import { hashPassword, readPasswordAttempt, validateNewPassword, verifyPassword 
 import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, type ResendEnvelope } from "../utils/resendClient";
 import { callerAddressKey } from "../utils/scans";
-import { sessionIdOf, sessionRef, sessionsRef } from "../utils/sessions";
+import { endSessions, sessionIdOf, sessionRef } from "../utils/sessions";
 import { sanitizeDisplayText, validateDocId, validateEmail } from "../utils/validation";
 
 /**
@@ -289,24 +289,6 @@ export const signInWithPassword = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await checkPassword(request, email, readPasswordAttempt(input.password));
     return {token: await getAuth().createCustomToken(uid)};
 });
-
-/**
- * Signs out every device but `keepSession` (see utils/sessions.ts), and revokes
- * the Firebase sessions behind them. An account that has never signed in has no
- * Firebase record to revoke.
- */
-async function endSessions(uid: string, keepSession: string | null): Promise<void> {
-    const live = await sessionsRef(uid).where("endedAt", "==", null).get();
-    const others = live.docs.filter(doc => doc.id !== keepSession);
-    // A person has a handful of devices, far under a batch's 500 writes.
-    const batch = db.batch();
-    for (const doc of others) batch.update(doc.ref, {endedAt: FieldValue.serverTimestamp()});
-    if (others.length > 0) await batch.commit();
-
-    await getAuth().revokeRefreshTokens(uid).catch((err: unknown) => {
-        if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
-    });
-}
 
 /**
  * Sets a password, in place of any old one, and signs out the account's other

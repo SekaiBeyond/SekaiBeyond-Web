@@ -2,7 +2,14 @@ import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
-import { describeUserAgent, SESSION_ID_RE, sessionIdOf, sessionRef, sessionsRef } from "../utils/sessions";
+import {
+    describeUserAgent,
+    endSessions,
+    SESSION_ID_RE,
+    sessionIdOf,
+    sessionRef,
+    sessionsRef,
+} from "../utils/sessions";
 
 /** The caller and the session their call comes from. requireAuth has already refused an ended one. */
 async function requireSession(request: CallableRequest): Promise<{uid: string; sessionId: string}> {
@@ -89,4 +96,16 @@ export const endOtherSessions = onCall({maxInstances: 10}, async (request) => {
     if (others.length > 0) await batch.commit();
 
     return {ended: others.length};
+});
+
+/**
+ * Signs out every device on the caller's account, theirs too, and revokes
+ * every Firebase sign-in, so one the list never caught goes as well. The
+ * caller's own row is ended rather than removed, so its watcher signs it out
+ * even if the caller doesn't. Needs no session, as nothing is kept.
+ */
+export const endAllSessions = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+    await endSessions(uid, null);
+    return {ended: true};
 });

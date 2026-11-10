@@ -17,12 +17,13 @@ const DEVICE_ICONS: Record<DeviceSession['device'], IconType> = {
  * /profile's Settings tab: the devices signed in to the account, each with a
  * button to sign it out. Another device is signed out at once if it's open,
  * or the next time it is; this one signs out as the menu's Sign Out does.
+ * Under the list, buttons sign out every other device, or every one.
  */
 export const ProfileDevicesSection = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
-    const {user, sessionId, signOut} = useAuth();
+    const {user, sessionId, signOut, signOutEverywhere} = useAuth();
     const {sessions, failed} = useDeviceSessions(user?.uid ?? null);
-    // A session ID, or 'others' for the sign-out-everywhere-else button.
+    // A session ID, 'others' for the sign-out-everywhere-else button, or 'all' for sign-out-everywhere.
     const [busy, setBusy] = useState<string | null>(null);
 
     const locale = isEnglish ? 'en-US' : 'zh-CN';
@@ -74,6 +75,23 @@ export const ProfileDevicesSection = ({showToast}: {showToast: ShowToast}) => {
         } catch {
             showToast(isEnglish ? 'Failed to sign out other devices. Please try again.' : '退出其他设备失败，请重试。', 'error');
         } finally {
+            setBusy(null);
+        }
+    };
+
+    const signOutAll = async () => {
+        const confirmed = window.confirm(
+            isEnglish
+                ? 'Sign out of every device, this one included? You’ll have to sign in again on each.'
+                : '确定要退出所有设备（包括当前设备）吗？每台设备都需要重新登录。',
+        );
+        if (!confirmed) return;
+        setBusy('all');
+        try {
+            // Signed out on success, which takes this page with it.
+            await signOutEverywhere();
+        } catch {
+            showToast(isEnglish ? 'Failed to sign out of all devices. Please try again.' : '退出所有设备失败，请重试。', 'error');
             setBusy(null);
         }
     };
@@ -142,17 +160,31 @@ export const ProfileDevicesSection = ({showToast}: {showToast: ShowToast}) => {
                 </div>
             )}
 
-            {othersCount > 0 && (
+            {/* With nothing else signed in, the other-devices button stays, disabled, so it's there to find. */}
+            {!failed && ordered && ordered.length > 0 && (
                 <div className="settings-devices-footer">
                     <button
                         type="button"
-                        className="profile-action settings-device-signout"
-                        disabled={busy !== null || !sessionId}
+                        className={`profile-action settings-device-signout${othersCount === 0 ? ' settings-device-signout--none' : ''}`}
+                        disabled={busy !== null || !sessionId || othersCount === 0}
+                        title={othersCount === 0
+                            ? (isEnglish ? 'No other devices are signed in.' : '没有其他已登录的设备。')
+                            : undefined}
                         onClick={() => void signOutOthers()}
                     >
                         {busy === 'others'
                             ? (isEnglish ? 'Signing out…' : '退出中…')
                             : (isEnglish ? 'Sign out of all other devices' : '退出所有其他设备')}
+                    </button>
+                    <button
+                        type="button"
+                        className="profile-action settings-device-signout"
+                        disabled={busy !== null}
+                        onClick={() => void signOutAll()}
+                    >
+                        {busy === 'all'
+                            ? (isEnglish ? 'Signing out…' : '退出中…')
+                            : (isEnglish ? 'Sign out of all devices' : '退出所有设备')}
                     </button>
                 </div>
             )}

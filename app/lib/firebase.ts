@@ -205,6 +205,9 @@ export const callEndOwnSession = () =>
 export const callEndOtherSessions = () =>
     httpsCallable<Record<string, never>, {ended: number}>(getFunctions(), 'endOtherSessions')({});
 
+export const callEndAllSessions = () =>
+    httpsCallable<Record<string, never>, {ended: boolean}>(getFunctions(), 'endAllSessions')({});
+
 export const callClaimEventCode = (data: {code: string}) =>
     httpsCallable<typeof data, {
         eventId: string;
