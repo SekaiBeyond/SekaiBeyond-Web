@@ -9,6 +9,7 @@ import {
     emailChangeUndoneMail,
     emailSetByStaffMail,
     googleChangedMail,
+    limitNoticedChange,
     type MailLanguage,
     passwordChangedMail,
     readMailLanguage,
@@ -16,7 +17,13 @@ import {
     sendAccountMail,
     sendNotice,
 } from "../utils/accountMail";
-import { creditScannedTickets, emailIndexRef, FORMER_EMAILS_MAX, nextEmailChangeAt } from "../utils/accountEmail";
+import {
+    creditScannedTickets,
+    domainTakesMail,
+    emailIndexRef,
+    FORMER_EMAILS_MAX,
+    nextEmailChangeAt,
+} from "../utils/accountEmail";
 import {
     consumeRateLimit,
     requireAdmin,
@@ -100,6 +107,13 @@ const googleTaken = () =>
 const badUndoLink = () =>
     new HttpsError("not-found", "This link doesn't work.", {code: "bad-undo-link"});
 
+/** Refuses an address whose domain can't receive mail, before a code is spent bouncing off it. */
+async function requireMailDomain(email: string): Promise<void> {
+    if (!await domainTakesMail(email)) {
+        throw new HttpsError("invalid-argument", "That address can't receive email.", {code: "email-undeliverable"});
+    }
+}
+
 /** When the account in `user` may next change its address, or null if it may now. */
 function emailChangeLockedUntil(user: FirebaseFirestore.DocumentData | undefined): Date | null {
     const changedAt: Date | undefined = user?.emailChangedAt?.toDate?.();
@@ -164,6 +178,7 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
 
     if (input.purpose === "signup") {
         const email = validateEmail(input.email, "email");
+        await requireMailDomain(email);
         const taken = (await emailIndexRef(email).get()).exists;
         await mailCode("signup", email, language, taken ? addressTakenMail(email, language) : undefined);
     } else if (input.purpose === "password") {
@@ -184,6 +199,7 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
         if (email === user?.email) {
             throw new HttpsError("invalid-argument", "That's already your email.", {code: "same-email"});
         }
+        await requireMailDomain(email);
         const taken = (await emailIndexRef(email).get()).exists;
         await mailCode("email-change", email, language, taken ? addressTakenMail(email, language) : undefined);
     } else {
@@ -325,6 +341,7 @@ export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
     await requireEmailCode("password", email, code);
     const uid: string | undefined = (await emailIndexRef(email).get()).get("uid");
     if (!uid) throw badCode();
+    await limitNoticedChange(uid, "password");
 
     await setPassword(uid, email, password, null, readMailLanguage(input.language));
     return {token: await getAuth().createCustomToken(uid)};
@@ -471,6 +488,7 @@ export const bindGoogleWithPassword = onCall(ACCOUNT_CALL, async (request) => {
     const google = await verifyGoogleToken(input.idToken);
     const email = validateEmail(input.email, "email");
     const uid = await checkPassword(request, email, readPasswordAttempt(input.password));
+    await limitNoticedChange(uid, "google");
 
     await bindGoogleTo(uid, google, readMailLanguage(input.language));
     return {token: await getAuth().createCustomToken(uid)};
@@ -481,6 +499,7 @@ export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {idToken?: unknown; language?: unknown};
     const google = await verifyGoogleToken(input.idToken);
+    await limitNoticedChange(uid, "google");
     await bindGoogleTo(uid, google, readMailLanguage(input.language));
     return {bound: true};
 });
@@ -502,6 +521,7 @@ async function unlinkFirebaseGoogle(uid: string): Promise<void> {
 export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const language = readMailLanguage((request.data as {language?: unknown} | null)?.language);
+    await limitNoticedChange(uid, "google");
 
     const unbound = await db.runTransaction(async (txn) => {
         const [credentials, user] = await Promise.all([
@@ -566,6 +586,7 @@ export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
     const email: string = (await db.collection("users").doc(uid).get()).get("email") ?? "";
 
     await requireEmailCode("password", email, code);
+    await limitNoticedChange(uid, "password");
     await setPassword(uid, email, password, sessionIdOf(request.auth!.token), readMailLanguage(input.language));
     // This device's sign-in was revoked with the rest, so it gets a new one.
     return {token: await getAuth().createCustomToken(uid)};

@@ -92,6 +92,37 @@ export async function sendNotice(envelope: ResendEnvelope): Promise<void> {
     }
 }
 
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * Changes that each email the account a notice, and how many of each one account
+ * may make a day. A notice may use all of the day's mail, the reserve kept from
+ * codes included, so without these one account looping a change (binding and
+ * unbinding Google, asking for deletion and cancelling) could spend the lot in
+ * minutes, and the next change to anyone's account would go unannounced.
+ */
+const NOTICED_CHANGES_PER_DAY = {google: 6, password: 5, deletion: 3} as const;
+export type NoticedChange = keyof typeof NOTICED_CHANGES_PER_DAY;
+
+/**
+ * Counts a change against its account's day, refusing it once over: refused,
+ * never made without its notice. Goes after whatever proves the caller may make
+ * the change, so nobody else can use up an account's allowance.
+ */
+export async function limitNoticedChange(uid: string, change: NoticedChange): Promise<void> {
+    const {allowed, retryAfterMs} = await chargeRateLimit(
+        `notice_${change}_${uid}`,
+        NOTICED_CHANGES_PER_DAY[change],
+        DAY_MS,
+    );
+    if (!allowed) {
+        throw new HttpsError("resource-exhausted", "Too many changes like this today. Please try again later.", {
+            code: "too-many-changes",
+            retryAfterMs,
+        });
+    }
+}
+
 function page(heading: string, paragraphs: string[]): string {
     const body = paragraphs
         .map(p => `<p style="margin:0 0 16px;color:#4a4a4a;font-size:15px;line-height:1.6;">${p}</p>`)

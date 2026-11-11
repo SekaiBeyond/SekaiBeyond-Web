@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Resolver } from "node:dns/promises";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firebase";
 import { isApiOrder, isScannedTicket } from "./tickets";
@@ -17,6 +18,40 @@ import { isApiOrder, isScannedTicket } from "./tickets";
  */
 
 export const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+
+// Short, so a slow DNS server can't hold up asking for a code.
+const resolver = new Resolver({timeout: 2_000, tries: 2});
+
+// What DNS answers when there's no such record, as opposed to not answering.
+const NO_RECORD = new Set(["ENODATA", "ENOTFOUND"]);
+
+const dnsErrorCode = (err: unknown): string => (err as {code?: string} | null)?.code ?? "";
+
+/**
+ * Whether mail to `email` has anywhere to go: its domain names a mail server,
+ * or, naming none, has an address of its own for mail to go to instead (RFC
+ * 5321). A made-up domain has neither, and every code sent there bounces, which
+ * Resend holds against the site. Says yes when DNS doesn't answer, so a hiccup
+ * never stops a real sign-up, and always in the emulator, which sends nothing.
+ */
+export async function domainTakesMail(email: string): Promise<boolean> {
+    if (process.env.FUNCTIONS_EMULATOR === "true") return true;
+    const domain = email.slice(email.lastIndexOf("@") + 1);
+    try {
+        // A lone "null MX" (RFC 7505), which Node reads as an empty name, says
+        // the domain takes no mail at all.
+        return (await resolver.resolveMx(domain)).some(mx => mx.exchange !== "");
+    } catch (err) {
+        // ENOTFOUND: no such domain. ENODATA: it exists, but names no mail
+        // server. Anything else is DNS not answering.
+        if (dnsErrorCode(err) === "ENOTFOUND") return false;
+        if (dnsErrorCode(err) !== "ENODATA") return true;
+    }
+    const answers = await Promise.allSettled([resolver.resolve4(domain), resolver.resolve6(domain)]);
+    return !answers.every(answer => answer.status === "fulfilled"
+        ? answer.value.length === 0
+        : NO_RECORD.has(dnsErrorCode(answer.reason)));
+}
 
 /**
  * An address shown to someone who may not own it, such as whoever holds a

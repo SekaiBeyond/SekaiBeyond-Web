@@ -28,6 +28,14 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
             return isEnglish
                 ? 'That password has appeared in a data breach, so it’s among the first anyone would guess. Please choose another.'
                 : '该密码曾出现在数据泄露中，很容易被猜到，请换一个。';
+        case 'too-many-changes':
+            return isEnglish
+                ? 'You’ve made this change too many times today. Please try again later.'
+                : '今天此项更改次数过多，请稍后再试。';
+        case 'email-undeliverable':
+            return isEnglish
+                ? 'That address can’t receive email. Please check it for typos.'
+                : '该邮箱地址无法接收邮件，请检查是否有拼写错误。';
         case 'deletion-by-staff':
             return isEnglish ? 'Staff scheduled this deletion, so only staff can cancel it.' : '此删除由工作人员安排，只有工作人员可以取消。';
         case 'no-name':

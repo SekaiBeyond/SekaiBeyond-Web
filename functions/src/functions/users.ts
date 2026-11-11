@@ -16,7 +16,7 @@ import {
     requireStaff,
 } from "../utils/auth";
 import { emailIndexRef } from "../utils/accountEmail";
-import { accountDeletionMail, readMailLanguage, sendNotice } from "../utils/accountMail";
+import { accountDeletionMail, limitNoticedChange, readMailLanguage, sendNotice } from "../utils/accountMail";
 import { RESEND_API_KEY } from "../utils/resendClient";
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
@@ -581,6 +581,7 @@ export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND
     const ownAccount = !input.targetUid || input.targetUid === request.auth?.uid;
     const callerUid = ownAccount ? await requireRegisteredSession(request) : await requireAuth(request);
     const targetUid = input.targetUid ? validateDocId(input.targetUid, "targetUid") : callerUid;
+    if (targetUid === callerUid) await limitNoticedChange(callerUid, "deletion");
 
     const deleteAt = deletionExpiresAt();
 
