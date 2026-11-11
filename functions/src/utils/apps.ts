@@ -4,12 +4,16 @@ import type { Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
 
 /**
- * Apps people sign in to with their accounts here: projects of their own, such
- * as SKBY Manager, that keep their own data and decide for themselves who may
- * do what with it. The site tells an app who someone is (issueAppToken), and
- * serves it what of the site's own data that person may see here, as far as
- * the scopes the app was given allow (the person routes of functions/api.ts).
- * Core staff register apps in the Apps tool (functions/apps.ts).
+ * Registered apps: other projects, such as SKBY Manager or a ticket seller's
+ * app, that connect to Sekai Beyond. Core staff register apps in the Apps tool
+ * (functions/apps.ts). An app may:
+ *
+ * - sign people in with their accounts here (issueAppToken), and read what of
+ *   the site's data that person may see here, as far as the scopes the app was
+ *   given allow (the person routes of functions/api.ts);
+ * - hold server-to-server API keys (utils/apiKeys.ts) for the ticket API, with
+ *   the app's ID as the namespace its order numbers live in;
+ * - or both.
  *
  * A sign-in is a Firebase custom token for the app's own Firebase project,
  * signed through IAM as a service account of that project, as this project's
@@ -64,12 +68,16 @@ export interface AppDoc {
     name: string;
     /** The account that looks after it, "" for none. Shown on its sign-in page. */
     ownerUid: string;
-    /** Where sign-in may hand back to. Their origins may call the API from a browser. */
+    /**
+     * Where sign-in may hand back to; empty when the app doesn't sign people
+     * in. Their origins may call the API from a browser.
+     */
     redirectUris: string[];
+    /** What it may read for the person signed in; empty when sign-in is off. */
     scopes: AppScope[];
-    /** The Firebase project its sign-ins are for. */
+    /** The Firebase project its sign-ins are for, "" when sign-in is off. */
     firebaseProjectId: string;
-    /** The service account of that project its sign-ins are signed as. */
+    /** The service account of that project its sign-ins are signed as, "" when sign-in is off. */
     serviceAccount: string;
     createdBy: string;
     createdByName: string;
@@ -79,6 +87,11 @@ export interface AppDoc {
 
 export interface RegisteredApp extends AppDoc {
     id: string;
+}
+
+/** Whether people can sign in to `app` with their accounts here. */
+export function hasSignIn(app: Pick<AppDoc, "redirectUris" | "firebaseProjectId" | "serviceAccount">): boolean {
+    return app.redirectUris.length > 0 && !!app.firebaseProjectId && !!app.serviceAccount;
 }
 
 export const appsCol = () => db.collection("apps");
@@ -175,7 +188,7 @@ async function acrossApps(uid: string, action: "revoke" | "delete"): Promise<voi
         console.error(`[apps] couldn't list apps to ${action} ${uid} in`, err);
         return;
     }
-    const byProject = new Map(apps.map(app => [app.firebaseProjectId, app]));
+    const byProject = new Map(apps.filter(hasSignIn).map(app => [app.firebaseProjectId, app]));
     await Promise.all([...byProject.values()].map(async app => {
         const auth = getAuth(adminFor(app));
         try {

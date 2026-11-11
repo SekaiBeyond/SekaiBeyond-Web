@@ -553,18 +553,14 @@ export const callGetWalletPassStatus = () =>
 export const API_SCOPES = ['events:read', 'tickets:read', 'tickets:write'] as const;
 export type ApiScope = typeof API_SCOPES[number];
 
-/** A seller ID. Mirrors SELLER_ID_RE in functions/src/utils/apiKeys.ts. */
-export const SELLER_ID_RE = /^[a-z0-9-]{1,32}$/;
-
 export interface ApiKeySummary {
     id: string;
+    appId: string;
     name: string;
     hint: string;
     scopes: ApiScope[];
     /** Empty for every event. */
     eventIds: string[];
-    /** The seller whose orders it places and reads. */
-    seller: string;
     createdByName: string;
     createdAt: string | null;
     expiresAt: string | null;
@@ -572,17 +568,13 @@ export interface ApiKeySummary {
 }
 
 export const callCreateApiKey = (data: {
+    appId: string;
     name: string;
-    seller: string;
     scopes: ApiScope[];
     eventIds: string[];
     expiresInDays: number;
 }) => httpsCallable<typeof data, {id: string; key: string; hint: string; expiresAt: string}>(
     getFunctions(), 'createApiKey')(data);
-
-export const callListApiKeys = () =>
-    httpsCallable<Record<string, never>, {keys: ApiKeySummary[]; serverNow: string}>(
-        getFunctions(), 'listApiKeys')({});
 
 export const callRenameApiKey = (data: {keyId: string; name: string}) =>
     httpsCallable<typeof data, {name: string}>(getFunctions(), 'renameApiKey')(data);
@@ -606,6 +598,7 @@ export interface AppSummary {
     scopes: AppScope[];
     firebaseProjectId: string;
     serviceAccount: string;
+    keys: ApiKeySummary[];
     createdByName: string;
     createdAt: string | null;
     updatedAt: string | null;
@@ -620,9 +613,10 @@ export interface AppFields {
     serviceAccount: string;
 }
 
-/** Every app, and the service account an app's owner grants roles to ("" where it can't be told). */
+/** Every app with its API keys, the service account an app's owner grants roles to ("" where it can't be told), and the server time. */
 export const callListApps = () =>
-    httpsCallable<Record<string, never>, {apps: AppSummary[]; signer: string}>(getFunctions(), 'listApps')({});
+    httpsCallable<Record<string, never>, {apps: AppSummary[]; signer: string; serverNow: string}>(
+        getFunctions(), 'listApps')({});
 
 export const callSaveApp = (data: AppFields & {appId: string; create: boolean}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveApp')(data);

@@ -3,11 +3,10 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { QrCodesTool } from './tools/QrCodesTool';
 import { EmailQuotaTool } from './tools/EmailQuotaTool';
 import { WalletPassesTool } from './tools/WalletPassesTool';
-import { ApiKeysTool } from './tools/ApiKeysTool';
 import { AppsTool } from './tools/AppsTool';
 import type { ShowToast } from './utils';
 
-type ToolId = 'qr-codes' | 'email-quota' | 'wallet-passes' | 'api-keys' | 'apps';
+type ToolId = 'qr-codes' | 'email-quota' | 'wallet-passes' | 'apps';
 
 interface ToolDef {
     id: ToolId;
@@ -42,19 +41,11 @@ const TOOLS: ToolDef[] = [
         descriptionCn: '查看本月门票邮件中的"添加到钱包"按钮还能生成多少张 Apple / Google 钱包票券。',
     },
     {
-        id: 'api-keys',
-        title: 'API Keys',
-        titleCn: 'API 密钥',
-        description: 'Create and revoke keys giving a server admin-level access to the ticket API: reading every event and selling tickets for paid ones.',
-        descriptionCn: '创建和吊销门票 API 密钥：持有密钥的服务器可以管理员级别读取所有活动，并为付费活动售票。',
-        adminOnly: true,
-    },
-    {
         id: 'apps',
         title: 'Apps',
         titleCn: '应用',
-        description: 'Register apps people sign in to with their account here, like SKBY Manager, and choose what of the site each may read for the person signed in.',
-        descriptionCn: '登记可用本站账号登录的应用（例如 SKBY Manager），并选择每个应用可以为登录者读取本站的哪些内容。',
+        description: 'Register apps people sign in to with their account here, like SKBY Manager, or that call the ticket API from a server with an API key.',
+        descriptionCn: '登记可用本站账号登录的应用（例如 SKBY Manager），或从服务器使用 API 密钥调用门票 API 的应用。',
         adminOnly: true,
     },
 ];
@@ -78,10 +69,6 @@ export const ToolsTab = ({showToast, readOnly = false}: ToolsTabProps) => {
 
     if (activeTool === 'wallet-passes') {
         return <WalletPassesTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
-    }
-
-    if (activeTool === 'api-keys') {
-        return <ApiKeysTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
     }
 
     if (activeTool === 'apps') {

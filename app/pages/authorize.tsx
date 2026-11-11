@@ -118,7 +118,8 @@ export const AuthorizePage = () => {
                             <p>
                                 {isEnglish
                                     ? <>You’ll be signed in to {appName}{info.ownerName && <> (looked after
-                                        by {info.ownerName})</>} as <strong>{profile.displayName}</strong>. It will see:</>
+                                        by {info.ownerName})</>} as <strong>{profile.displayName}</strong>. It will
+                                        see:</>
                                     : <>您将以 <strong>{profile.displayName}</strong> 的身份登录 {appName}
                                         {info.ownerName && <>（由 {info.ownerName} 负责）</>}。它可以看到：</>}
                             </p>

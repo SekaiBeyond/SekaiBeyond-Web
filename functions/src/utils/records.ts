@@ -194,7 +194,7 @@ export interface RecordFields {
     enabled?: boolean;
     /**
      * The API key a key record is about, or that placed an order: its name and
-     * the hint of it the API Keys tool shows. Never the key.
+     * the hint of it the Apps tool shows. Never the key.
      */
     apiKeyName?: string;
     apiKeyHint?: string;

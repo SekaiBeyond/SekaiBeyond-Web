@@ -2,12 +2,14 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { GoogleAuth } from "google-auth-library";
 import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
+import { type ApiKeyDoc, apiKeysCol } from "../utils/apiKeys";
 import {
     APP_ID_RE,
     APP_REDIRECT_URIS_MAX,
     APP_SCOPES,
     appsCol,
     FIREBASE_PROJECT_ID_RE,
+    hasSignIn,
     isAppScope,
     mintAppToken,
     normalizeRedirectUri,
@@ -47,12 +49,16 @@ function parseAppInput(raw: unknown): AppInput {
 
     const ownerUid = input.ownerUid === undefined || input.ownerUid === "" ? "" : validateDocId(input.ownerUid, "ownerUid");
 
-    if (!Array.isArray(input.redirectUris) || input.redirectUris.length === 0
-        || input.redirectUris.length > APP_REDIRECT_URIS_MAX) {
+    const rawUris = input.redirectUris === undefined ? [] : input.redirectUris;
+    const rawScopes = input.scopes === undefined ? [] : input.scopes;
+    const rawProject = input.firebaseProjectId === undefined ? "" : input.firebaseProjectId;
+    const rawServiceAccount = input.serviceAccount === undefined ? "" : input.serviceAccount;
+
+    if (!Array.isArray(rawUris) || rawUris.length > APP_REDIRECT_URIS_MAX) {
         throw new HttpsError("invalid-argument",
             `redirectUris must list 1–${APP_REDIRECT_URIS_MAX} places sign-in may hand back to.`);
     }
-    const redirectUris = [...new Set(input.redirectUris.map(uri => {
+    const redirectUris = [...new Set(rawUris.map(uri => {
         const normalized = normalizeRedirectUri(uri);
         if (!normalized) {
             throw new HttpsError("invalid-argument",
@@ -61,17 +67,26 @@ function parseAppInput(raw: unknown): AppInput {
         return normalized;
     }))];
 
-    if (!Array.isArray(input.scopes) || !input.scopes.every(isAppScope)) {
+    if (!Array.isArray(rawScopes) || !rawScopes.every(isAppScope)) {
         throw new HttpsError("invalid-argument", `scopes may only name: ${APP_SCOPES.join(", ")}.`);
     }
     // In APP_SCOPES order and once each, however they came. None is fine: the
     // app then gets who someone is and nothing else.
-    const scopes = APP_SCOPES.filter(s => (input.scopes as string[]).includes(s));
+    const scopes = APP_SCOPES.filter(s => (rawScopes as string[]).includes(s));
 
-    if (typeof input.firebaseProjectId !== "string" || !FIREBASE_PROJECT_ID_RE.test(input.firebaseProjectId)) {
+    // An app that only holds API keys leaves sign-in blank; one that signs
+    // people in needs where to hand them back to, its project and its service account.
+    if (redirectUris.length === 0 && scopes.length === 0 && rawProject === "" && rawServiceAccount === "") {
+        return {name, ownerUid, redirectUris: [], scopes: [], firebaseProjectId: "", serviceAccount: ""};
+    }
+    if (redirectUris.length === 0) {
+        throw new HttpsError("invalid-argument",
+            `redirectUris must list 1–${APP_REDIRECT_URIS_MAX} places sign-in may hand back to.`);
+    }
+    if (typeof rawProject !== "string" || !FIREBASE_PROJECT_ID_RE.test(rawProject)) {
         throw new HttpsError("invalid-argument", "firebaseProjectId must be a Firebase project ID.");
     }
-    if (typeof input.serviceAccount !== "string" || !SERVICE_ACCOUNT_RE.test(input.serviceAccount)) {
+    if (typeof rawServiceAccount !== "string" || !SERVICE_ACCOUNT_RE.test(rawServiceAccount)) {
         throw new HttpsError("invalid-argument", "serviceAccount must be a service account's address.");
     }
     return {
@@ -79,8 +94,8 @@ function parseAppInput(raw: unknown): AppInput {
         ownerUid,
         redirectUris,
         scopes,
-        firebaseProjectId: input.firebaseProjectId,
-        serviceAccount: input.serviceAccount,
+        firebaseProjectId: rawProject,
+        serviceAccount: rawServiceAccount,
     };
 }
 
@@ -104,17 +119,55 @@ function signerAccount(): Promise<string> {
     return signer;
 }
 
-/** Every app, newest first, with its owner's name, and the account owners grant roles to. Core staff only. */
+/**
+ * Every app, newest first, with its owner's name, its API keys (expired ones
+ * too, newest first, never the key itself), and the account owners grant roles
+ * to. Core staff only.
+ */
 export const listApps = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
-    const apps = (await appsCol().orderBy("createdAt", "desc").get()).docs.map(doc => readApp(doc)!);
+    const [appsSnap, keysSnap] = await Promise.all([
+        appsCol().orderBy("createdAt", "desc").get(),
+        apiKeysCol().orderBy("createdAt", "desc").get(),
+    ]);
+    const apps = appsSnap.docs.map(doc => readApp(doc)!);
     const ownerUids = [...new Set(apps.map(app => app.ownerUid).filter(Boolean))];
     const owners = ownerUids.length > 0
         ? await db.getAll(...ownerUids.map(id => db.collection("users").doc(id)))
         : [];
     const ownerNames = new Map(owners.map(snap => [snap.id, snap.get("displayName") as string ?? ""]));
+
+    const keysByApp = new Map<string, {
+        id: string;
+        appId: string;
+        name: string;
+        hint: string;
+        scopes: string[];
+        eventIds: string[];
+        createdByName: string;
+        createdAt: string | null;
+        expiresAt: string | null;
+        lastUsedAt: string | null;
+    }[]>();
+    for (const doc of keysSnap.docs) {
+        const data = doc.data() as ApiKeyDoc;
+        const list = keysByApp.get(data.appId) ?? [];
+        list.push({
+            id: doc.id,
+            appId: data.appId,
+            name: data.name ?? "",
+            hint: data.hint ?? "",
+            scopes: data.scopes ?? [],
+            eventIds: data.eventIds ?? [],
+            createdByName: data.createdByName ?? "",
+            createdAt: isoOrNull(data.createdAt),
+            expiresAt: isoOrNull(data.expiresAt),
+            lastUsedAt: isoOrNull(data.lastUsedAt),
+        });
+        keysByApp.set(data.appId, list);
+    }
 
     return {
         apps: apps.map(app => ({
@@ -126,11 +179,13 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
             scopes: app.scopes,
             firebaseProjectId: app.firebaseProjectId,
             serviceAccount: app.serviceAccount,
+            keys: keysByApp.get(app.id) ?? [],
             createdByName: app.createdByName,
             createdAt: isoOrNull(app.createdAt),
             updatedAt: isoOrNull(app.updatedAt),
         })),
         signer: await signerAccount(),
+        serverNow: new Date().toISOString(),
     };
 });
 
@@ -176,8 +231,9 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Removes an app. The API refuses its sign-ins within seconds, and sign-in to
- * it stops at once. Its users and data in its own project are its owner's.
+ * Removes an app and revokes its API keys. Its keys and sign-in to it stop at
+ * once, and the API refuses its sign-ins within seconds. Its users and data in
+ * its own project are its owner's.
  */
 export const deleteApp = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -185,9 +241,14 @@ export const deleteApp = onCall({maxInstances: 10}, async (request) => {
 
     await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = appsCol().doc(appId);
-        const app = readApp(await txn.get(ref));
+        const [snap, keysSnap] = await Promise.all([
+            txn.get(ref),
+            txn.get(apiKeysCol().where("appId", "==", appId)),
+        ]);
+        const app = readApp(snap);
         if (!app) throw new HttpsError("not-found", "App not found.");
         txn.delete(ref);
+        for (const keyDoc of keysSnap.docs) txn.delete(keyDoc.ref);
         txn.set(recordRef(), recordDoc("app-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
@@ -198,12 +259,12 @@ export const deleteApp = onCall({maxInstances: 10}, async (request) => {
     return {deleted: true};
 });
 
-/** The app a sign-in is for, read fresh, so a change made a moment ago counts. */
+/** The app a sign-in is for, read fresh, so a change made a moment ago counts. Refuses one without sign-in. */
 async function findApp(raw: unknown): Promise<RegisteredApp> {
     const notFound = new HttpsError("not-found", "No such app.", {code: "unknown-app"});
     if (typeof raw !== "string" || !APP_ID_RE.test(raw)) throw notFound;
     const app = readApp(await appsCol().doc(raw).get());
-    if (!app) throw notFound;
+    if (!app || !hasSignIn(app)) throw notFound;
     return app;
 }
 

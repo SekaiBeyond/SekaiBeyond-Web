@@ -8,8 +8,9 @@ import {
     APP_ID_RE,
     appOrigins,
     type AppScope,
-    registeredApps,
+    hasSignIn,
     type RegisteredApp,
+    registeredApps,
     verifyAppIdToken,
 } from "../utils/apps";
 import { signedInSinceSessionsEnded } from "../utils/sessions";
@@ -29,9 +30,9 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
 /**
  * The site's API. Two kinds of caller use it:
  *
- * - A seller's server, with a key from the API Keys tool, so tickets sold in
- *   another app (the Chinese app first) land on the same list, and scan at the
- *   same door, as ours. Documented at https://docs.sekaibeyond.com/en/ticket-api,
+ * - A registered app's server, with a key from the Apps tool, so tickets sold
+ *   in another app (the Chinese app first) land on the same list, and scan at
+ *   the same door, as ours. Documented at https://docs.sekaibeyond.com/en/ticket-api,
  *   with a page per endpoint and per object under
  *   https://docs.sekaibeyond.com/en/api-reference.
  * - A person signed in to a registered app (see utils/apps.ts), with the ID
@@ -84,8 +85,8 @@ class ApiError extends Error {
 
 interface ApiKey {
     id: string;
+    appId: string;
     name: string;
-    seller: string;
     scopes: ApiScope[];
     eventIds: string[];
 }
@@ -181,8 +182,8 @@ async function authenticatePerson(idToken: string): Promise<Person> {
     const appId = claims?.app;
     if (typeof appId !== "string" || !APP_ID_RE.test(appId)) throw signInAgain;
     const app = (await registeredApps()).get(appId);
-    // Removed since, or not from the project the app signs people in to.
-    if (!app || claims!.aud !== app.firebaseProjectId) throw signInAgain;
+    // Removed since, sign-in turned off, or not from the project the app signs people in to.
+    if (!app || !hasSignIn(app) || claims!.aud !== app.firebaseProjectId) throw signInAgain;
     let token: DecodedIdToken;
     try {
         token = await verifyAppIdToken(app, idToken);
@@ -221,8 +222,8 @@ async function authenticateKey(credential: string): Promise<ApiKey> {
     }
     return {
         id: snap.id,
+        appId: data.appId,
         name: data.name,
-        seller: data.seller,
         scopes: data.scopes ?? [],
         eventIds: data.eventIds ?? [],
     };
@@ -638,10 +639,10 @@ interface PendingEmail {
 }
 
 /**
- * Issues an order's tickets, once. The doc is named for the seller and the
+ * Issues an order's tickets, once. The doc is named for the app and the
  * order, so a retry after a timeout gets the tickets it already has (200), the
  * same order number with different contents is refused (409) rather than
- * overwritten, and another seller's order number is another order.
+ * overwritten, and another app's order number is another order.
  *
  * Marked sent, as HomeTown's are, when the seller's app delivers the tickets.
  * With sendEmail they're emailed from here once the order is in, and the
@@ -659,7 +660,7 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
     const placed = await db.runTransaction(async (txn): Promise<{reply: ApiReply; email?: PendingEmail}> => {
         const event = await findEvent(eventId, txn);
         const orderRef = event.snap.ref.collection("attendees")
-            .doc(apiOrderAttendeeId(key.seller, order.orderId));
+            .doc(apiOrderAttendeeId(key.appId, order.orderId));
         const orderSnap = await txn.get(orderRef);
 
         // Before the on-sale checks, so a retry still gets its tickets once the
@@ -847,13 +848,13 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
 
 /**
  * From whichever collection holds the event, so an order is still there once
- * it's archived. Only the key's own seller's orders.
+ * it's archived. Only the key's own app's orders.
  */
 async function getOrder(key: ApiKey, eventId: string, orderId: string): Promise<ApiReply> {
     requireScope(key, "tickets:read");
     requireEventAccess(key, eventId);
     const event = await findEvent(eventId);
-    const snap = await event.snap.ref.collection("attendees").doc(apiOrderAttendeeId(key.seller, orderId)).get();
+    const snap = await event.snap.ref.collection("attendees").doc(apiOrderAttendeeId(key.appId, orderId)).get();
     if (!snap.exists || !isApiOrder(snap.data())) {
         throw new ApiError(404, "order-not-found", "Order not found.");
     }
@@ -925,7 +926,12 @@ const HTTPS_ERROR_STATUS: Partial<Record<FunctionsErrorCode, number>> = {
 
 // cors: false leaves CORS to the handler, in the emulator too, which otherwise
 // answers every preflight itself, for any origin.
-export const api = onRequest({maxInstances: 20, memory: "256MiB", secrets: [RESEND_API_KEY], cors: false}, async (req, res) => {
+export const api = onRequest({
+    maxInstances: 20,
+    memory: "256MiB",
+    secrets: [RESEND_API_KEY],
+    cors: false
+}, async (req, res) => {
     res.set("Cache-Control", "no-store");
     res.set("Vary", "Origin");
     // A registered app's page may read what it's answered, but never a call
