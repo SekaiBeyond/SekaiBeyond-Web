@@ -18,5 +18,6 @@ export * from "./functions/passportEmails";
 export * from "./functions/socialPlatforms";
 export * from "./functions/apiKeys";
 export { api } from "./functions/api";
+export * from "./functions/apps";
 export { scheduledMailDrain } from "./functions/scheduledMail";
 export { lookUpUwBuilding, syncUwParking, uwParkingNightlySync } from "./functions/parking";

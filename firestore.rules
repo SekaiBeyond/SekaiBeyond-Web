@@ -144,10 +144,18 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
-        // API keys, stored under their hashes. Server-only, no exceptions — core
-        // staff list, rename and revoke them through listApiKeys, renameApiKey
-        // and revokeApiKey, and the API reads them to check a caller's key.
+        // API keys, stored under their hashes, each belonging to a registered app.
+        // Server-only, no exceptions — core staff list, create, rename and revoke
+        // them through listApps, createApiKey, renameApiKey and revokeApiKey, and
+        // the API reads them to check a caller's key.
         match /apiKeys/{keyId} {
+            allow read, write: if false;
+        }
+
+        // Apps people sign in to with their accounts here (functions/src/utils/apps.ts).
+        // Server-only: core staff manage them through listApps, saveApp and
+        // deleteApp, and sign-in and the API read them.
+        match /apps/{appId} {
             allow read, write: if false;
         }
 

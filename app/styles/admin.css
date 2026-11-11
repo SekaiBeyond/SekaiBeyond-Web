@@ -1924,6 +1924,34 @@
     flex-wrap: wrap;
 }
 
+/* Apps tool: the gcloud commands an app's owner runs, wrapped to the card. */
+.admin-app-grant {
+    display: block;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 6px 0;
+}
+
+.admin-app-keys {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 107, 157, 0.14);
+}
+
+.admin-app-key {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 107, 157, 0.14);
+    border-radius: 10px;
+    background: rgba(255, 107, 157, 0.03);
+    min-width: 0;
+}
+
 .admin-api-key-meta {
     display: flex;
     flex-wrap: wrap;

@@ -103,12 +103,12 @@ export function hometownAttendeeId(ticketId: string): string {
 
 /**
  * The attendee doc holding one order placed through the API. Named for the
- * seller and its order number, so a retried call finds the order it already
- * placed instead of issuing a second set of tickets, and another seller's
+ * app and its order number, so a retried call finds the order it already
+ * placed instead of issuing a second set of tickets, and another app's
  * order with the same number is another doc.
  */
-export function apiOrderAttendeeId(seller: string, orderId: string): string {
-    return `api_${seller}_${orderId}`;
+export function apiOrderAttendeeId(appId: string, orderId: string): string {
+    return `api_${appId}_${orderId}`;
 }
 
 /**

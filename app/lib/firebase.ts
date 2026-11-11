@@ -553,18 +553,14 @@ export const callGetWalletPassStatus = () =>
 export const API_SCOPES = ['events:read', 'tickets:read', 'tickets:write'] as const;
 export type ApiScope = typeof API_SCOPES[number];
 
-/** A seller ID. Mirrors SELLER_ID_RE in functions/src/utils/apiKeys.ts. */
-export const SELLER_ID_RE = /^[a-z0-9-]{1,32}$/;
-
 export interface ApiKeySummary {
     id: string;
+    appId: string;
     name: string;
     hint: string;
     scopes: ApiScope[];
     /** Empty for every event. */
     eventIds: string[];
-    /** The seller whose orders it places and reads. */
-    seller: string;
     createdByName: string;
     createdAt: string | null;
     expiresAt: string | null;
@@ -572,23 +568,70 @@ export interface ApiKeySummary {
 }
 
 export const callCreateApiKey = (data: {
+    appId: string;
     name: string;
-    seller: string;
     scopes: ApiScope[];
     eventIds: string[];
     expiresInDays: number;
 }) => httpsCallable<typeof data, {id: string; key: string; hint: string; expiresAt: string}>(
     getFunctions(), 'createApiKey')(data);
 
-export const callListApiKeys = () =>
-    httpsCallable<Record<string, never>, {keys: ApiKeySummary[]; serverNow: string}>(
-        getFunctions(), 'listApiKeys')({});
-
 export const callRenameApiKey = (data: {keyId: string; name: string}) =>
     httpsCallable<typeof data, {name: string}>(getFunctions(), 'renameApiKey')(data);
 
 export const callRevokeApiKey = (data: {keyId: string}) =>
     httpsCallable<typeof data, {revoked: boolean}>(getFunctions(), 'revokeApiKey')(data);
+
+/** What an app may read for the person signed in to it. Mirrors APP_SCOPES in functions/src/utils/apps.ts. */
+export const APP_SCOPES = ['events:read', 'team:read', 'event-staff:read'] as const;
+export type AppScope = typeof APP_SCOPES[number];
+
+/** An app's ID. Mirrors APP_ID_RE in functions/src/utils/apps.ts. */
+export const APP_ID_RE = /^[a-z0-9-]{1,32}$/;
+
+export interface AppSummary {
+    id: string;
+    name: string;
+    ownerUid: string;
+    ownerName: string;
+    redirectUris: string[];
+    scopes: AppScope[];
+    firebaseProjectId: string;
+    serviceAccount: string;
+    keys: ApiKeySummary[];
+    createdByName: string;
+    createdAt: string | null;
+    updatedAt: string | null;
+}
+
+export interface AppFields {
+    name: string;
+    ownerUid: string;
+    redirectUris: string[];
+    scopes: AppScope[];
+    firebaseProjectId: string;
+    serviceAccount: string;
+}
+
+/** Every app with its API keys, the service account an app's owner grants roles to ("" where it can't be told), and the server time. */
+export const callListApps = () =>
+    httpsCallable<Record<string, never>, {apps: AppSummary[]; signer: string; serverNow: string}>(
+        getFunctions(), 'listApps')({});
+
+export const callSaveApp = (data: AppFields & {appId: string; create: boolean}) =>
+    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveApp')(data);
+
+export const callDeleteApp = (data: {appId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteApp')(data);
+
+/** What the sign-in page shows of an app. Needs no sign-in. */
+export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>
+    httpsCallable<typeof data, {name: string; ownerName: string; scopes: AppScope[]}>(
+        getFunctions(), 'getAppSignInInfo')(data);
+
+/** A sign-in to an app for the caller, and where to hand it. */
+export const callIssueAppToken = (data: {appId: string; redirectUri?: string}) =>
+    httpsCallable<typeof data, {token: string; redirectUri: string}>(getFunctions(), 'issueAppToken')(data);
 
 export const callUpdateEventEmailTemplate = (data: {
     eventId: string;

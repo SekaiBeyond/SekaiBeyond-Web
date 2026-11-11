@@ -117,6 +117,9 @@ export type RecordType =
     | "api-key-create"
     | "api-key-rename"
     | "api-key-revoke"
+    | "app-create"
+    | "app-update"
+    | "app-delete"
     | "scheduled-mail-drain";
 
 /** What a record says besides its type. Mirrors ActivityRecord in app/pages/admin/types.ts. */
@@ -191,12 +194,15 @@ export interface RecordFields {
     enabled?: boolean;
     /**
      * The API key a key record is about, or that placed an order: its name and
-     * the hint of it the API Keys tool shows. Never the key.
+     * the hint of it the Apps tool shows. Never the key.
      */
     apiKeyName?: string;
     apiKeyHint?: string;
     /** The seller's own number for an order placed through the API. */
     apiOrderId?: string;
+    /** The app an app record is about (see utils/apps.ts), and its name then. */
+    appId?: string;
+    appName?: string;
 }
 
 /** Where a new record goes. A fixed `id` makes a retried write land on the same record. */

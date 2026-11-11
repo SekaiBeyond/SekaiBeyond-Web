@@ -1,8 +1,19 @@
 import * as crypto from "crypto";
 import { type FunctionsErrorCode, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { checkApiKeyRateLimit } from "../utils/auth";
+import type { DecodedIdToken } from "firebase-admin/auth";
+import { checkApiKeyRateLimit, consumeRateLimit, isStaffOrAbove, normalizeGroup, type UserGroup } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol, type ApiScope, hashApiKey, isApiKeyShaped } from "../utils/apiKeys";
+import {
+    APP_ID_RE,
+    appOrigins,
+    type AppScope,
+    hasSignIn,
+    type RegisteredApp,
+    registeredApps,
+    verifyAppIdToken,
+} from "../utils/apps";
+import { signedInSinceSessionsEnded } from "../utils/sessions";
 import { RESEND_QUEUE_CAP } from "../utils/config";
 import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
 import { eventLocationText, getEventDoc, readConInfo } from "../utils/events";
@@ -17,25 +28,35 @@ import { sanitizeDisplayText, validateOptionalEmail, validateStr } from "../util
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 
 /**
- * The ticket API a seller's server calls with a key from the API Keys tool, so
- * tickets sold in another app (the Chinese app first) land on the same list,
- * and scan at the same door, as ours. Documented at
- * https://docs.sekaibeyond.com/en/ticket-api, with a page per endpoint and per object under
- * https://docs.sekaibeyond.com/en/api-reference.
+ * The site's API. Two kinds of caller use it:
  *
+ * - A registered app's server, with a key from the Apps tool, so tickets sold
+ *   in another app (the Chinese app first) land on the same list, and scan at
+ *   the same door, as ours. Documented at https://docs.sekaibeyond.com/en/ticket-api,
+ *   with a page per endpoint and per object under
+ *   https://docs.sekaibeyond.com/en/api-reference.
+ * - A person signed in to a registered app (see utils/apps.ts), with the ID
+ *   token of that sign-in, from the app's server or its pages. They're shown
+ *   what they may see here, and no more than the app's scopes allow.
+ *
+ *   GET  /api/v1/me                                a person, no scope
+ *   GET  /api/v1/team                              a person, team:read
  *   GET  /api/v1/events                            events:read
  *   GET  /api/v1/events/{eventId}                  events:read
- *   POST /api/v1/events/{eventId}/orders           tickets:write
- *   GET  /api/v1/events/{eventId}/orders/{orderId} tickets:read
+ *   GET  /api/v1/events/{eventId}/staff            a person, event-staff:read
+ *   POST /api/v1/events/{eventId}/orders           a key, tickets:write
+ *   GET  /api/v1/events/{eventId}/orders/{orderId} a key, tickets:read
  *
  * Events are both kinds the site has: unarchived (upcomingEvents) and archived
  * (pastEvents), told apart by `archived`, each with the fields the site reads
  * for it. Archiving keeps an event's ID and moves its attendees along, so an
- * event's URLs, and its orders', outlive the archive. Every event is listed,
- * free, unpublished and archived ones too: the seller filters.
+ * event's URLs, and its orders', outlive the archive. A key is shown every
+ * event, free, unpublished and archived ones too: the seller filters. A person
+ * is shown the ones they could see on the site.
  *
- * Server to server, so no App Check and no CORS: the key is the credential,
- * and it must never ship inside an app.
+ * No App Check: the key or the sign-in is the credential. A key is server to
+ * server, and must never ship inside an app. A registered app's pages may call
+ * from a browser (CORS), with a person's sign-in only.
  */
 
 /** The types a seller may sell. Comp, guest and vendor tickets are given out by staff, never bought. */
@@ -64,8 +85,8 @@ class ApiError extends Error {
 
 interface ApiKey {
     id: string;
+    appId: string;
     name: string;
-    seller: string;
     scopes: ApiScope[];
     eventIds: string[];
 }
@@ -111,13 +132,78 @@ async function isKnownKeyId(keyId: string): Promise<boolean> {
     return (await knownKeys.ids).has(keyId);
 }
 
-async function authenticate(header: string | undefined): Promise<ApiKey> {
-    const match = /^Bearer\s+(\S{1,128})$/i.exec(header ?? "");
+/** A person signed in to a registered app, calling through it. */
+interface Person {
+    uid: string;
+    app: RegisteredApp;
+    /** Their user doc here, read for this call. */
+    user: FirebaseFirestore.DocumentSnapshot;
+}
+
+/** Who's calling: a seller's server with its key, or a person signed in to a registered app. */
+type Caller = {kind: "key"; key: ApiKey} | {kind: "person"; person: Person};
+
+/** A JWT: what an ID token is. The emulator's are unsigned, so the last part may be empty. */
+const JWT_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
+
+async function authenticate(header: string | undefined): Promise<Caller> {
+    const match = /^Bearer\s+(\S{1,4096})$/i.exec(header ?? "");
     if (!match) {
-        throw new ApiError(401, "missing-api-key", "Send the key as \"Authorization: Bearer <key>\".");
+        throw new ApiError(401, "missing-api-key",
+            "Send the key, or the ID token of a sign-in to a registered app, as \"Authorization: Bearer <it>\".");
     }
-    const keyId = hashApiKey(match[1]);
-    if (!isApiKeyShaped(match[1]) || !(await isKnownKeyId(keyId))) {
+    return JWT_RE.test(match[1])
+        ? {kind: "person", person: await authenticatePerson(match[1])}
+        : {kind: "key", key: await authenticateKey(match[1])};
+}
+
+/** A JWT's claims, unchecked: only to find the app whose project it's to be checked against. */
+function peekClaims(jwt: string): Record<string, unknown> | null {
+    try {
+        const claims: unknown = JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8"));
+        return claims && typeof claims === "object" ? claims as Record<string, unknown> : null;
+    } catch {
+        return null;
+    }
+}
+
+/** Calls one person may make a minute through one app. Opening an app makes a few. */
+const PERSON_RATE_LIMIT_MAX = 60;
+
+/**
+ * The person an app's ID token is for: one issueAppToken signed in, to an app
+ * still registered, from that app's project. Whether their account is still
+ * there, and still signed in, is read now, so signing out everywhere here
+ * ends it here at once, whatever the app's own project still allows.
+ */
+async function authenticatePerson(idToken: string): Promise<Person> {
+    const signInAgain = new ApiError(401, "invalid-token", "This sign-in isn't recognised. Sign in to the app again.");
+    const claims = peekClaims(idToken);
+    const appId = claims?.app;
+    if (typeof appId !== "string" || !APP_ID_RE.test(appId)) throw signInAgain;
+    const app = (await registeredApps()).get(appId);
+    // Removed since, sign-in turned off, or not from the project the app signs people in to.
+    if (!app || !hasSignIn(app) || claims!.aud !== app.firebaseProjectId) throw signInAgain;
+    let token: DecodedIdToken;
+    try {
+        token = await verifyAppIdToken(app, idToken);
+    } catch {
+        throw signInAgain;
+    }
+    // Not one of the app's own sign-ins, which this site knows nothing of.
+    if (token.firebase?.sign_in_provider !== "custom" || token.app !== appId) throw signInAgain;
+
+    await consumeRateLimit(`app_${appId}_${token.uid}`, PERSON_RATE_LIMIT_MAX);
+    const user = await db.collection("users").doc(token.uid).get();
+    if (!user.exists || !signedInSinceSessionsEnded(token, user.data())) {
+        throw new ApiError(401, "session-ended", "This sign-in has been signed out. Sign in to the app again.");
+    }
+    return {uid: token.uid, app, user};
+}
+
+async function authenticateKey(credential: string): Promise<ApiKey> {
+    const keyId = hashApiKey(credential);
+    if (!isApiKeyShaped(credential) || !(await isKnownKeyId(keyId))) {
         throw new ApiError(401, "invalid-api-key", "API key not recognised.");
     }
     const snap = await apiKeysCol().doc(keyId).get();
@@ -136,8 +222,8 @@ async function authenticate(header: string | undefined): Promise<ApiKey> {
     }
     return {
         id: snap.id,
+        appId: data.appId,
         name: data.name,
-        seller: data.seller,
         scopes: data.scopes ?? [],
         eventIds: data.eventIds ?? [],
     };
@@ -147,6 +233,52 @@ function requireScope(key: ApiKey, scope: ApiScope): void {
     if (!key.scopes.includes(scope)) {
         throw new ApiError(403, "missing-scope", `This API key lacks the ${scope} scope.`);
     }
+}
+
+/** A scope of the key's, or for a person, of their app's. */
+function requireCallerScope(caller: Caller, scope: AppScope): void {
+    if (caller.kind === "key") {
+        if (!(caller.key.scopes as string[]).includes(scope)) {
+            throw new ApiError(403, "missing-scope", `This API key lacks the ${scope} scope.`);
+        }
+    } else if (!caller.person.app.scopes.includes(scope)) {
+        throw new ApiError(403, "missing-scope", `This app lacks the ${scope} scope.`);
+    }
+}
+
+function requireKey(caller: Caller): ApiKey {
+    if (caller.kind !== "key") {
+        throw new ApiError(403, "api-key-required", "Orders need an API key: a person's sign-in can't place or read them.");
+    }
+    return caller.key;
+}
+
+function requirePerson(caller: Caller): Person {
+    if (caller.kind !== "person") {
+        throw new ApiError(403, "sign-in-required",
+            "This is about a person: call it with their sign-in to a registered app, not an API key.");
+    }
+    return caller.person;
+}
+
+/** The events a person is event staff for here. */
+function staffEventsOf(person: Person): string[] {
+    const raw: unknown = person.user.get("eventStaffEvents");
+    return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
+}
+
+/**
+ * Whether the caller may see an event: a key every one, a person the ones the
+ * site would show them (firestore.rules): every archived one, and an
+ * unarchived one once it's published, or before that to staff and its own
+ * event staff.
+ */
+function canSee(caller: Caller, snap: FirebaseFirestore.DocumentSnapshot, archived: boolean): boolean {
+    if (caller.kind === "key" || archived) return true;
+    const {person} = caller;
+    return snap.get("published") === true
+        || isStaffOrAbove(person.user.get("group"))
+        || staffEventsOf(person).includes(snap.id);
 }
 
 function requireEventAccess(key: ApiKey, eventId: string): void {
@@ -322,18 +454,21 @@ async function heldEvents(eventIds: string[]): Promise<[Snapshot[], Snapshot[]]>
 }
 
 /**
- * Every event, in the site's own order: unarchived soonest first, then
- * archived latest first. Like the site's lists, an event missing its sort
- * field isn't one.
+ * Every event the caller may see (canSee), in the site's own order: unarchived
+ * soonest first, then archived latest first. Like the site's lists, an event
+ * missing its sort field isn't one.
  */
-async function listEvents(key: ApiKey): Promise<ApiReply> {
-    requireScope(key, "events:read");
-    const [upcoming, past] = key.eventIds.length > 0
-        ? await heldEvents(key.eventIds)
+async function listEvents(caller: Caller): Promise<ApiReply> {
+    requireCallerScope(caller, "events:read");
+    const held = caller.kind === "key" ? caller.key.eventIds : [];
+    const [allUpcoming, allPast] = held.length > 0
+        ? await heldEvents(held)
         : await Promise.all([
             db.collection("upcomingEvents").orderBy("startAt", "asc").get().then(snap => snap.docs),
             db.collection("pastEvents").orderBy("date", "desc").get().then(snap => snap.docs),
         ]);
+    const upcoming = allUpcoming.filter(snap => canSee(caller, snap, false));
+    const past = allPast.filter(snap => canSee(caller, snap, true));
     const venues = await venuesOf([...upcoming, ...past]);
     const events = [
         ...upcoming.map(snap => eventJson({archived: false, snap}, venues)),
@@ -342,11 +477,83 @@ async function listEvents(key: ApiKey): Promise<ApiReply> {
     return {status: 200, body: {events}};
 }
 
-async function getEvent(key: ApiKey, eventId: string): Promise<ApiReply> {
-    requireScope(key, "events:read");
-    requireEventAccess(key, eventId);
+async function getEvent(caller: Caller, eventId: string): Promise<ApiReply> {
+    requireCallerScope(caller, "events:read");
+    if (caller.kind === "key") requireEventAccess(caller.key, eventId);
     const event = await findEvent(eventId);
+    // As if it weren't there, as the site has it for them.
+    if (!canSee(caller, event.snap, event.archived)) throw new ApiError(404, "event-not-found", "Event not found.");
     return {status: 200, body: eventJson(event, await venuesOf([event.snap]))};
+}
+
+/** The groups /v1/team lists, highest first. */
+const TEAM_GROUPS: UserGroup[] = ["president", "core-staff", "staff"];
+
+/** The user doc fields a person is shown with, and all that's read of one. Never their email. */
+const PERSON_FIELDS = ["displayName", "photoURL", "group", "title", "titleCn"];
+
+interface PersonJson {
+    uid: string;
+    displayName: string;
+    photoURL: string;
+    group: UserGroup;
+    title: string;
+    titleCn: string;
+}
+
+function personJson(snap: FirebaseFirestore.DocumentSnapshot): PersonJson {
+    return {
+        uid: snap.id,
+        displayName: str(snap.get("displayName")),
+        photoURL: str(snap.get("photoURL")),
+        group: normalizeGroup(snap.get("group")),
+        title: str(snap.get("title")),
+        titleCn: str(snap.get("titleCn")),
+    };
+}
+
+/** Highest group first, then by name. */
+function byGroupThenName(a: PersonJson, b: PersonJson): number {
+    const rank = (p: PersonJson) => {
+        const i = TEAM_GROUPS.indexOf(p.group);
+        return i === -1 ? TEAM_GROUPS.length : i;
+    };
+    return rank(a) - rank(b) || a.displayName.localeCompare(b.displayName) || (a.uid < b.uid ? -1 : 1);
+}
+
+/** The person calling, as they are now: their group may have changed since they signed in. */
+function getMe(caller: Caller): ApiReply {
+    return {status: 200, body: personJson(requirePerson(caller).user)};
+}
+
+/** Staff and above, as the admin panel lists them: only to a person who's staff here. */
+async function listTeam(caller: Caller): Promise<ApiReply> {
+    const person = requirePerson(caller);
+    requireCallerScope(caller, "team:read");
+    if (!isStaffOrAbove(person.user.get("group"))) {
+        throw new ApiError(403, "not-allowed", "Only staff can see the team.");
+    }
+    const snap = await db.collection("users").where("group", "in", TEAM_GROUPS).select(...PERSON_FIELDS).get();
+    return {status: 200, body: {people: snap.docs.map(personJson).sort(byGroupThenName)}};
+}
+
+/**
+ * An event's staff, to staff here and to that event's own staff, as the admin
+ * panel shows them. Asked before the event is looked up, so no one else can
+ * tell which events exist. Kept on archive, like the event's ID.
+ */
+async function listEventStaff(caller: Caller, eventId: string): Promise<ApiReply> {
+    const person = requirePerson(caller);
+    requireCallerScope(caller, "event-staff:read");
+    if (!isStaffOrAbove(person.user.get("group")) && !staffEventsOf(person).includes(eventId)) {
+        throw new ApiError(403, "not-allowed", "Only staff and this event's own staff can see its staff.");
+    }
+    await findEvent(eventId);
+    const snap = await db.collection("users")
+        .where("eventStaffEvents", "array-contains", eventId)
+        .select(...PERSON_FIELDS)
+        .get();
+    return {status: 200, body: {eventId, staff: snap.docs.map(personJson).sort(byGroupThenName)}};
 }
 
 interface OrderInput {
@@ -432,10 +639,10 @@ interface PendingEmail {
 }
 
 /**
- * Issues an order's tickets, once. The doc is named for the seller and the
+ * Issues an order's tickets, once. The doc is named for the app and the
  * order, so a retry after a timeout gets the tickets it already has (200), the
  * same order number with different contents is refused (409) rather than
- * overwritten, and another seller's order number is another order.
+ * overwritten, and another app's order number is another order.
  *
  * Marked sent, as HomeTown's are, when the seller's app delivers the tickets.
  * With sendEmail they're emailed from here once the order is in, and the
@@ -453,7 +660,7 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
     const placed = await db.runTransaction(async (txn): Promise<{reply: ApiReply; email?: PendingEmail}> => {
         const event = await findEvent(eventId, txn);
         const orderRef = event.snap.ref.collection("attendees")
-            .doc(apiOrderAttendeeId(key.seller, order.orderId));
+            .doc(apiOrderAttendeeId(key.appId, order.orderId));
         const orderSnap = await txn.get(orderRef);
 
         // Before the on-sale checks, so a retry still gets its tickets once the
@@ -641,13 +848,13 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
 
 /**
  * From whichever collection holds the event, so an order is still there once
- * it's archived. Only the key's own seller's orders.
+ * it's archived. Only the key's own app's orders.
  */
 async function getOrder(key: ApiKey, eventId: string, orderId: string): Promise<ApiReply> {
     requireScope(key, "tickets:read");
     requireEventAccess(key, eventId);
     const event = await findEvent(eventId);
-    const snap = await event.snap.ref.collection("attendees").doc(apiOrderAttendeeId(key.seller, orderId)).get();
+    const snap = await event.snap.ref.collection("attendees").doc(apiOrderAttendeeId(key.appId, orderId)).get();
     if (!snap.exists || !isApiOrder(snap.data())) {
         throw new ApiError(404, "order-not-found", "Order not found.");
     }
@@ -655,14 +862,20 @@ async function getOrder(key: ApiKey, eventId: string, orderId: string): Promise<
 }
 
 type Route =
+    | {kind: "me"}
+    | {kind: "team"}
     | {kind: "events"}
     | {kind: "event"; eventId: string}
+    | {kind: "event-staff"; eventId: string}
     | {kind: "orders"; eventId: string}
     | {kind: "order"; eventId: string; orderId: string};
 
 const ROUTE_METHODS: Record<Route["kind"], string> = {
+    me: "GET",
+    team: "GET",
     events: "GET",
     event: "GET",
+    "event-staff": "GET",
     orders: "POST",
     order: "GET",
 };
@@ -673,14 +886,31 @@ const ROUTE_METHODS: Record<Route["kind"], string> = {
  */
 function matchRoute(path: string): Route | null {
     const segments = path.replace(/^\/api(?=\/)/, "").split("/").filter(Boolean);
-    if (segments[0] !== "v1" || segments[1] !== "events") return null;
+    if (segments[0] !== "v1") return null;
+    if (segments.length === 2 && segments[1] === "me") return {kind: "me"};
+    if (segments.length === 2 && segments[1] === "team") return {kind: "team"};
+    if (segments[1] !== "events") return null;
     const [, , eventId, sub, orderId] = segments;
     if (eventId === undefined) return segments.length === 2 ? {kind: "events"} : null;
     if (!EVENT_ID_RE.test(eventId)) return null;
     if (sub === undefined) return {kind: "event", eventId};
+    if (sub === "staff") return segments.length === 4 ? {kind: "event-staff", eventId} : null;
     if (sub !== "orders" || segments.length > 5) return null;
     if (orderId === undefined) return {kind: "orders", eventId};
     return ORDER_ID_RE.test(orderId) ? {kind: "order", eventId, orderId} : null;
+}
+
+/** `origin`, if a registered app's pages are served from there, else null. */
+async function registeredOrigin(origin: string | undefined): Promise<string | null> {
+    if (!origin) return null;
+    try {
+        for (const app of (await registeredApps()).values()) {
+            if (appOrigins(app).includes(origin)) return origin;
+        }
+    } catch (err) {
+        console.error("[api] couldn't list apps to check an origin", err);
+    }
+    return null;
 }
 
 const HTTPS_ERROR_STATUS: Partial<Record<FunctionsErrorCode, number>> = {
@@ -694,10 +924,35 @@ const HTTPS_ERROR_STATUS: Partial<Record<FunctionsErrorCode, number>> = {
     "resource-exhausted": 429,
 };
 
-export const api = onRequest({maxInstances: 20, memory: "256MiB", secrets: [RESEND_API_KEY]}, async (req, res) => {
+// cors: false leaves CORS to the handler, in the emulator too, which otherwise
+// answers every preflight itself, for any origin.
+export const api = onRequest({
+    maxInstances: 20,
+    memory: "256MiB",
+    secrets: [RESEND_API_KEY],
+    cors: false
+}, async (req, res) => {
     res.set("Cache-Control", "no-store");
-    const fail = (status: number, code: string, message: string) =>
-        res.status(status).json({error: {code, message}});
+    res.set("Vary", "Origin");
+    // A registered app's page may read what it's answered, but never a call
+    // made with a key, which mustn't be in a page at all. Server callers send
+    // no Origin, so cost no read.
+    const corsOrigin = await registeredOrigin(req.get("Origin"));
+    let caller: Caller | null = null;
+    const send = (status: number, body: unknown) => {
+        if (corsOrigin && caller?.kind !== "key") res.set("Access-Control-Allow-Origin", corsOrigin);
+        res.status(status).json(body);
+    };
+    const fail = (status: number, code: string, message: string) => send(status, {error: {code, message}});
+
+    if (req.method === "OPTIONS" && corsOrigin) {
+        res.set("Access-Control-Allow-Origin", corsOrigin);
+        res.set("Access-Control-Allow-Methods", "GET");
+        res.set("Access-Control-Allow-Headers", "Authorization");
+        res.set("Access-Control-Max-Age", "3600");
+        res.status(204).end();
+        return;
+    }
 
     const route = matchRoute(req.path);
     if (!route) {
@@ -711,12 +966,15 @@ export const api = onRequest({maxInstances: 20, memory: "256MiB", secrets: [RESE
     }
 
     try {
-        const key = await authenticate(req.get("Authorization"));
-        const reply = route.kind === "events" ? await listEvents(key)
-            : route.kind === "event" ? await getEvent(key, route.eventId)
-                : route.kind === "orders" ? await createOrder(key, route.eventId, req.body)
-                    : await getOrder(key, route.eventId, route.orderId);
-        res.status(reply.status).json(reply.body);
+        caller = await authenticate(req.get("Authorization"));
+        const reply = route.kind === "me" ? getMe(caller)
+            : route.kind === "team" ? await listTeam(caller)
+                : route.kind === "events" ? await listEvents(caller)
+                    : route.kind === "event" ? await getEvent(caller, route.eventId)
+                        : route.kind === "event-staff" ? await listEventStaff(caller, route.eventId)
+                            : route.kind === "orders" ? await createOrder(requireKey(caller), route.eventId, req.body)
+                                : await getOrder(requireKey(caller), route.eventId, route.orderId);
+        send(reply.status, reply.body);
     } catch (err) {
         if (err instanceof ApiError) {
             fail(err.status, err.code, err.message);

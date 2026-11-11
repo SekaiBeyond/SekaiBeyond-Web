@@ -28,6 +28,7 @@ import { RESEND_API_KEY } from "../utils/resendClient";
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
+import { deleteFromApps } from "../utils/apps";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { pastEventIds, shelfPassports, toStringIds } from "../utils/publicProfile";
@@ -718,6 +719,7 @@ export const onUserDeleted = onDocumentDeleted(
                 throw err;
             }
         }
+        await deleteFromApps(uid);
 
         // Frees the address and the Google account for use again. One batch, as
         // the credentials doc is the only thing that names the Google account.

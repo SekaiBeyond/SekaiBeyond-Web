@@ -22,27 +22,22 @@ export function isApiKeyShaped(key: string): boolean {
 }
 
 /**
- * A seller's ID: the namespace its order numbers live in. Keys with the same
- * one share orders, so a key that replaces another finds the orders it
- * placed, and two sellers' order numbers never meet. No `_`, which separates
- * it from the order number in the order's doc ID (see apiOrderAttendeeId).
- */
-export const SELLER_ID_RE = /^[a-z0-9-]{1,32}$/;
-
-/**
  * An `apiKeys` doc, stored under the key's SHA-256: the key itself is never
- * kept, so a lost one is revoked and replaced rather than looked up. Server
- * only (see firestore.rules).
+ * kept, so a lost one is revoked and replaced rather than looked up. Each key
+ * belongs to a registered app (see apps.ts), whose ID namespaces the orders it
+ * places (see apiOrderAttendeeId), so a replacement key under the same app
+ * finds the orders the old one placed, and two apps' order numbers never meet.
+ * Server only (see firestore.rules).
  */
 export interface ApiKeyDoc {
+    /** The registered app (see apps.ts) this key belongs to. */
+    appId: string;
     name: string;
     /** The key's first and last few characters, for telling keys apart. */
     hint: string;
     scopes: ApiScope[];
     /** The only events the key may touch; empty for all of them. */
     eventIds: string[];
-    /** Its seller's ID (see SELLER_ID_RE). */
-    seller: string;
     createdBy: string;
     createdByName: string;
     createdAt: Timestamp;
