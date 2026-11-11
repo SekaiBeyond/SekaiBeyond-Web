@@ -10,6 +10,10 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
             return isEnglish ? 'That code isn’t right, or it has expired.' : '验证码不正确或已过期。';
         case 'email-taken':
             return isEnglish ? 'That email already has an account.' : '此邮箱已有账号。';
+        case 'email-held':
+            return isEnglish
+                ? 'The account on that email moved to another address in the last few days, so the email is held for it for now. If it’s your account, use the Undo this change link we emailed to that address.'
+                : '使用该邮箱的账号最近改用了其他邮箱，因此该邮箱暂时为其保留。如果那是您的账号，请使用我们发送到该邮箱的“撤销此更改”链接。';
         case 'google-taken':
             return isEnglish ? 'That Google account is bound to another account.' : '此 Google 账号已绑定其他账号。';
         case 'google-already-bound':

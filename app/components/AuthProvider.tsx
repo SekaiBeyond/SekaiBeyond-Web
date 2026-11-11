@@ -19,7 +19,7 @@ import {
 import { toDate } from '~/lib/collectionCache';
 import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
 import { openSignInModal } from '~/lib/signInModal';
-import { currentSessionId, sessionEnded, watchOwnSession } from '~/lib/sessions';
+import { currentSessionId, sessionEnded, signInMovedOn, watchOwnSession } from '~/lib/sessions';
 
 // `group` is a role ladder only; membership lives in membershipExpiresAt.
 export type UserGroup = 'user' | 'staff' | 'core-staff' | 'president';
@@ -265,6 +265,10 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         return () => unsubscribe();
     }, []);
 
+    // Bumped to watch the sign-in another tab has moved this browser on to, which
+    // arrives in the same user object, so nothing else here would notice it.
+    const [sessionGeneration, setSessionGeneration] = useState(0);
+
     // Waits for the profile, as there's no device list for a login with no account.
     const hasProfile = !!profile;
     useEffect(() => {
@@ -273,17 +277,27 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
             return;
         }
         let stale = false;
-        void currentSessionId(user).then(id => {
+        const onEnded = async (endedId: string) => {
+            if (await signInMovedOn(endedId)) {
+                if (!stale) setSessionGeneration(generation => generation + 1);
+                return;
+            }
+            await firebaseSignOut();
+        };
+        // The live user when it's this account, so a sign-in that has moved on is
+        // what's watched even if `user` is an older object for the same account.
+        const live = getFirebaseAuth().currentUser;
+        void currentSessionId(live?.uid === user.uid ? live : user).then(id => {
             if (stale || !id) return;
             setSessionId(id);
-            stopWatchingSession.current = watchOwnSession(user.uid, id, () => void firebaseSignOut());
+            stopWatchingSession.current = watchOwnSession(user.uid, id, () => void onEnded(id));
         });
         return () => {
             stale = true;
             stopWatchingSession.current?.();
             stopWatchingSession.current = null;
         };
-    }, [user, hasProfile]);
+    }, [user, hasProfile, sessionGeneration]);
 
     const signIn = () => openSignInModal();
 

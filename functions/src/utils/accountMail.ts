@@ -203,6 +203,37 @@ export function addressTakenMail(to: string, language: MailLanguage): ResendEnve
     };
 }
 
+/**
+ * Sent in place of a code, or of nothing for Forgot Password, when the address is
+ * held for an account that has just moved off it (addressHeldForUndo). Whoever
+ * asked may be that account's owner, locked out of it, and the link is their way
+ * back; a new account on the address would leave the link dead.
+ */
+export function addressHeldMail(to: string, until: Date, language: MailLanguage): ResendEnvelope {
+    const when = escapeHtml(until.toLocaleString(language === "zh" ? "zh-CN" : "en-US", {
+        dateStyle: "long",
+        timeStyle: "short",
+        timeZone: SITE_TIME_ZONE,
+    }));
+    return language === "zh" ? {
+        to,
+        subject: "此邮箱的 Sekai Beyond 账号刚刚更换了邮箱",
+        html: page("此邮箱暂时保留", [
+            `有人尝试在 Sekai Beyond 使用此邮箱地址。原先使用此地址的账号最近改用了其他邮箱，因此此地址为该账号保留至 ${when}。`,
+            "如果那是您的账号，而邮箱更改不是您本人的操作，请使用更改时发送到此邮箱的邮件中的“撤销此更改”链接，它会将账号恢复到此地址。",
+            `如果更改是您本人的操作，自 ${when} 起即可用此地址注册新账号。如果以上都不是您，请忽略此邮件。`,
+        ]),
+    } : {
+        to,
+        subject: "Your Sekai Beyond account moved to another address",
+        html: page("This address is held for now", [
+            `Someone tried to use this address on Sekai Beyond. The account that was on it recently moved to another address, so this one is held for that account until ${when}.`,
+            "If that's your account and you didn't make the change, use the Undo this change link in the email we sent here when it happened. It puts the account back on this address.",
+            `If you did make it, this address can be used for a new account from ${when}. If none of this was you, you can ignore this email.`,
+        ]),
+    };
+}
+
 /** "contact us at …", or the site, without a Contact Email in Site Config. */
 async function contactLine(language: MailLanguage): Promise<string> {
     const saved: unknown = (await db.collection("config").doc("main").get()).get("contactEmail");

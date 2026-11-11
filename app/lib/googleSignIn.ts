@@ -34,12 +34,16 @@ function loadGoogle(): Promise<GoogleIdentityServices> {
         const script = document.createElement('script');
         script.src = SCRIPT_URL;
         script.async = true;
-        script.onload = () => window.google ? resolve(window.google) : reject(new Error('Google sign-in didn’t load.'));
-        script.onerror = () => {
-            // So opening the modal again tries again.
+        // Failing to load, or loading without defining anything, as when a
+        // content blocker stands in for it, is forgotten, so opening the modal
+        // again tries again.
+        const fail = () => {
             loading = null;
+            script.remove();
             reject(new Error('Google sign-in didn’t load.'));
         };
+        script.onload = () => window.google ? resolve(window.google) : fail();
+        script.onerror = fail;
         document.head.appendChild(script);
     });
     return loading;

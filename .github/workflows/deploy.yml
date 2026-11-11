@@ -73,10 +73,20 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      # One command ships everything, TTL policies included (fieldOverrides in
-      # firestore.indexes.json). Hosting is released last, after functions, so
-      # the new frontend never goes live ahead of a function it calls.
-      - name: Deploy to Firebase
-        run: npx -y firebase-tools@15 deploy --non-interactive --config firebase.generated.json --project "$FIREBASE_PROJECT_ID"
+      # Functions first, on their own, as npm run deploy does. In one command the
+      # CLI releases rules before functions, so a functions deploy that stops (a
+      # deployed function missing from the source, which non-interactive mode
+      # won't delete, or a secret not set) would leave new rules live over the
+      # old functions and site. Apart, a stop here ships nothing else.
+      - name: Deploy functions
+        run: npx -y firebase-tools@15 deploy --non-interactive --config firebase.generated.json --project "$FIREBASE_PROJECT_ID" --only functions
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+
+      # Everything else, TTL policies included (fieldOverrides in
+      # firestore.indexes.json). Hosting is released last, after the rules, so
+      # the new frontend never goes live ahead of a function or rule it needs.
+      - name: Deploy rules, indexes and hosting
+        run: npx -y firebase-tools@15 deploy --non-interactive --config firebase.generated.json --project "$FIREBASE_PROJECT_ID" --except functions
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}

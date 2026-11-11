@@ -321,7 +321,7 @@ export const UserDetailView = ({
         )) return;
         setDeletionBusy(true);
         try {
-            await callRequestAccountDeletion({targetUid: userRecord.uid});
+            await callRequestAccountDeletion({targetUid: userRecord.uid, language: isEnglish ? 'en' : 'zh'});
             showToast(
                 isEnglish ? 'Deletion request submitted.' : '已提交删除申请。',
                 'warning',

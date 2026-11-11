@@ -29,12 +29,18 @@ function codeRef(purpose: CodePurpose, email: string): FirebaseFirestore.Documen
 const hashCode = (email: string, code: string): string =>
     createHmac("sha256", accountPepper()).update(`${email}|${code}`).digest("hex");
 
+/** A code just issued, and the doc it replaced, if any, for withdrawEmailCode to put back. */
+export interface IssuedCode {
+    code: string;
+    previous: FirebaseFirestore.DocumentData | null;
+}
+
 /**
  * A fresh code for `email`, or null when too many have gone to it lately. The
  * limits count against the address, not whoever's asking, so nobody can have it
  * flooded.
  */
-export async function issueEmailCode(purpose: CodePurpose, email: string): Promise<string | null> {
+export async function issueEmailCode(purpose: CodePurpose, email: string): Promise<IssuedCode | null> {
     const ref = codeRef(purpose, email);
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
     const now = Date.now();
@@ -56,13 +62,25 @@ export async function issueEmailCode(purpose: CodePurpose, email: string): Promi
             // Outlives the code, or the limits above would reset with it.
             expiresAt: Timestamp.fromMillis(now + WINDOW_MS),
         });
-        return code;
+        return {code, previous: data ?? null};
     });
 }
 
-/** Takes back a code whose email never went, so its address can ask again at once. */
-export async function dropEmailCode(purpose: CodePurpose, email: string): Promise<void> {
-    await codeRef(purpose, email).delete();
+/**
+ * Takes back a code whose email never went, putting back the doc it replaced: its
+ * code may be in its owner's inbox and still good, and anyone can ask for a new
+ * one, so deleting it would let a failed send cost the owner theirs. The address
+ * can ask again at once, as the doc put back was sent over MIN_GAP_MS ago. A doc
+ * that has moved on since, to another code, is left alone.
+ */
+export async function withdrawEmailCode(purpose: CodePurpose, email: string, issued: IssuedCode): Promise<void> {
+    const ref = codeRef(purpose, email);
+    await db.runTransaction(async (txn) => {
+        const data = (await txn.get(ref)).data();
+        if (data?.codeHash !== hashCode(email, issued.code)) return;
+        if (issued.previous) txn.set(ref, issued.previous);
+        else txn.delete(ref);
+    });
 }
 
 /**

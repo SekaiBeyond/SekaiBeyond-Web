@@ -50,6 +50,33 @@ export function emailUndoLive(
         : user.email === undo.get("newEmail");
 }
 
+/**
+ * The account `email` is held for by a link that can still undo its move off
+ * that address (see emailUndoLive), and when the hold ends, or null. Read inside
+ * `txn` when given one. Links of `exceptUid` don't count.
+ *
+ * An address an account moves off stays that account's while the link works. The
+ * link is how an owner whose sign-in was stolen gets the account back, and it
+ * needs the address free: anyone taking it meanwhile would leave the link dead,
+ * the owner included, when they can't sign in and make a new account instead.
+ */
+export async function addressHeldForUndo(
+    email: string,
+    txn?: FirebaseFirestore.Transaction,
+    exceptUid?: string,
+): Promise<{uid: string; until: Timestamp} | null> {
+    const query = db.collection("emailUndos").where("oldEmail", "==", email);
+    const undos = txn ? await txn.get(query) : await query.get();
+    for (const undo of undos.docs) {
+        const uid: unknown = undo.get("uid");
+        if (typeof uid !== "string" || uid === exceptUid) continue;
+        const userRef = db.collection("users").doc(uid);
+        const user = txn ? await txn.get(userRef) : await userRef.get();
+        if (emailUndoLive(undo, user.data())) return {uid, until: undo.get("expiresAt")};
+    }
+    return null;
+}
+
 /** The account's links that can still be followed (see emailUndoLive), read inside `txn`. */
 export async function liveEmailUndos(
     txn: FirebaseFirestore.Transaction,

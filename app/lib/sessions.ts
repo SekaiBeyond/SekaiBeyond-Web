@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
-import type { User } from 'firebase/auth';
+import { onIdTokenChanged, type User } from 'firebase/auth';
 import { collection, doc, onSnapshot, query, type QueryDocumentSnapshot, where } from 'firebase/firestore';
 import { toDate } from '~/lib/collectionCache';
-import { callTouchSession, functionsErrorCode, functionsErrorDetails, getFirebaseDb } from '~/lib/firebase';
+import {
+    callTouchSession,
+    functionsErrorCode,
+    functionsErrorDetails,
+    getFirebaseAuth,
+    getFirebaseDb,
+} from '~/lib/firebase';
 
 /**
  * The devices signed in to an account, one doc each in users/{uid}/sessions,
@@ -26,6 +32,12 @@ const TOUCH_INTERVAL_MS = 15 * 60_000;
 const TOUCH_RETRY_MS = 2_000;
 const TOUCH_RETRY_MAX_MS = 60_000;
 
+/**
+ * How long a tab whose sign-in has been ended waits for the one that replaced it
+ * to arrive from another tab. Firebase looks for one every 800ms.
+ */
+const REPLACED_SIGN_IN_WAIT_MS = 2_000;
+
 /** This sign-in's session ID, or null when its token can't be read. */
 export async function currentSessionId(user: User): Promise<string | null> {
     try {
@@ -35,6 +47,41 @@ export async function currentSessionId(user: User): Promise<string | null> {
     } catch {
         return null;
     }
+}
+
+/**
+ * Whether this browser has moved on from the sign-in `endedId`: another tab has
+ * replaced it with a new one and ended it, as a password change does
+ * (replaceSession in AuthProvider). Tabs share one sign-in, so signing out over
+ * the ended one would sign that tab out too. The new one reaches this tab within
+ * a second, with no auth state change since the account is the same, so this
+ * waits that long for its token. Says no once signed out, or on waiting it out.
+ */
+export function signInMovedOn(endedId: string): Promise<boolean> {
+    return new Promise(resolve => {
+        let settled = false;
+        let unsubscribe = () => {
+        };
+        const settle = (moved: boolean) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            unsubscribe();
+            resolve(moved);
+        };
+        const timer = setTimeout(() => settle(false), REPLACED_SIGN_IN_WAIT_MS);
+        const off = onIdTokenChanged(getFirebaseAuth(), user => {
+            if (!user) {
+                settle(false);
+                return;
+            }
+            void currentSessionId(user).then(id => {
+                if (id && id !== endedId) settle(true);
+            });
+        });
+        unsubscribe = off;
+        if (settled) off();
+    });
 }
 
 /**

@@ -918,7 +918,8 @@ export const callUpdateDisplayName = (data: {displayName: string; targetUid?: st
 export const callDeleteAvatar = (data: {targetUid?: string} = {}) =>
     httpsCallable<typeof data, {photoURL: string}>(getFunctions(), 'deleteAvatar')(data);
 
-export const callRequestAccountDeletion = (data: {targetUid?: string} = {}) =>
+/** `language` is for the notice an account asking for its own deletion gets. */
+export const callRequestAccountDeletion = (data: {targetUid?: string; language?: Language} = {}) =>
     httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestAccountDeletion')(data);
 
 export const callCancelAccountDeletion = (data: {targetUid?: string} = {}) =>

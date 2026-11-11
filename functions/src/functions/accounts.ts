@@ -3,6 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
+    addressHeldMail,
     addressTakenMail,
     codeMail,
     emailChangedMail,
@@ -41,16 +42,18 @@ import {
     googleIndexRef,
     PASSWORD_PEPPER
 } from "../utils/credentials";
+import { CODE_MAIL_HOURLY_CAP } from "../utils/config";
 import { deletionPending } from "../utils/deletion";
 import {
     CODE_ATTEMPTS,
     type CodePurpose,
     consumeEmailCode,
-    dropEmailCode,
     emailCodeKey,
     issueEmailCode,
+    withdrawEmailCode,
 } from "../utils/emailCodes";
 import {
+    addressHeldForUndo,
     EMAIL_UNDO_DAYS,
     emailUndoLive,
     emailUndoRef,
@@ -88,8 +91,12 @@ const ACCOUNT_CALL: CallableOptions = {
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 
-// Per network, so loose enough for a venue's Wi-Fi all signing up at once.
-const CODES_PER_HOUR_PER_NETWORK = 30;
+// Code emails one network may ask for in an hour: a quarter of what the whole
+// site may send (CODE_MAIL_HOURLY_CAP), so no single client can use up everyone's
+// codes, and with them the day's code mail within hours. A venue's Wi-Fi shares
+// this, but code mail is that scarce whoever asks: a Google sign-up with its
+// Google address needs no code, and raising the site's cap raises this with it.
+const CODES_PER_HOUR_PER_NETWORK = Math.max(1, Math.floor(CODE_MAIL_HOURLY_CAP / 4));
 const SIGN_INS_PER_MINUTE_PER_NETWORK = 60;
 const UNDOS_PER_HOUR_PER_NETWORK = 30;
 
@@ -132,6 +139,11 @@ const googleTaken = () =>
 
 const badUndoLink = () =>
     new HttpsError("not-found", "This link doesn't work.", {code: "bad-undo-link"});
+
+const emailHeld = () =>
+    new HttpsError("already-exists", "That email is held for an account that just moved off it.", {
+        code: "email-held",
+    });
 
 /** Refuses an address whose domain can't receive mail, before a code is spent bouncing off it. */
 async function requireMailDomain(email: string): Promise<void> {
@@ -208,15 +220,30 @@ async function mailCode(
     language: MailLanguage,
     instead?: ResendEnvelope,
 ): Promise<void> {
-    const code = await issueEmailCode(purpose, email);
-    if (!code) return;
+    const issued = await issueEmailCode(purpose, email);
+    if (!issued) return;
     try {
-        await sendAccountMail(instead ?? codeMail(email, purpose, code, language), "code");
+        await sendAccountMail(instead ?? codeMail(email, purpose, issued.code, language), "code");
     } catch (err) {
-        await dropEmailCode(purpose, email).catch(() => {
+        await withdrawEmailCode(purpose, email, issued).catch(() => {
         });
         throw err;
     }
+}
+
+/**
+ * What goes to `email` in place of a code to take it on: a note that it has an
+ * account, or that it's held for one that just moved off it (addressHeldForUndo),
+ * or undefined when a code can go. `exceptUid`'s own hold doesn't count.
+ */
+async function insteadOfCode(
+    email: string,
+    language: MailLanguage,
+    exceptUid?: string,
+): Promise<ResendEnvelope | undefined> {
+    if ((await emailIndexRef(email).get()).exists) return addressTakenMail(email, language);
+    const held = await addressHeldForUndo(email, undefined, exceptUid);
+    return held ? addressHeldMail(email, held.until.toDate(), language) : undefined;
 }
 
 /**
@@ -232,8 +259,7 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
     if (input.purpose === "signup") {
         const email = validateEmail(input.email, "email");
         await requireMailDomain(email);
-        const taken = (await emailIndexRef(email).get()).exists;
-        await mailCode("signup", email, language, taken ? addressTakenMail(email, language) : undefined);
+        await mailCode("signup", email, language, await insteadOfCode(email, language));
     } else if (input.purpose === "password") {
         const email = validateEmail(input.email, "email");
         // Refused alike when no code could go out now, or a full mailbag would
@@ -242,7 +268,14 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
         if ((await emailIndexRef(email).get()).exists) {
             await mailCode("password", email, language);
         } else {
-            await sleep(SEND_TIME_MS + Math.random() * SEND_TIME_JITTER_MS);
+            // An owner locked out of an account just moved off this address is
+            // likeliest to try here, so they're pointed to the link that undoes it.
+            const held = await addressHeldForUndo(email);
+            if (held) {
+                await mailCode("password", email, language, addressHeldMail(email, held.until.toDate(), language));
+            } else {
+                await sleep(SEND_TIME_MS + Math.random() * SEND_TIME_JITTER_MS);
+            }
         }
     } else if (input.purpose === "email-change") {
         const uid = await requireRegisteredSession(request, "account");
@@ -253,8 +286,7 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
             throw new HttpsError("invalid-argument", "That's already your email.", {code: "same-email"});
         }
         await requireMailDomain(email);
-        const taken = (await emailIndexRef(email).get()).exists;
-        await mailCode("email-change", email, language, taken ? addressTakenMail(email, language) : undefined);
+        await mailCode("email-change", email, language, await insteadOfCode(email, language, uid));
     } else {
         throw new HttpsError("invalid-argument", "Invalid purpose.");
     }
@@ -299,6 +331,7 @@ async function createAccount({email, displayName, photoURL, passwordHash, google
         ]);
         if (held.exists) throw emailTaken();
         if (googleHeld?.exists) throw googleTaken();
+        if (await addressHeldForUndo(email, txn)) throw emailHeld();
 
         txn.set(emailIndexRef(email), {uid});
         for (const holder of formerHolders.docs) {
@@ -411,6 +444,9 @@ export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
  * while it ran. Without this its owner would be asked to make a second account.
  * An account with a credentials doc has moved over, so Google being off it
  * means it was unbound.
+ *
+ * An address another account holds is left off, as the migration leaves it for
+ * a person to settle; the migration's next run indexes it once it's free.
  */
 async function adoptFromFirebase(google: GoogleIdentity): Promise<string | null> {
     let uid: string;
@@ -429,9 +465,12 @@ async function adoptFromFirebase(google: GoogleIdentity): Promise<string | null>
         const storedEmail: string = user.get("email") ?? "";
         const email = normalizeEmail(storedEmail) || (google.emailVerified ? google.email : "");
         const held = email ? await txn.get(emailIndexRef(email)) : null;
+        const free = !!held && !held.exists && !await addressHeldForUndo(email, txn, uid);
+        if (email && !free) console.warn(`adoptFromFirebase: ${uid} adopted without its address, held by another account`);
+
         txn.set(credentialsRef(uid), {passwordHash: null, google: toBinding(google)});
         txn.set(googleIndexRef(google.sub), {uid});
-        if (held && !held.exists) {
+        if (free) {
             txn.set(emailIndexRef(email), {uid});
             if (email !== storedEmail) txn.update(userRef, {email});
         }
@@ -699,6 +738,9 @@ async function moveEmail(
         if (!user.exists) throw new HttpsError("not-found", "User not found.");
         if (held.exists) throw emailTaken();
         if (own) requireEmailChangeAllowed(user.data());
+        // Staff too: an account moved back onto the address it's held for is the
+        // only one that may have it.
+        if (await addressHeldForUndo(email, txn, uid)) throw emailHeld();
 
         const oldEmail: string = user.get("email") ?? "";
         // The notice went to the address read before this; it's the wrong one now.
@@ -774,6 +816,7 @@ export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
     // After the code, or this would say to anyone signed in whether an address
     // has an account; before the notice, so taken since isn't announced as done.
     if ((await emailIndexRef(email).get()).exists) throw emailTaken();
+    if (await addressHeldForUndo(email, undefined, uid)) throw emailHeld();
 
     const undoToken = oldEmail ? newEmailUndoToken() : null;
     if (undoToken) {
