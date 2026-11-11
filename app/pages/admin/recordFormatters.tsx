@@ -516,6 +516,18 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                     className="record-code">{r.apiKeyHint}</span></>}</>
                 : <>吊销并删除了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
                     className="record-code">{r.apiKeyHint}</span></>}</>;
+        case 'app-create':
+            return isEnglish
+                ? <>registered app {r.appName} <span className="record-code">{r.appId}</span></>
+                : <>登记了应用 {r.appName} <span className="record-code">{r.appId}</span></>;
+        case 'app-update':
+            return isEnglish
+                ? <>changed app {r.appName} <span className="record-code">{r.appId}</span></>
+                : <>修改了应用 {r.appName} <span className="record-code">{r.appId}</span></>;
+        case 'app-delete':
+            return isEnglish
+                ? <>removed app {r.appName} <span className="record-code">{r.appId}</span></>
+                : <>移除了应用 {r.appName} <span className="record-code">{r.appId}</span></>;
         case 'scheduled-mail-drain': {
             const sent = r.sentCount ?? 0;
             return isEnglish

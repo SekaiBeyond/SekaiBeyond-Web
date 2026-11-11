@@ -4,9 +4,10 @@ import { QrCodesTool } from './tools/QrCodesTool';
 import { EmailQuotaTool } from './tools/EmailQuotaTool';
 import { WalletPassesTool } from './tools/WalletPassesTool';
 import { ApiKeysTool } from './tools/ApiKeysTool';
+import { AppsTool } from './tools/AppsTool';
 import type { ShowToast } from './utils';
 
-type ToolId = 'qr-codes' | 'email-quota' | 'wallet-passes' | 'api-keys';
+type ToolId = 'qr-codes' | 'email-quota' | 'wallet-passes' | 'api-keys' | 'apps';
 
 interface ToolDef {
     id: ToolId;
@@ -48,6 +49,14 @@ const TOOLS: ToolDef[] = [
         descriptionCn: '创建和吊销门票 API 密钥：持有密钥的服务器可以管理员级别读取所有活动，并为付费活动售票。',
         adminOnly: true,
     },
+    {
+        id: 'apps',
+        title: 'Apps',
+        titleCn: '应用',
+        description: 'Register apps people sign in to with their account here, like SKBY Manager, and choose what of the site each may read for the person signed in.',
+        descriptionCn: '登记可用本站账号登录的应用（例如 SKBY Manager），并选择每个应用可以为登录者读取本站的哪些内容。',
+        adminOnly: true,
+    },
 ];
 
 interface ToolsTabProps {
@@ -73,6 +82,10 @@ export const ToolsTab = ({showToast, readOnly = false}: ToolsTabProps) => {
 
     if (activeTool === 'api-keys') {
         return <ApiKeysTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
+    }
+
+    if (activeTool === 'apps') {
+        return <AppsTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
     }
 
     return (

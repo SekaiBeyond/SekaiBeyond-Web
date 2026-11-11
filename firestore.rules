@@ -151,6 +151,13 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
+        // Apps people sign in to with their accounts here (functions/src/utils/apps.ts).
+        // Server-only: core staff manage them through listApps, saveApp and
+        // deleteApp, and sign-in and the API read them.
+        match /apps/{appId} {
+            allow read, write: if false;
+        }
+
         // How accounts sign in: password hashes and bound Google accounts, kept
         // off users/{uid} because all staff can read that. Server-only, no
         // exceptions, and the two indexes below are what make an address and a

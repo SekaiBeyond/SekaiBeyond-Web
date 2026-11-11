@@ -28,7 +28,7 @@ import { RESEND_API_KEY } from "../utils/resendClient";
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
-import { deleteManagerUser, revokeManagerAccess } from "../utils/manager";
+import { deleteFromApps } from "../utils/apps";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { pastEventIds, shelfPassports, toStringIds } from "../utils/publicProfile";
@@ -436,10 +436,6 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
         return oldGroup;
     });
 
-    // A manager sign-in carries the group it was made with, so one made before
-    // this would go on letting them in there.
-    if (ADMIN_GROUPS.includes(oldGroup) && !ADMIN_GROUPS.includes(newGroup)) await revokeManagerAccess(targetUid);
-
     return {oldGroup, newGroup};
 });
 // Membership is time-boxed, not a group: this never writes `group`, which only
@@ -723,7 +719,7 @@ export const onUserDeleted = onDocumentDeleted(
                 throw err;
             }
         }
-        await deleteManagerUser(uid);
+        await deleteFromApps(uid);
 
         // Frees the address and the Google account for use again. One batch, as
         // the credentials doc is the only thing that names the Google account.

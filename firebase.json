@@ -84,10 +84,6 @@
         "function": "api"
       },
       {
-        "source": "/api/manager/v1/**",
-        "function": "managerApi"
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }

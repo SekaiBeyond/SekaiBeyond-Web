@@ -125,7 +125,7 @@ export const RECORD_CATEGORIES = {
     },
     api: {
         en: 'API', zh: 'API',
-        types: ['api-key-create', 'api-key-rename', 'api-key-revoke'],
+        types: ['api-key-create', 'api-key-rename', 'api-key-revoke', 'app-create', 'app-update', 'app-delete'],
     },
 } as const satisfies Record<string, {en: string; zh: string; types: readonly string[]}>;
 
@@ -213,5 +213,8 @@ export interface ActivityRecord {
     apiKeyHint?: string;
     /** The seller's own number for an order placed through the API. */
     apiOrderId?: string;
+    /** The app an app record is about, and its name then. */
+    appId?: string;
+    appName?: string;
     timestamp: Date;
 }

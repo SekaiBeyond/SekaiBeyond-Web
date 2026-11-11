@@ -65,18 +65,6 @@ jobs:
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
 
-      # SKBY Manager sign-in (see functions/.env.example). Repository variables,
-      # not secrets: none is secret. Left out when unset, which turns it off.
-      - name: Give the functions the SKBY Manager settings
-        run: |
-          for name in MANAGER_PROJECT_ID MANAGER_SERVICE_ACCOUNT MANAGER_ORIGIN; do
-            if [ -n "${!name}" ]; then echo "$name=${!name}" >> functions/.env; fi
-          done
-        env:
-          MANAGER_PROJECT_ID: ${{ vars.MANAGER_PROJECT_ID }}
-          MANAGER_SERVICE_ACCOUNT: ${{ vars.MANAGER_SERVICE_ACCOUNT }}
-          MANAGER_ORIGIN: ${{ vars.MANAGER_ORIGIN }}
-
       - name: Generate firebase.generated.json with CSP hashes
         run: npm run update-csp-hashes
 

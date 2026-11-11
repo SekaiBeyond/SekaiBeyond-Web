@@ -590,10 +590,54 @@ export const callRenameApiKey = (data: {keyId: string; name: string}) =>
 export const callRevokeApiKey = (data: {keyId: string}) =>
     httpsCallable<typeof data, {revoked: boolean}>(getFunctions(), 'revokeApiKey')(data);
 
-/** A sign-in for SKBY Manager, and the manager page to hand it to. Core staff only. */
-export const callIssueManagerToken = () =>
-    httpsCallable<Record<string, never>, {token: string; returnUrl: string}>(
-        getFunctions(), 'issueManagerToken')({});
+/** What an app may read for the person signed in to it. Mirrors APP_SCOPES in functions/src/utils/apps.ts. */
+export const APP_SCOPES = ['events:read', 'team:read', 'event-staff:read'] as const;
+export type AppScope = typeof APP_SCOPES[number];
+
+/** An app's ID. Mirrors APP_ID_RE in functions/src/utils/apps.ts. */
+export const APP_ID_RE = /^[a-z0-9-]{1,32}$/;
+
+export interface AppSummary {
+    id: string;
+    name: string;
+    ownerUid: string;
+    ownerName: string;
+    redirectUris: string[];
+    scopes: AppScope[];
+    firebaseProjectId: string;
+    serviceAccount: string;
+    createdByName: string;
+    createdAt: string | null;
+    updatedAt: string | null;
+}
+
+export interface AppFields {
+    name: string;
+    ownerUid: string;
+    redirectUris: string[];
+    scopes: AppScope[];
+    firebaseProjectId: string;
+    serviceAccount: string;
+}
+
+/** Every app, and the service account an app's owner grants roles to ("" where it can't be told). */
+export const callListApps = () =>
+    httpsCallable<Record<string, never>, {apps: AppSummary[]; signer: string}>(getFunctions(), 'listApps')({});
+
+export const callSaveApp = (data: AppFields & {appId: string; create: boolean}) =>
+    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveApp')(data);
+
+export const callDeleteApp = (data: {appId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteApp')(data);
+
+/** What the sign-in page shows of an app. Needs no sign-in. */
+export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>
+    httpsCallable<typeof data, {name: string; ownerName: string; scopes: AppScope[]}>(
+        getFunctions(), 'getAppSignInInfo')(data);
+
+/** A sign-in to an app for the caller, and where to hand it. */
+export const callIssueAppToken = (data: {appId: string; redirectUri?: string}) =>
+    httpsCallable<typeof data, {token: string; redirectUri: string}>(getFunctions(), 'issueAppToken')(data);
 
 export const callUpdateEventEmailTemplate = (data: {
     eventId: string;
