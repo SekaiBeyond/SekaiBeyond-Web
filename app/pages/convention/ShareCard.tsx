@@ -1,8 +1,8 @@
 import { type ChangeEvent, type PointerEvent, useEffect, useId, useRef, useState } from 'react';
 import { FiDownload, FiPlus, FiRotateCcw, FiRotateCw, FiUpload, FiX } from 'react-icons/fi';
 import { QRCodeCanvas } from 'qrcode.react';
-import { SectionHeader } from '~/pages/con/SectionHeader';
-import { type Localized, useT } from '~/pages/con/i18n';
+import { SectionHeader } from '~/pages/convention/SectionHeader';
+import { type Localized, useT } from '~/pages/convention/i18n';
 
 const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1350;

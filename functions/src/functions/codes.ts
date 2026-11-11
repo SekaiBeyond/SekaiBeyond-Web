@@ -1,7 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
-import { verifiedEmail } from "../utils/accountEmail";
 import { db } from "../utils/firebase";
 import { type CodeKind, codeKind, issueCode, normalizeCode } from "../utils/codes";
 import { getEventDoc } from "../utils/events";
@@ -115,16 +114,16 @@ function isUnmatchedCode(err: unknown): boolean {
 
 /**
  * Claims the passport whose slip carries `key`. Null when no passport has it.
- * See claimPassportWithKey for `email`.
+ * See claimPassportWithKey for `confirmEmailMismatch`.
  */
 async function redeemPassportKey(
     uid: string,
     key: string,
-    email: {accountEmail: string; confirmEmailMismatch: boolean},
+    confirmEmailMismatch: boolean,
 ) {
     const passportId = await findPassportByKey(key);
     if (!passportId) return null;
-    const grant = await claimPassportWithKey(uid, passportId, key, email);
+    const grant = await claimPassportWithKey(uid, passportId, key, confirmEmailMismatch);
     // Named and pictured on the screen that confirms it, the way a badge is.
     const design = grant.designId
         ? (await db.collection("passportDesigns").doc(grant.designId).get()).data()
@@ -176,12 +175,11 @@ export const redeemCode = onCall({maxInstances: 20}, async (request) => {
     const passportKey = normalizeActivationKey(code);
     if (passportKey) {
         const {confirmEmailMismatch} = request.data as {confirmEmailMismatch?: unknown};
-        const claimed = await redeemPassportKey(uid, passportKey, {
-            accountEmail: verifiedEmail(request.auth!.token),
-            confirmEmailMismatch: confirmEmailMismatch === undefined
-                ? false
-                : validateBoolean(confirmEmailMismatch, "confirmEmailMismatch"),
-        });
+        const claimed = await redeemPassportKey(
+            uid,
+            passportKey,
+            confirmEmailMismatch === undefined ? false : validateBoolean(confirmEmailMismatch, "confirmEmailMismatch"),
+        );
         if (claimed) return {kind: "passport-claim" as const, ...claimed};
     }
 

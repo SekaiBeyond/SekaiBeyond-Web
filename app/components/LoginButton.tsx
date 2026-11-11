@@ -68,7 +68,7 @@ export const LoginButton = () => {
                 onMouseLeave={handleMouseLeave}
             >
                 <img
-                    src={(profile ? profile.photoURL : cachedPhotoURL) || user.photoURL || '/mika.webp'}
+                    src={(profile ? profile.photoURL : cachedPhotoURL) || '/mika.webp'}
                     alt={isEnglish ? 'Profile' : '个人主页'}
                     className="login-avatar"
                     referrerPolicy="no-referrer"
@@ -76,8 +76,8 @@ export const LoginButton = () => {
                 />
                 <div className="user-dropdown" ref={menuRef}>
                     <div className="user-dropdown-header">
-                        <span className="user-dropdown-name">{profile?.displayName ?? user.displayName}</span>
-                        <span className="user-dropdown-email">{user.email}</span>
+                        <span className="user-dropdown-name">{profile?.displayName}</span>
+                        <span className="user-dropdown-email">{profile?.email}</span>
                     </div>
                     <div className="user-dropdown-divider"/>
                     <Link to="/" className="user-dropdown-item" onClick={closeDropdown}>

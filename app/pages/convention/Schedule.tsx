@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { type RoomAccent, type ScheduleItem, useConContent } from '~/lib/conContent';
-import { type Localized, useT } from '~/pages/con/i18n';
-import { formatClockTime, pad, parseClockTime } from '~/pages/con/utils';
-import { SectionHeader } from '~/pages/con/SectionHeader';
+import { type Localized, useT } from '~/pages/convention/i18n';
+import { formatClockTime, pad, parseClockTime } from '~/pages/convention/utils';
+import { SectionHeader } from '~/pages/convention/SectionHeader';
 
 /**
  * Minutes per grid row. The admin panel only takes times on a five, so every item

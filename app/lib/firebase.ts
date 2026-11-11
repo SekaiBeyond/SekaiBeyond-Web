@@ -4,8 +4,7 @@ import {
     type Auth,
     connectAuthEmulator,
     getAuth,
-    GoogleAuthProvider,
-    signInWithPopup,
+    signInWithCustomToken,
     signOut as firebaseSignOut,
 } from "firebase/auth";
 import { connectFirestoreEmulator, type Firestore, getFirestore } from "firebase/firestore";
@@ -48,7 +47,7 @@ const firebaseConfig = {
 // Points the site at the local emulators (Auth, Firestore and Functions on their
 // default ports), as npm run dev does through .env.emulator. App Check stays
 // off, and the emulated functions don't enforce it.
-const USE_EMULATORS = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true';
+export const USE_EMULATORS = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true';
 
 // Whether a URL is a file uploaded to Storage, rather than, say, a Google photo.
 // The Storage emulator serves its files from its own port.
@@ -111,8 +110,79 @@ function getFunctions() {
     return functions;
 }
 
-export const callCreateUserProfile = () =>
-    httpsCallable<Record<string, never>, {alreadyExists: boolean}>(getFunctions(), 'createUserProfile')({});
+type Language = 'en' | 'zh';
+
+/** Emails a code proving an address. Answers the same whether or not it has an account. */
+export const callSendEmailCode = (data: {
+    purpose: 'signup' | 'password' | 'email-change';
+    email: string;
+    language: Language;
+}) =>
+    httpsCallable<typeof data, {sent: boolean}>(getFunctions(), 'sendEmailCode')(data);
+
+export const callSignUpWithEmail = (data: {email: string; code: string; displayName: string; password: string}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'signUpWithEmail')(data);
+
+export const callSignInWithPassword = (data: {email: string; password: string}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'signInWithPassword')(data);
+
+export const callResetPassword = (data: {email: string; code: string; password: string; language: Language}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'resetPassword')(data);
+
+export type GoogleSignIn =
+    | {status: 'signed-in'; token: string}
+    | {status: 'needs-account'; name: string; email: string; emailVerified: boolean; emailTaken: boolean};
+
+/** Signs in with a bound Google account, or says it needs an account made or bound first. */
+export const callSignInWithGoogle = (data: {idToken: string}) =>
+    httpsCallable<typeof data, GoogleSignIn>(getFunctions(), 'signInWithGoogle')(data);
+
+export const callCreateAccountWithGoogle = (data: {
+    idToken: string;
+    displayName: string;
+    email: string;
+    code?: string;
+    password?: string;
+}) => httpsCallable<typeof data, {token: string}>(getFunctions(), 'createAccountWithGoogle')(data);
+
+export const callBindGoogleWithPassword = (data: {
+    idToken: string;
+    email: string;
+    password: string;
+    language: Language;
+}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'bindGoogleWithPassword')(data);
+
+export const callBindGoogle = (data: {idToken: string; language: Language}) =>
+    httpsCallable<typeof data, {bound: boolean}>(getFunctions(), 'bindGoogle')(data);
+
+export const callUnbindGoogle = (data: {language: Language}) =>
+    httpsCallable<typeof data, {unbound: boolean}>(getFunctions(), 'unbindGoogle')(data);
+
+export interface SignInMethods {
+    hasPassword: boolean;
+    /** The address of the bound Google account, or null with none bound. */
+    googleEmail: string | null;
+    /** ISO time the address may next change, or null if it may now. */
+    emailChangeAllowedAt: string | null;
+}
+
+/** How an account signs in: the caller's own, or anyone's for staff+. */
+export const callGetSignInMethods = (data: {uid?: string} = {}) =>
+    httpsCallable<typeof data, SignInMethods>(getFunctions(), 'getSignInMethods')(data);
+
+export const callChangePassword = (data: {code: string; password: string; language: Language}) =>
+    httpsCallable<typeof data, {token: string}>(getFunctions(), 'changePassword')(data);
+
+export const callChangeEmail = (data: {email: string; code: string; language: Language}) =>
+    httpsCallable<typeof data, {email: string}>(getFunctions(), 'changeEmail')(data);
+
+/** The "This wasn't me" link. Signs nobody in: the new password does that, once it's set. */
+export const callUndoEmailChange = (data: {token: string; password: string; language: Language}) =>
+    httpsCallable<typeof data, {email: string}>(getFunctions(), 'undoEmailChange')(data);
+
+export const callAdminChangeEmail = (data: {targetUid: string; email: string; language: Language}) =>
+    httpsCallable<typeof data, {email: string}>(getFunctions(), 'adminChangeEmail')(data);
 
 export const callTouchSession = () =>
     httpsCallable<Record<string, never>, {registered: boolean}>(getFunctions(), 'touchSession')({});
@@ -134,6 +204,9 @@ export const callEndOwnSession = () =>
 
 export const callEndOtherSessions = () =>
     httpsCallable<Record<string, never>, {ended: number}>(getFunctions(), 'endOtherSessions')({});
+
+export const callEndAllSessions = () =>
+    httpsCallable<Record<string, never>, {ended: boolean}>(getFunctions(), 'endAllSessions')({});
 
 export const callClaimEventCode = (data: {code: string}) =>
     httpsCallable<typeof data, {
@@ -799,12 +872,12 @@ export const callGetPublicProfile = (data: {uid: string}) =>
     }>(getFunctions(), 'getPublicProfile')(data);
 
 /**
- * A user's Google account name and photo, for staff+. `signUpName` is the name
- * the profile started as, `name` Google's latest; both cleaned as a stored
- * displayName is, so they compare directly.
+ * The name and photo of the Google account bound to a user, for staff+, or null
+ * without one. `signUpName` is the name it was bound with, `name` Google's
+ * latest; both cleaned as a stored displayName is, so they compare directly.
  */
 export const callGetGoogleProfile = (data: {uid: string}) =>
-    httpsCallable<typeof data, {name: string; signUpName: string; photoURL: string}>(
+    httpsCallable<typeof data, {name: string; signUpName: string; photoURL: string} | null>(
         getFunctions(), 'getGoogleProfile')(data);
 
 // Callables carry JSON, so an uploaded file travels as bare base64.
@@ -845,7 +918,8 @@ export const callUpdateDisplayName = (data: {displayName: string; targetUid?: st
 export const callDeleteAvatar = (data: {targetUid?: string} = {}) =>
     httpsCallable<typeof data, {photoURL: string}>(getFunctions(), 'deleteAvatar')(data);
 
-export const callRequestAccountDeletion = (data: {targetUid?: string} = {}) =>
+/** `language` is for the notice an account asking for its own deletion gets. */
+export const callRequestAccountDeletion = (data: {targetUid?: string; language?: Language} = {}) =>
     httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestAccountDeletion')(data);
 
 export const callCancelAccountDeletion = (data: {targetUid?: string} = {}) =>
@@ -888,12 +962,7 @@ export const errorSuffix = (err: unknown, isEnglish: boolean): string => {
 export const errorMessage = (err: unknown, fallback: string): string =>
     err instanceof Error && err.message ? err.message : fallback;
 
-const googleProvider = new GoogleAuthProvider();
-// Always show the account chooser: signOut() doesn't end the browser's Google
-// session, so otherwise the popup silently picks the same account again and
-// switching accounts is impossible.
-googleProvider.setCustomParameters({prompt: 'select_account'});
-
-export const signInWithGoogle = () => signInWithPopup(getFirebaseAuth(), googleProvider);
+/** Starts a session with the token one of the account callables answered with. */
+export const signInWithToken = (token: string) => signInWithCustomToken(getFirebaseAuth(), token);
 
 export const signOut = () => firebaseSignOut(getFirebaseAuth());

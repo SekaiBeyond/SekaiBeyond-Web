@@ -187,7 +187,6 @@ export const ProfilePage = () => {
     const [editName, setEditName] = useState('');
     const [savingName, setSavingName] = useState(false);
     const [savingPhoto, setSavingPhoto] = useState(false);
-    const [customPhotoLoaded, setCustomPhotoLoaded] = useState(false);
     const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
     const [avatarError, setAvatarError] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -298,19 +297,9 @@ export const ProfilePage = () => {
         [isViewingOther, viewedEarnedAt, ownEarnedAt],
     );
 
-    const hasCustomPhoto = isStorageUrl(profile?.photoURL);
-
     useEffect(() => {
         setAvatarError(false);
-        if (!hasCustomPhoto || !profile) {
-            setCustomPhotoLoaded(false);
-            return;
-        }
-        const img = new Image();
-        img.onload = () => setCustomPhotoLoaded(true);
-        img.onerror = () => setCustomPhotoLoaded(false);
-        img.src = profile.photoURL;
-    }, [profile?.photoURL, hasCustomPhoto]);
+    }, [profile?.photoURL]);
 
     useEffect(() => {
         if (isViewingOther && viewedProfile) {
@@ -348,7 +337,6 @@ export const ProfilePage = () => {
         setSavingPhoto(true);
         try {
             await updateProfile({photoFile: cropped});
-            setCustomPhotoLoaded(true);
             showToast(isEnglish ? 'Profile photo updated.' : '头像已更新。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to upload photo. Please try again.' : '上传头像失败，请重试。', 'error');
@@ -361,14 +349,13 @@ export const ProfilePage = () => {
         if (!profile || !user) return;
         const confirmed = window.confirm(
             isEnglish
-                ? 'Remove your profile photo? This will revert to your Google account photo.'
-                : '确定要删除头像吗？将恢复为 Google 账户的头像。',
+                ? 'Remove your profile photo? It goes back to your Google account photo if you have one bound.'
+                : '确定要删除头像吗？如已绑定 Google 账号，将恢复为其头像。',
         );
         if (!confirmed) return;
         setSavingPhoto(true);
         try {
             await updateProfile({deletePhoto: true});
-            setCustomPhotoLoaded(false);
             showToast(isEnglish ? 'Profile photo removed.' : '头像已删除。', 'warning');
         } catch {
             showToast(isEnglish ? 'Failed to remove photo. Please try again.' : '删除头像失败，请重试。', 'error');
@@ -489,10 +476,7 @@ export const ProfilePage = () => {
     }
 
     const isOwnProfile = !isViewingOther;
-    const googlePhotoURL = user?.photoURL ?? '';
-    const displayedPhoto = isOwnProfile
-        ? (hasCustomPhoto ? (customPhotoLoaded ? profile!.photoURL : googlePhotoURL) : profile!.photoURL)
-        : viewedProfile!.photoURL;
+    const displayedPhoto = isOwnProfile ? profile!.photoURL : viewedProfile!.photoURL;
     const dp = isOwnProfile
         ? {
             name: profile!.displayName,
@@ -572,7 +556,7 @@ export const ProfilePage = () => {
     // A membership perk that staff+ keep without one.
     const canEdit = isOwnProfile && (isMember || hasPermission(profile!.group, 'staff'));
     // Non-members can't upload a photo, but may remove one an admin gave them.
-    const canRemovePhoto = isOwnProfile && hasCustomPhoto;
+    const canRemovePhoto = isOwnProfile && isStorageUrl(profile?.photoURL);
     // Same rule as the photo; a non-member only has a banner left over from a
     // lapsed membership.
     const bannerURL = isOwnProfile ? profile!.bannerURL : viewedProfile!.bannerURL;

@@ -29,7 +29,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
 | [React Router](https://reactrouter.com/)      | Framework & Routing            |
 | [TypeScript](https://www.typescriptlang.org/) | Type Safety                    |
 | [Vite](https://vitejs.dev/)                   | Build Tool                     |
-| [Firebase](https://firebase.google.com/)      | Auth, Firestore, Cloud Storage, Cloud Functions |
+| [Firebase](https://firebase.google.com/)      | Firestore, Cloud Storage, Cloud Functions, and sessions for our own accounts |
 
 ## Getting Started
 

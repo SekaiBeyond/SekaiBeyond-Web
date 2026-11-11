@@ -210,8 +210,8 @@ export function SendSection({
                 ) : quota ? (
                     <span>
                         {isEnglish
-                            ? `Resend free tier: ${quota.sentToday} / ${quota.dailyCap} emails used in the last 24h (${remainingToday} remaining). Overflow queue: ${quota.queuedCount} / ${quota.queueCap} waiting to send. Capacity returns gradually as older sends age out of the rolling 24-hour window.`
-                            : `Resend 免费额度：过去 24 小时已使用 ${quota.sentToday} / ${quota.dailyCap} 封（剩余 ${remainingToday} 封）。待发队列：${quota.queuedCount} / ${quota.queueCap} 封。额度随早前邮件超出 24 小时滚动窗口而逐步恢复。`}
+                            ? `Resend free tier: ${quota.sentToday} / ${quota.dailyCap} emails used in the last 24h (${remainingToday} remaining). Overflow queue: ${quota.queuedCount} / ${quota.queueCap} waiting to send. Capacity returns gradually as older sends age out of the rolling 24-hour window. Part of the daily limit is kept back for sign-up and password emails, and isn't counted here.`
+                            : `Resend 免费额度：过去 24 小时已使用 ${quota.sentToday} / ${quota.dailyCap} 封（剩余 ${remainingToday} 封）。待发队列：${quota.queuedCount} / ${quota.queueCap} 封。额度随早前邮件超出 24 小时滚动窗口而逐步恢复。每日限额中有一部分预留给注册和密码邮件，未计入此处。`}
                     </span>
                 ) : (
                     <span>

@@ -256,7 +256,7 @@ export const ClaimPage = () => {
                         <h2>{isEnglish ? 'Sign In to Claim Event' : '登录以签到活动'}</h2>
                         <p>{isEnglish ? 'You need to sign in first to check in for this event.' : '请先登录以签到此活动。'}</p>
                         <button onClick={signIn} className="profile-sign-in-btn">
-                            {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
+                            {isEnglish ? 'Sign In' : '登录'}
                         </button>
                     </>
                 ))}

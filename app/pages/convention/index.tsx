@@ -3,18 +3,18 @@ import { GoToTop } from '~/components/GoToTop';
 import { useConContent, useConListing } from '~/lib/conContent';
 import { useHashScroll } from '~/lib/useHashScroll';
 import { useVenues } from '~/lib/venues';
-import { Navigation } from '~/pages/con/Navigation';
-import { Hero } from '~/pages/con/Hero';
-import { Tickets } from '~/pages/con/Tickets';
-import { About } from '~/pages/con/About';
-import { Schedule } from '~/pages/con/Schedule';
-import { ShareCard } from '~/pages/con/ShareCard';
-import { MaidCafe } from '~/pages/con/MaidCafe';
-import { Vendors } from '~/pages/con/Vendors';
-import { Faq } from '~/pages/con/Faq';
-import { Footer } from '~/pages/con/Footer';
-import { Unpublished } from '~/pages/con/Unpublished';
-import { useT } from '~/pages/con/i18n';
+import { Navigation } from '~/pages/convention/Navigation';
+import { Hero } from '~/pages/convention/Hero';
+import { Tickets } from '~/pages/convention/Tickets';
+import { About } from '~/pages/convention/About';
+import { Schedule } from '~/pages/convention/Schedule';
+import { ShareCard } from '~/pages/convention/ShareCard';
+import { MaidCafe } from '~/pages/convention/MaidCafe';
+import { Vendors } from '~/pages/convention/Vendors';
+import { Faq } from '~/pages/convention/Faq';
+import { Footer } from '~/pages/convention/Footer';
+import { Unpublished } from '~/pages/convention/Unpublished';
+import { useT } from '~/pages/convention/i18n';
 
 /**
  * The Sekai Beyond Con page, with its own navbar and footer: the bar sits

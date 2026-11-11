@@ -1,9 +1,9 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent } from '~/lib/conContent';
 import { labelSiteZone, parseSiteTime } from '~/lib/siteTime';
-import { useNowAcross } from '~/pages/con/hooks';
-import { useT } from '~/pages/con/i18n';
-import { formatClockTime, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
+import { useNowAcross } from '~/pages/convention/hooks';
+import { useT } from '~/pages/convention/i18n';
+import { formatClockTime, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/convention/utils';
 
 /**
  * The in-person ticket table under the ticket cards: another way to buy, so no

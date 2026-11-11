@@ -332,7 +332,7 @@ const CON_LIMITS = {
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// Mirrors HALL_TABLES in app/pages/con/hall.ts: the hall floor plan's tables, in
+// Mirrors HALL_TABLES in app/pages/convention/hall.ts: the hall floor plan's tables, in
 // plan order. A vendor can only sit at one of these.
 const CON_HALL_TABLES = ([["A", 14], ["B", 14], ["C", 14], ["D", 14], ["E", 3]] as const)
     .flatMap(([row, count]) => Array.from({length: count}, (_, i) => `${row}${i + 1}`));

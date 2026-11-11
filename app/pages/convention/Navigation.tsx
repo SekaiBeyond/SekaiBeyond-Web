@@ -3,9 +3,9 @@ import { Link } from 'react-router';
 import { FiArrowLeft, FiMenu, FiX } from 'react-icons/fi';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { CON_NAME, CON_NAV_LINKS, useConListing } from '~/lib/conContent';
-import { useT } from '~/pages/con/i18n';
-import { useActiveSection, useConEnded, useConNavLinks, useScrolledPast } from '~/pages/con/hooks';
-import { scrollToSection } from '~/pages/con/utils';
+import { useT } from '~/pages/convention/i18n';
+import { useActiveSection, useConEnded, useConNavLinks, useScrolledPast } from '~/pages/convention/hooks';
+import { scrollToSection } from '~/pages/convention/utils';
 
 const SECTION_IDS = CON_NAV_LINKS.map(link => link.id);
 

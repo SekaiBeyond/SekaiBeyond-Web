@@ -1,8 +1,8 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ConContent, EarlyBird, InPersonSession } from '~/lib/conContent';
 import { parseSiteTime } from '~/lib/siteTime';
-import { useT } from '~/pages/con/i18n';
-import { formatPrice, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
+import { useT } from '~/pages/convention/i18n';
+import { formatPrice, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/convention/utils';
 import {
     AddButton,
     AmountField,

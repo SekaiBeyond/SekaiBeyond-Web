@@ -1,5 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { RESEND_DAILY_CAP } from "./config";
+import { BULK_MAIL_CAP, RESEND_DAILY_CAP } from "./config";
 import { db } from "./firebase";
 
 // The quota cache (system/resendQuota), as two counters.
@@ -30,9 +30,11 @@ function parseQuotaDoc(
     };
 }
 
+// What ticket and passport mail may send: their cap leaves out the reserve for
+// account mail, which sendAccountMail checks against the whole cap instead.
 export async function computeEmailQuota(): Promise<{sentToday: number; dailyCap: number}> {
-    const {sentToday, dailyCap} = await computeEmailQuotaDetail();
-    return {sentToday, dailyCap};
+    const {sentToday} = await computeEmailQuotaDetail();
+    return {sentToday, dailyCap: BULK_MAIL_CAP};
 }
 
 // computeEmailQuota plus the raw counters and the cache's age, for the admin
@@ -62,7 +64,7 @@ export async function computeEmailQuotaInTxn(
     txn: FirebaseFirestore.Transaction,
 ): Promise<{sentToday: number; dailyCap: number; reserved: number}> {
     const {confirmed, reserved} = parseQuotaDoc((await txn.get(QUOTA_DOC)).data());
-    return {sentToday: confirmed + reserved, dailyCap: RESEND_DAILY_CAP, reserved};
+    return {sentToday: confirmed + reserved, dailyCap: BULK_MAIL_CAP, reserved};
 }
 
 // Pre-charge `delta` onto `reserved`. `currentReserved` must come from

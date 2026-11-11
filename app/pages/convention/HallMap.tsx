@@ -8,8 +8,8 @@ import {
     HALL_LANDMARKS,
     HALL_TABLE_PLACES,
     type LandmarkKind,
-} from '~/pages/con/hall';
-import { type Localized, useT } from '~/pages/con/i18n';
+} from '~/pages/convention/hall';
+import { type Localized, useT } from '~/pages/convention/i18n';
 
 const LANDMARK_LABELS: Record<LandmarkKind, Localized> = {
     stage: {en: 'Main Stage', zh: '主舞台'},

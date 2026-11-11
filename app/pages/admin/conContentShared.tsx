@@ -2,7 +2,7 @@ import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveConContent, errorMessage } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent } from '~/lib/conContent';
-import type { Localized } from '~/pages/con/i18n';
+import type { Localized } from '~/pages/convention/i18n';
 import type { ShowToast } from './utils';
 
 export const SECTION_LABELS: Record<ConContentSection, Localized> = {

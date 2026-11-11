@@ -2,9 +2,9 @@ import { Link } from 'react-router';
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from 'react-icons/si';
 import { CON_NAME, useConVenue } from '~/lib/conContent';
 import { SOCIAL_LINK_NAMES, useSiteConfig } from '~/lib/siteConfig';
-import { useConNavLinks } from '~/pages/con/hooks';
-import { useT } from '~/pages/con/i18n';
-import { scrollToSection } from '~/pages/con/utils';
+import { useConNavLinks } from '~/pages/convention/hooks';
+import { useT } from '~/pages/convention/i18n';
+import { scrollToSection } from '~/pages/convention/utils';
 import type { ParkingGuideState } from '~/pages/parking';
 
 const SOCIALS = [

@@ -115,11 +115,13 @@ export async function sendEmails(envelopes: ResendEnvelope[], timeoutMs?: number
     const from = await getSenderAddress();
 
     // The emulator never reaches Resend, whatever key it has: each email is
-    // logged and counted as sent, releasing the pre-charge as a paid plan does.
+    // logged, with its links so they can be followed, and counted as sent,
+    // releasing the pre-charge as a paid plan does.
     if (process.env.FUNCTIONS_EMULATOR === "true") {
         for (const e of envelopes) {
             const to = Array.isArray(e.to) ? e.to : [e.to];
-            console.log(`Emulator, not sent: "${e.subject}" from ${from} to ${to.join(", ")}`);
+            const links = [...e.html.matchAll(/href="([^"]+)"/g)].map(match => match[1]).join(" ");
+            console.log(`Emulator, not sent: "${e.subject}" from ${from} to ${to.join(", ")}${links ? ` links: ${links}` : ""}`);
         }
         await rollbackQuotaReservation(countRecipients(envelopes));
         return {sentCount: envelopes.length, ids: [], dailyConsumed: null};

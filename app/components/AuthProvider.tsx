@@ -1,22 +1,25 @@
 import { createContext, type FC, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { FirebaseError } from 'firebase/app';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, type DocumentData, getDoc, Timestamp } from 'firebase/firestore';
 import {
-    callCreateUserProfile,
     callDeleteAvatar,
     callDeleteBanner,
+    callEndAllSessions,
     callEndOwnSession,
+    callEndSession,
     callUpdateDisplayName,
     callUploadAvatar,
     callUploadBanner,
     getFirebaseAuth,
     getFirebaseDb,
-    signInWithGoogle as firebaseSignIn,
+    signInWithToken,
     signOut as firebaseSignOut
 } from '~/lib/firebase';
 import { toDate } from '~/lib/collectionCache';
 import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
-import { currentSessionId, watchOwnSession } from '~/lib/sessions';
+import { openSignInModal } from '~/lib/signInModal';
+import { currentSessionId, sessionEnded, signInMovedOn, watchOwnSession } from '~/lib/sessions';
 
 // `group` is a role ladder only; membership lives in membershipExpiresAt.
 export type UserGroup = 'user' | 'staff' | 'core-staff' | 'president';
@@ -104,6 +107,10 @@ export interface UserProfile {
     title?: string;
     titleCn?: string;
     eventStaffEvents: string[];
+    /** When the account is due to be deleted, or null when it isn't. */
+    deleteAt: Date | null;
+    /** Who asked for that: the account itself, or the staff member's uid. "" when not due. */
+    deletionRequestedBy: string;
 }
 
 function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
@@ -115,10 +122,10 @@ function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
     return out;
 }
 
-function toUserProfile(data: DocumentData, email: string): UserProfile {
+function toUserProfile(data: DocumentData): UserProfile {
     return {
         displayName: data.displayName,
-        email,
+        email: data.email ?? '',
         photoURL: data.photoURL,
         bannerURL: data.bannerURL ?? '',
         joinedAt: toDate(data.joinedAt) ?? new Date(),
@@ -133,6 +140,8 @@ function toUserProfile(data: DocumentData, email: string): UserProfile {
         title: data.title ?? '',
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],
+        deleteAt: toDate(data.deleteAt),
+        deletionRequestedBy: typeof data.deletionRequestedBy === 'string' ? data.deletionRequestedBy : '',
     };
 }
 
@@ -146,8 +155,13 @@ interface AuthContextType {
     cachedPhotoURL: string;
     /** This device's row in the device list, once known. */
     sessionId: string | null;
-    signIn: () => Promise<void>;
+    /** Opens the sign-in modal. */
+    signIn: () => void;
     signOut: () => Promise<void>;
+    /** Signs out every device on the account, this one too. Throws, still signed in, if that fails. */
+    signOutEverywhere: () => Promise<void>;
+    /** Moves this device onto the new sign-in a password change answers with. */
+    replaceSession: (token: string) => Promise<void>;
     refreshProfile: () => Promise<void>;
     updateProfile: (updates: {
         displayName?: string;
@@ -218,16 +232,14 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     const userRef = doc(getFirebaseDb(), 'users', firebaseUser.uid);
                     const userSnap = await getDoc(userRef);
 
-                    let data = userSnap.data();
+                    const data = userSnap.data();
                     if (!data) {
-                        await callCreateUserProfile();
-                        const freshSnap = await getDoc(userRef);
-                        data = freshSnap.data();
-                        if (!data) {
-                            throw new Error('Profile creation succeeded but document was not found.');
-                        }
+                        // A login with no account behind it: one that's been
+                        // deleted. Every account exists before its first login.
+                        await firebaseSignOut();
+                        return;
                     }
-                    const loaded = toUserProfile(data, firebaseUser.email ?? '');
+                    const loaded = toUserProfile(data);
                     setProfile(loaded);
                     cachePhoto(firebaseUser.uid, loaded.photoURL);
                 } else {
@@ -235,6 +247,14 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     clearCachedPhoto();
                 }
             } catch (error) {
+                // A sign-in that has been signed out, or never listed itself in
+                // time, can't read even its own profile (liveSession in
+                // firestore.rules), so it signs out rather than sit half in.
+                if (firebaseUser && error instanceof FirebaseError && error.code === 'permission-denied'
+                    && await sessionEnded()) {
+                    await firebaseSignOut();
+                    return;
+                }
                 console.error('AuthProvider: failed to load or create user profile', error);
                 setProfile(null);
             } finally {
@@ -245,8 +265,11 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         return () => unsubscribe();
     }, []);
 
-    // Waits for the profile, so a new account's user doc is there for
-    // touchSession to find.
+    // Bumped to watch the sign-in another tab has moved this browser on to, which
+    // arrives in the same user object, so nothing else here would notice it.
+    const [sessionGeneration, setSessionGeneration] = useState(0);
+
+    // Waits for the profile, as there's no device list for a login with no account.
     const hasProfile = !!profile;
     useEffect(() => {
         if (!user || !hasProfile) {
@@ -254,21 +277,29 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
             return;
         }
         let stale = false;
-        void currentSessionId(user).then(id => {
+        const onEnded = async (endedId: string) => {
+            if (await signInMovedOn(endedId)) {
+                if (!stale) setSessionGeneration(generation => generation + 1);
+                return;
+            }
+            await firebaseSignOut();
+        };
+        // The live user when it's this account, so a sign-in that has moved on is
+        // what's watched even if `user` is an older object for the same account.
+        const live = getFirebaseAuth().currentUser;
+        void currentSessionId(live?.uid === user.uid ? live : user).then(id => {
             if (stale || !id) return;
             setSessionId(id);
-            stopWatchingSession.current = watchOwnSession(user.uid, id, () => void firebaseSignOut());
+            stopWatchingSession.current = watchOwnSession(user.uid, id, () => void onEnded(id));
         });
         return () => {
             stale = true;
             stopWatchingSession.current?.();
             stopWatchingSession.current = null;
         };
-    }, [user, hasProfile]);
+    }, [user, hasProfile, sessionGeneration]);
 
-    const signIn = async () => {
-        await firebaseSignIn();
-    };
+    const signIn = () => openSignInModal();
 
     const signOut = async () => {
         // Stops watching first, or the removed row would be put back. Signing
@@ -281,12 +312,36 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         setProfile(null);
     };
 
+    const signOutEverywhere = async () => {
+        // This device's row is ended with the rest, so its watcher may sign it
+        // out before the call answers; signing out again does no harm.
+        await callEndAllSessions();
+        stopWatchingSession.current?.();
+        await firebaseSignOut();
+        setProfile(null);
+    };
+
+    // The same uid signing in again fires no auth state change, so the new user
+    // is set here, which starts watching the new session. The old row is ended
+    // after: this device is the one that would notice.
+    const replaceSession = async (token: string) => {
+        const oldSessionId = sessionId;
+        stopWatchingSession.current?.();
+        stopWatchingSession.current = null;
+        const credential = await signInWithToken(token);
+        setUser(credential.user);
+        if (oldSessionId) {
+            await callEndSession({sessionId: oldSessionId}).catch(() => {
+            });
+        }
+    };
+
     const refreshProfile = async () => {
         if (!user) return;
         const userRef = doc(getFirebaseDb(), 'users', user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
-            const loaded = toUserProfile(userSnap.data(), user.email ?? '');
+            const loaded = toUserProfile(userSnap.data());
             setProfile(loaded);
             cachePhoto(user.uid, loaded.photoURL);
         }
@@ -335,6 +390,8 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         sessionId,
         signIn,
         signOut,
+        signOutEverywhere,
+        replaceSession,
         refreshProfile,
         updateProfile,
     };

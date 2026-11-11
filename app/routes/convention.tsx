@@ -1,6 +1,6 @@
-import type { Route } from "./+types/con";
+import type { Route } from "./+types/convention";
 import { pageMeta } from "~/lib/seo";
-import { ConPage } from "~/pages/con";
+import { ConPage } from "~/pages/convention";
 
 export function meta({}: Route.MetaArgs) {
     return pageMeta({

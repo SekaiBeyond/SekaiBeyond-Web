@@ -1,10 +1,10 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent, useConListing } from '~/lib/conContent';
-import { useConEnded, useNowAcross } from '~/pages/con/hooks';
-import { useT } from '~/pages/con/i18n';
-import { InPersonSales } from '~/pages/con/InPersonSales';
-import { SectionHeader } from '~/pages/con/SectionHeader';
-import { activeEarlyBird, formatDeadline, formatPrice, ticketFeeFor } from '~/pages/con/utils';
+import { useConEnded, useNowAcross } from '~/pages/convention/hooks';
+import { useT } from '~/pages/convention/i18n';
+import { InPersonSales } from '~/pages/convention/InPersonSales';
+import { SectionHeader } from '~/pages/convention/SectionHeader';
+import { activeEarlyBird, formatDeadline, formatPrice, ticketFeeFor } from '~/pages/convention/utils';
 
 export const Tickets = () => {
     const t = useT();

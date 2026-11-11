@@ -7,7 +7,7 @@ import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUploadLimits } from '~/lib/uploadLimits';
 import { useVenues } from '~/lib/venues';
 import { localized } from '~/lib/localized';
-import type { Localized } from '~/pages/con/i18n';
+import type { Localized } from '~/pages/convention/i18n';
 import { validateVideoFile } from './utils';
 import {
     AddButton,

@@ -181,6 +181,22 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>signed in with {r.targetEmail}, taking it off {target}'s account, whose Google account no longer
                     uses it</>
                 : <>以 {r.targetEmail} 登录，该邮箱已从 {target} 的账号中移除（其 Google 账号已不再使用此邮箱）</>;
+        case 'account-password-set':
+            return isEnglish ? <>set a new password</> : <>设置了新密码</>;
+        case 'account-email-change': {
+            const self = r.performedBy && r.performedBy === r.targetUid;
+            const change = <>{r.oldEmail || '—'} → {r.targetEmail}</>;
+            if (self) return isEnglish ? <>changed their email: {change}</> : <>更改了邮箱：{change}</>;
+            return isEnglish ? <>changed {target}'s email: {change}</> : <>更改了 {target} 的邮箱：{change}</>;
+        }
+        case 'account-email-undo':
+            return isEnglish
+                ? <>undid an email change from the link sent to their old address: {r.oldEmail} → {r.targetEmail}</>
+                : <>通过发送至原邮箱的链接撤销了邮箱更改：{r.oldEmail} → {r.targetEmail}</>;
+        case 'account-google-bind':
+            return isEnglish ? <>bound a Google account</> : <>绑定了 Google 账号</>;
+        case 'account-google-unbind':
+            return isEnglish ? <>unbound their Google account</> : <>解绑了 Google 账号</>;
         case 'code-create':
             if (r.eventId) {
                 return isEnglish

@@ -1156,7 +1156,7 @@
 }
 
 /* Artist alley: the hall floor plan, a panel naming whoever is at the picked
-   table, and a directory below. The geometry is one CSS grid in con/hall.ts;
+   table, and a directory below. The geometry is one CSS grid in convention/hall.ts;
    each item carries grid lines for both orientations, and the container query
    below picks the pair.
 

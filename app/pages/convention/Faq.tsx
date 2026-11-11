@@ -1,8 +1,8 @@
 import { Link } from 'react-router';
 import { useConContent } from '~/lib/conContent';
 import { useSiteConfig } from '~/lib/siteConfig';
-import { useT } from '~/pages/con/i18n';
-import { SectionHeader } from '~/pages/con/SectionHeader';
+import { useT } from '~/pages/convention/i18n';
+import { SectionHeader } from '~/pages/convention/SectionHeader';
 
 const POLICY_WORD = {en: 'Policy', zh: '政策'};
 

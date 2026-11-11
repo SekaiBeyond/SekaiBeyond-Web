@@ -13,7 +13,7 @@ export const NoticeCard = ({title, text, onSignIn}: {title: string; text?: strin
                 {text && <p>{text}</p>}
                 {onSignIn && (
                     <button onClick={onSignIn} className="profile-sign-in-btn">
-                        {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
+                        {isEnglish ? 'Sign In' : '登录'}
                     </button>
                 )}
                 <a href="/" className="profile-back-link">
