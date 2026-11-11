@@ -2,7 +2,7 @@ import { type CallableRequest, HttpsError } from "firebase-functions/v2/https";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firebase";
-import { sessionIdOf, sessionRef, UNLISTED_GRACE_SECONDS } from "./sessions";
+import { sessionIdOf, sessionRef, signedInSinceSessionsEnded, UNLISTED_GRACE_SECONDS } from "./sessions";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
@@ -176,16 +176,18 @@ export async function requireRegisteredSession(
 /**
  * Refuses a call from a device signed out from the device list, whose token
  * still works with Firebase Auth, or from a sign-in that has gone unlisted for
- * longer than a new device needs to list itself (UNLISTED_GRACE_SECONDS).
- * firestore.rules holds reads to the same (liveSession). Says whether the
- * device is listed.
+ * longer than a new device needs to list itself (UNLISTED_GRACE_SECONDS), or
+ * one unlisted from before the account's devices were last signed out
+ * (signedInSinceSessionsEnded). firestore.rules holds reads to the same
+ * (liveSession). Says whether the device is listed.
  */
 async function requireLiveSession(uid: string, token: DecodedIdToken): Promise<boolean> {
     const sessionId = sessionIdOf(token);
     const snap = sessionId ? await sessionRef(uid, sessionId).get() : null;
     const live = snap?.exists
         ? !snap.get("endedAt")
-        : !!sessionId && Date.now() / 1000 - token.auth_time < UNLISTED_GRACE_SECONDS;
+        : !!sessionId && Date.now() / 1000 - token.auth_time < UNLISTED_GRACE_SECONDS
+            && signedInSinceSessionsEnded(token, (await db.collection("users").doc(uid).get()).data());
     if (!live) {
         throw new HttpsError("unauthenticated", "This device has been signed out.", {code: "session-ended"});
     }

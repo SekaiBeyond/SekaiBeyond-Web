@@ -47,7 +47,7 @@ import { checkNewPassword, hashPassword, readPasswordAttempt, verifyPassword } f
 import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, type ResendEnvelope } from "../utils/resendClient";
 import { callerAddressKey } from "../utils/scans";
-import { endSessions, sessionIdOf } from "../utils/sessions";
+import { endSessions, sessionIdOf, signInToken } from "../utils/sessions";
 import { sanitizeDisplayText, validateDocId, validateEmail } from "../utils/validation";
 
 /**
@@ -279,7 +279,7 @@ export const signUpWithEmail = onCall(ACCOUNT_CALL, async (request) => {
     await requireEmailCode("signup", email, code);
     const passwordHash = await hashPassword(password);
     const uid = await createAccount({email, displayName, photoURL: "", passwordHash, google: null});
-    return {token: await getAuth().createCustomToken(uid)};
+    return {token: await signInToken(uid)};
 });
 
 /** The account `password` opens at `email`, or a refusal that doesn't say which part was wrong. */
@@ -299,7 +299,7 @@ export const signInWithPassword = onCall(ACCOUNT_CALL, async (request) => {
     const input = (request.data ?? {}) as {email?: unknown; password?: unknown};
     const email = validateEmail(input.email, "email");
     const uid = await checkPassword(request, email, readPasswordAttempt(input.password));
-    return {token: await getAuth().createCustomToken(uid)};
+    return {token: await signInToken(uid)};
 });
 
 /**
@@ -344,7 +344,7 @@ export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
     await limitNoticedChange(uid, "password");
 
     await setPassword(uid, email, password, null, readMailLanguage(input.language));
-    return {token: await getAuth().createCustomToken(uid)};
+    return {token: await signInToken(uid)};
 });
 
 /**
@@ -404,7 +404,7 @@ export const signInWithGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const google = await verifyGoogleToken((request.data as {idToken?: unknown} | null)?.idToken);
 
     const uid = await accountForGoogle(google);
-    if (uid) return {status: "signed-in" as const, token: await getAuth().createCustomToken(uid)};
+    if (uid) return {status: "signed-in" as const, token: await signInToken(uid)};
 
     const emailTakenByAccount = google.emailVerified && !!google.email
         && (await emailIndexRef(google.email).get()).exists;
@@ -440,7 +440,7 @@ export const createAccountWithGoogle = onCall(ACCOUNT_CALL, async (request) => {
     }
     const passwordHash = password ? await hashPassword(password) : null;
     const uid = await createAccount({email, displayName, photoURL: google.photoURL, passwordHash, google});
-    return {token: await getAuth().createCustomToken(uid)};
+    return {token: await signInToken(uid)};
 });
 
 /**
@@ -491,7 +491,7 @@ export const bindGoogleWithPassword = onCall(ACCOUNT_CALL, async (request) => {
     await limitNoticedChange(uid, "google");
 
     await bindGoogleTo(uid, google, readMailLanguage(input.language));
-    return {token: await getAuth().createCustomToken(uid)};
+    return {token: await signInToken(uid)};
 });
 
 /** For a signed-in account, from Settings. */
@@ -589,7 +589,7 @@ export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
     await limitNoticedChange(uid, "password");
     await setPassword(uid, email, password, sessionIdOf(request.auth!.token), readMailLanguage(input.language));
     // This device's sign-in was revoked with the rest, so it gets a new one.
-    return {token: await getAuth().createCustomToken(uid)};
+    return {token: await signInToken(uid)};
 });
 
 /**

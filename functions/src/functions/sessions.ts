@@ -1,6 +1,6 @@
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { requireAuth } from "../utils/auth";
+import { requireAuth, requireRegisteredSession } from "../utils/auth";
 import { db } from "../utils/firebase";
 import {
     describeUserAgent,
@@ -8,7 +8,7 @@ import {
     SESSION_ID_RE,
     sessionIdOf,
     sessionRef,
-    sessionsRef,
+    signedInSinceSessionsEnded,
 } from "../utils/sessions";
 
 /** The caller and the session their call comes from. requireAuth has already refused an ended one. */
@@ -24,7 +24,8 @@ async function requireSession(request: CallableRequest): Promise<{uid: string; s
  * again, with what its user agent says it is. The device calls this once it
  * has loaded and every so often while open. Nothing is written for an account
  * whose user doc is gone, so a deleted account's last token can't leave a
- * session behind.
+ * session behind, nor for a sign-in from before the account's devices were
+ * last signed out, which would otherwise outlive it (see utils/sessions.ts).
  */
 export const touchSession = onCall({maxInstances: 20}, async (request) => {
     const {uid, sessionId} = await requireSession(request);
@@ -37,8 +38,10 @@ export const touchSession = onCall({maxInstances: 20}, async (request) => {
             txn.get(ref),
         ]);
         if (!userSnap.exists) return false;
-        // Signed out between requireAuth and here: endedAt must not be undone.
-        if (snap.data()?.endedAt) {
+        // Signed out between requireAuth and here: endedAt must not be undone,
+        // nor a sign-in the sign-out missed be listed after it. Reading the
+        // user doc here is what keeps endSessions from missing it.
+        if (snap.data()?.endedAt || (!snap.exists && !signedInSinceSessionsEnded(request.auth!.token, userSnap.data()))) {
             throw new HttpsError("unauthenticated", "This device has been signed out.", {code: "session-ended"});
         }
         txn.set(ref, {
@@ -84,18 +87,16 @@ export const endSession = onCall({maxInstances: 10}, async (request) => {
     return {ended: true};
 });
 
-/** Signs out every device on the caller's account but the one they call from. */
+/**
+ * Signs out every device on the caller's account but the one they call from,
+ * which has to be on the list, as the button for this is: a sign-in the list
+ * never caught goes too, and an unlisted caller would be one of those. Nothing
+ * is revoked with Firebase Auth, which would sign the caller out as well.
+ */
 export const endOtherSessions = onCall({maxInstances: 10}, async (request) => {
-    const {uid, sessionId: own} = await requireSession(request);
-
-    const snap = await sessionsRef(uid).where("endedAt", "==", null).get();
-    const others = snap.docs.filter(doc => doc.id !== own);
-    // A person has a handful of devices, far under a batch's 500 writes.
-    const batch = db.batch();
-    for (const doc of others) batch.update(doc.ref, {endedAt: FieldValue.serverTimestamp()});
-    if (others.length > 0) await batch.commit();
-
-    return {ended: others.length};
+    const uid = await requireRegisteredSession(request);
+    const own = sessionIdOf(request.auth!.token);
+    return {ended: await endSessions(uid, own, {revoke: false})};
 });
 
 /**

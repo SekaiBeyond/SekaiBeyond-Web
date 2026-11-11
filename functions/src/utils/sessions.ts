@@ -1,5 +1,5 @@
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
 
 /**
@@ -18,6 +18,11 @@ import { db } from "./firebase";
  * A sign-in with no doc is refused the same way once UNLISTED_GRACE_SECONDS
  * have passed, or one that never listed itself, such as a stolen token, would
  * be out of reach of signing other devices out.
+ *
+ * Within those minutes it has no doc to end either, so signing devices out
+ * also stamps the account's user doc with `sessionsEndedAt`, and a sign-in
+ * with no doc that began before then is refused, and may not list itself
+ * (signedInSinceSessionsEnded). firestore.rules (liveSession) does the same.
  */
 
 /**
@@ -45,13 +50,82 @@ export function sessionRef(uid: string, sessionId: string): FirebaseFirestore.Do
 }
 
 /**
- * Signs out every device but `keepSession`, or every one with null, and
- * revokes the Firebase sessions behind them, which also reaches a sign-in the
- * list never caught. The kept device needs a new sign-in after, as its refresh
- * token goes too. An account that has never signed in has no Firebase record
- * to revoke.
+ * A token to sign in to `uid` with, which every sign-in the functions give out
+ * goes through. It says when it was made (`mintedAt`, in milliseconds), as a
+ * custom token works for an hour and its sign-in's auth_time is only when it's
+ * used: one taken before the account's devices were signed out and used after
+ * would otherwise count as a sign-in from after.
  */
-export async function endSessions(uid: string, keepSession: string | null): Promise<void> {
+export function signInToken(uid: string): Promise<string> {
+    return getAuth().createCustomToken(uid, {mintedAt: Date.now()});
+}
+
+/**
+ * When a sign-in began, in milliseconds: the earlier of when its token was
+ * made (`mintedAt`) and its `auth_time`, or `auth_time` alone for Firebase
+ * Auth's own providers. A custom-token sign-in that doesn't say when it was
+ * made, which no token from signInToken is, counts as the oldest.
+ */
+function signInBeganMillis(token: DecodedIdToken): number {
+    const authMillis = token.auth_time * 1000;
+    if (typeof token.mintedAt === "number") return Math.min(token.mintedAt, authMillis);
+    return token.firebase?.sign_in_provider === "custom" ? 0 : authMillis;
+}
+
+/**
+ * Whether a sign-in began after the account's devices were last signed out
+ * (`sessionsEndedAt` on its user doc `user`). Only asked of a sign-in with no
+ * doc: one with a doc that was live then has been ended since. An auth_time is
+ * in whole seconds, so one in the same second as the sign-out counts as before
+ * (endSessions waits that second out). Written into firestore.rules
+ * (liveSession) as well, so keep the two the same.
+ */
+export function signedInSinceSessionsEnded(
+    token: DecodedIdToken,
+    user: FirebaseFirestore.DocumentData | undefined,
+): boolean {
+    const endedAt: unknown = user?.sessionsEndedAt;
+    return !(endedAt instanceof Timestamp) || signInBeganMillis(token) > endedAt.toMillis();
+}
+
+/** How far past the second endSessions waits, for the clocks of Auth and the functions to differ by. */
+const SECOND_MARGIN_MS = 100;
+
+/**
+ * Stamps `sessionsEndedAt` on the account's user doc, and says when, or null
+ * for an account with no user doc, which has nothing to sign in to.
+ */
+async function markSessionsEnded(uid: string): Promise<Timestamp | null> {
+    try {
+        const result = await db.collection("users").doc(uid).update({sessionsEndedAt: FieldValue.serverTimestamp()});
+        return result.writeTime;
+    } catch (err) {
+        // 5 is NOT_FOUND: no user doc.
+        if ((err as {code?: unknown})?.code === 5) return null;
+        throw err;
+    }
+}
+
+/**
+ * Signs out every device but `keepSession`, or every one with null, and with
+ * `revoke` (the default) revokes the Firebase sessions behind them. The kept
+ * device needs a new sign-in after a revoke, as its refresh token goes too.
+ * An account that has never signed in has no Firebase record to revoke.
+ *
+ * A sign-in the list never caught is reached by `sessionsEndedAt`, stamped
+ * before the list is read: a device listing itself (touchSession) reads the
+ * user doc in its transaction, so it either listed itself in time to be ended
+ * here or sees the stamp and is refused. Returns once the second of the stamp
+ * is over, so a sign-in after, such as the kept device's new one, has a later
+ * auth_time. Says how many devices it signed out.
+ */
+export async function endSessions(
+    uid: string,
+    keepSession: string | null,
+    {revoke = true}: {revoke?: boolean} = {},
+): Promise<number> {
+    const markedAt = await markSessionsEnded(uid);
+
     const live = await sessionsRef(uid).where("endedAt", "==", null).get();
     const others = live.docs.filter(doc => doc.id !== keepSession);
     // A person has a handful of devices, far under a batch's 500 writes.
@@ -59,9 +133,17 @@ export async function endSessions(uid: string, keepSession: string | null): Prom
     for (const doc of others) batch.update(doc.ref, {endedAt: FieldValue.serverTimestamp()});
     if (others.length > 0) await batch.commit();
 
-    await getAuth().revokeRefreshTokens(uid).catch((err: unknown) => {
-        if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
-    });
+    if (revoke) {
+        await getAuth().revokeRefreshTokens(uid).catch((err: unknown) => {
+            if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
+        });
+    }
+
+    if (markedAt) {
+        const wait = (Math.floor(markedAt.toMillis() / 1000) + 1) * 1000 + SECOND_MARGIN_MS - Date.now();
+        if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+    }
+    return others.length;
 }
 
 export interface DeviceInfo {
