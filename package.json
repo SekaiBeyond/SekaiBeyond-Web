@@ -6,6 +6,7 @@
     "dev": "node scripts/dev.ts",
     "dev:prod": "react-router dev",
     "typecheck": "react-router typegen && tsc && tsc -p functions --noEmit",
+    "test:manager": "npm --prefix functions run build && node scripts/manager-test.ts",
     "build": "npm --prefix functions run build && react-router build",
     "start": "react-router-serve ./build/server/index.js",
     "update-csp-hashes": "node scripts/update-csp-hashes.ts",
