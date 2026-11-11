@@ -1,6 +1,7 @@
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
+import { revokeManagerAccess } from "./manager";
 
 /**
  * Each device signed in to an account is a doc in users/{uid}/sessions, named
@@ -138,6 +139,10 @@ export async function endSessions(
             if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
         });
     }
+    // Revoked even without `revoke`: a manager sign-in is never the device kept.
+    // managerApi refuses it from now on by sessionsEndedAt; this ends it in the
+    // manager's own rules too.
+    await revokeManagerAccess(uid);
 
     if (markedAt) {
         const wait = (Math.floor(markedAt.toMillis() / 1000) + 1) * 1000 + SECOND_MARGIN_MS - Date.now();

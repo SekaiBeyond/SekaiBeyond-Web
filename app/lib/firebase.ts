@@ -590,6 +590,11 @@ export const callRenameApiKey = (data: {keyId: string; name: string}) =>
 export const callRevokeApiKey = (data: {keyId: string}) =>
     httpsCallable<typeof data, {revoked: boolean}>(getFunctions(), 'revokeApiKey')(data);
 
+/** A sign-in for SKBY Manager, and the manager page to hand it to. Core staff only. */
+export const callIssueManagerToken = () =>
+    httpsCallable<Record<string, never>, {token: string; returnUrl: string}>(
+        getFunctions(), 'issueManagerToken')({});
+
 export const callUpdateEventEmailTemplate = (data: {
     eventId: string;
     subject: string;
