@@ -14,6 +14,7 @@ import {
     passwordChangedMail,
     readMailLanguage,
     requireCodeMailRoom,
+    requireNoticeMailRoom,
     sendAccountMail,
     sendNotice,
 } from "../utils/accountMail";
@@ -40,8 +41,23 @@ import {
     googleIndexRef,
     PASSWORD_PEPPER
 } from "../utils/credentials";
-import { type CodePurpose, consumeEmailCode, dropEmailCode, issueEmailCode } from "../utils/emailCodes";
-import { EMAIL_UNDO_DAYS, emailUndoRef, emailUndoUrl, isEmailUndoToken, newEmailUndoToken } from "../utils/emailUndo";
+import { deletionPending } from "../utils/deletion";
+import {
+    CODE_ATTEMPTS,
+    type CodePurpose,
+    consumeEmailCode,
+    dropEmailCode,
+    emailCodeKey,
+    issueEmailCode,
+} from "../utils/emailCodes";
+import {
+    EMAIL_UNDO_DAYS,
+    emailUndoLive,
+    emailUndoRef,
+    emailUndoUrl,
+    isEmailUndoToken,
+    newEmailUndoToken,
+} from "../utils/emailUndo";
 import { db } from "../utils/firebase";
 import { type GoogleIdentity, verifyGoogleToken } from "../utils/google";
 import { checkNewPassword, hashPassword, readPasswordAttempt, verifyPassword } from "../utils/passwords";
@@ -76,6 +92,14 @@ const HOUR_MS = 60 * MINUTE_MS;
 const CODES_PER_HOUR_PER_NETWORK = 30;
 const SIGN_INS_PER_MINUTE_PER_NETWORK = 60;
 const UNDOS_PER_HOUR_PER_NETWORK = 30;
+
+// Checking codes, per network. Across every address, loose enough for as many as
+// the network may be sent. On any one address's code, fewer than the wrong tries
+// that kill it (CODE_ATTEMPTS), so no single client can use up a code its owner
+// is waiting on, the one way left in for an account locked out by password
+// guessing. Clients on several networks still can.
+const CODE_CHECKS_PER_HOUR_PER_NETWORK = 2 * CODES_PER_HOUR_PER_NETWORK;
+const CODE_CHECKS_PER_CODE_PER_NETWORK = CODE_ATTEMPTS - 1;
 
 // Password tries on one address, by anyone and whether or not it has an account,
 // so being stopped says nothing about it. Enough for someone working out which
@@ -124,12 +148,23 @@ function emailChangeLockedUntil(user: FirebaseFirestore.DocumentData | undefined
     return next.getTime() > Date.now() ? next : null;
 }
 
+/**
+ * Refuses an owner's own email change while it can't be made: within a month of
+ * the last, or while the account is due to be deleted. A move after a deletion
+ * request would leave the owner, told of the deletion at the old address, unable
+ * to sign in and cancel it before it happens.
+ */
 function requireEmailChangeAllowed(user: FirebaseFirestore.DocumentData | undefined): void {
     const lockedUntil = emailChangeLockedUntil(user);
     if (lockedUntil) {
         throw new HttpsError("failed-precondition", "Your email can only change once a month.", {
             code: "email-change-locked",
             allowedAt: lockedUntil.toISOString(),
+        });
+    }
+    if (user && deletionPending(user)) {
+        throw new HttpsError("failed-precondition", "This account is due to be deleted.", {
+            code: "deletion-pending",
         });
     }
 }
@@ -145,8 +180,24 @@ function readDisplayName(value: unknown): string {
     return name;
 }
 
-/** Throws unless `code` is the live one. Goes last in a call, as it uses the code up. */
-async function requireEmailCode(purpose: CodePurpose, email: string, code: string): Promise<void> {
+/**
+ * Throws unless `code` is the live one. Goes last in a call, as it uses the code
+ * up. Anyone can try a code, and wrong tries kill it, so each try is charged to
+ * the caller's network first (CODE_CHECKS_PER_CODE_PER_NETWORK).
+ */
+async function requireEmailCode(
+    request: CallableRequest,
+    purpose: CodePurpose,
+    email: string,
+    code: string,
+): Promise<void> {
+    const network = callerAddressKey(request.rawRequest);
+    await consumeRateLimit(`codecheck_${network}`, CODE_CHECKS_PER_HOUR_PER_NETWORK, HOUR_MS);
+    await consumeRateLimit(
+        `codecheck_${emailCodeKey(purpose, email)}_${network}`,
+        CODE_CHECKS_PER_CODE_PER_NETWORK,
+        HOUR_MS,
+    );
     if (!await consumeEmailCode(purpose, email, code)) throw badCode();
 }
 
@@ -283,7 +334,7 @@ export const signUpWithEmail = onCall(ACCOUNT_CALL, async (request) => {
     const displayName = readDisplayName(input.displayName);
     const password = await checkNewPassword(input.password);
 
-    await requireEmailCode("signup", email, code);
+    await requireEmailCode(request, "signup", email, code);
     const passwordHash = await hashPassword(password);
     const uid = await createAccount({email, displayName, photoURL: "", passwordHash, google: null});
     return {token: await signInToken(uid)};
@@ -345,7 +396,7 @@ export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
     const code = readCode(input.code);
     const password = await checkNewPassword(input.password);
 
-    await requireEmailCode("password", email, code);
+    await requireEmailCode(request, "password", email, code);
     const uid: string | undefined = (await emailIndexRef(email).get()).get("uid");
     if (!uid) throw badCode();
     await limitNoticedChange(uid, "password");
@@ -453,7 +504,7 @@ export const createAccountWithGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const password = input.password ? await checkNewPassword(input.password) : null;
 
     if (email !== google.email || !google.emailVerified) {
-        await requireEmailCode("signup", email, readCode(input.code));
+        await requireEmailCode(request, "signup", email, readCode(input.code));
     }
     const passwordHash = password ? await hashPassword(password) : null;
     const uid = await createAccount({email, displayName, photoURL: google.photoURL, passwordHash, google});
@@ -608,7 +659,7 @@ export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
     const password = await checkNewPassword(input.password);
     const email: string = (await db.collection("users").doc(uid).get()).get("email") ?? "";
 
-    await requireEmailCode("password", email, code);
+    await requireEmailCode(request, "password", email, code);
     await limitNoticedChange(uid, "password");
     await setPassword(uid, email, password, sessionIdOf(request.auth!.token), readMailLanguage(input.language));
     // This device's sign-in was revoked with the rest, so it gets a new one.
@@ -616,9 +667,18 @@ export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
 });
 
 /**
+ * An owner's own move off `oldEmail`, which the old address has been told of
+ * already, with the link that undoes it when there's an `undoToken`.
+ */
+interface OwnMove {
+    oldEmail: string;
+    undoToken: string | null;
+}
+
+/**
  * Moves an account to `email`, whose owner has been proven or vouched for by now.
  * The old address joins the account's former list, and leaves the index for
- * anyone else to take. `by` is who's acting. An `ownChange` is held to the month
+ * anyone else to take. `by` is who's acting. An `own` move is held to the month
  * between changes, starts the next one, and can be undone from the old address
  * (undoEmailChange); staff stepping in does none of that.
  */
@@ -626,8 +686,8 @@ async function moveEmail(
     uid: string,
     email: string,
     by: {uid: string; name: string},
-    ownChange: boolean,
-): Promise<{oldEmail: string; undoToken: string | null}> {
+    own: OwnMove | null,
+): Promise<{oldEmail: string}> {
     const userRef = db.collection("users").doc(uid);
 
     return db.runTransaction(async (txn) => {
@@ -638,9 +698,13 @@ async function moveEmail(
         ]);
         if (!user.exists) throw new HttpsError("not-found", "User not found.");
         if (held.exists) throw emailTaken();
-        if (ownChange) requireEmailChangeAllowed(user.data());
+        if (own) requireEmailChangeAllowed(user.data());
 
         const oldEmail: string = user.get("email") ?? "";
+        // The notice went to the address read before this; it's the wrong one now.
+        if (own && oldEmail !== own.oldEmail) {
+            throw new HttpsError("aborted", "The account changed meanwhile. Please try again.");
+        }
         const oldIndex = oldEmail ? await txn.get(emailIndexRef(oldEmail)) : null;
 
         if (oldIndex?.get("uid") === uid) txn.delete(oldIndex.ref);
@@ -653,7 +717,7 @@ async function moveEmail(
         txn.update(userRef, {
             email,
             formerEmails: [oldEmail, ...former].filter(a => a && a !== email).slice(0, FORMER_EMAILS_MAX),
-            ...(ownChange ? {emailChangedAt: FieldValue.serverTimestamp()} : {}),
+            ...(own ? {emailChangedAt: FieldValue.serverTimestamp()} : {}),
         });
         txn.set(recordRef(), recordDoc("account-email-change", {
             performedBy: by.uid,
@@ -664,50 +728,60 @@ async function moveEmail(
             oldEmail,
         }));
 
-        const undoToken = ownChange && oldEmail ? newEmailUndoToken() : null;
-        if (undoToken) {
-            txn.set(emailUndoRef(undoToken), {
+        if (own?.undoToken) {
+            txn.set(emailUndoRef(own.undoToken), {
                 uid,
                 oldEmail,
                 newEmail: email,
                 expiresAt: Timestamp.fromMillis(Date.now() + EMAIL_UNDO_DAYS * 24 * HOUR_MS),
             });
         }
-        return {oldEmail, undoToken};
+        return {oldEmail};
     });
 }
 
-/** The heads-up to the old address, and the attendance the new one was scanned into. */
-async function afterEmailMoved(
-    uid: string,
-    oldEmail: string,
-    email: string,
-    language: MailLanguage,
-    undoToken: string | null = null,
-): Promise<void> {
-    const undoUrl = undoToken ? emailUndoUrl(undoToken) : undefined;
-    if (oldEmail) await sendNotice(await emailChangedMail(oldEmail, email, language, undoUrl));
+/** The attendance an account's new address was scanned into. */
+async function creditMovedEmail(uid: string, email: string): Promise<void> {
     try {
         await creditScannedTickets(db.collection("users").doc(uid), email);
     } catch (err) {
         // The address has moved either way; getMyTickets backfills while the event runs.
-        console.error(`afterEmailMoved: ticket credit failed for ${uid}`, err);
+        console.error(`creditMovedEmail: ticket credit failed for ${uid}`, err);
     }
 }
 
+/**
+ * An owner moving their account to a new address. The old address has to hear
+ * of it, with the link that undoes it, as that's how an owner whose sign-in was
+ * stolen gets the account back. So the notice goes first, and a notice that
+ * can't go stops the move: refused when no notice could go today, before the
+ * code is used up, and when sending it fails. Should the move then fail, which
+ * takes another change to the account in the moment between, the old address has
+ * a notice for a change that didn't happen, whose link says it doesn't work.
+ */
 export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {email?: unknown; code?: unknown; language?: unknown};
     const email = validateEmail(input.email, "email");
     const code = readCode(input.code);
+    const language = readMailLanguage(input.language);
 
     const user = await db.collection("users").doc(uid).get();
     requireEmailChangeAllowed(user.data());
-    await requireEmailCode("email-change", email, code);
+    const oldEmail: string = user.get("email") ?? "";
+    if (oldEmail) await requireNoticeMailRoom();
+    await requireEmailCode(request, "email-change", email, code);
+    // After the code, or this would say to anyone signed in whether an address
+    // has an account; before the notice, so taken since isn't announced as done.
+    if ((await emailIndexRef(email).get()).exists) throw emailTaken();
 
+    const undoToken = oldEmail ? newEmailUndoToken() : null;
+    if (undoToken) {
+        await sendAccountMail(await emailChangedMail(oldEmail, email, language, emailUndoUrl(undoToken)), "notice");
+    }
     const by = {uid, name: user.get("displayName") ?? ""};
-    const {oldEmail, undoToken} = await moveEmail(uid, email, by, true);
-    await afterEmailMoved(uid, oldEmail, email, readMailLanguage(input.language), undoToken);
+    await moveEmail(uid, email, by, {oldEmail, undoToken});
+    await creditMovedEmail(uid, email);
     return {email};
 });
 
@@ -724,6 +798,15 @@ export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
  * every device is being signed out, and the one asking signs in fresh with the
  * new password. The address it moved to is told, in case this link was the wrong
  * person's: the old mailbox may be why the owner moved.
+ *
+ * A deletion is cancelled only when the account asked for it, as anyone signed
+ * in to it could have. One staff asked for stays theirs (cancelAccountDeletion).
+ *
+ * The link is used up only once every device is signed out. Until then whoever
+ * moved the account is still in, so a restore whose signing out fails marks the
+ * link `restoredAt` rather than spending it: following it again puts the way in
+ * back to just the new password and finishes. The month's lock on email changes
+ * their move started stays until then too, so they can't move it again meanwhile.
  */
 export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
     const input = (request.data ?? {}) as {token?: unknown; password?: unknown; language?: unknown};
@@ -735,11 +818,12 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
 
     const {uid, oldEmail, newEmail} = await db.runTransaction(async (txn) => {
         const undo = await txn.get(undoRef);
-        const expiresAt: Timestamp | undefined = undo.get("expiresAt");
-        if (!expiresAt || expiresAt.toMillis() <= Date.now()) throw badUndoLink();
-        const uid: string = undo.get("uid");
+        const uid: unknown = undo.get("uid");
+        if (typeof uid !== "string") throw badUndoLink();
         const oldEmail: string = undo.get("oldEmail");
         const newEmail: string = undo.get("newEmail");
+        // Followed before, and the address put back, but not everything after.
+        const finishing = !!undo.get("restoredAt");
 
         const [user, credentials, oldHeld, newHeld, formerHolders] = await Promise.all([
             txn.get(db.collection("users").doc(uid)),
@@ -748,24 +832,31 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
             txn.get(emailIndexRef(newEmail)),
             txn.get(db.collection("users").where("formerEmails", "array-contains", oldEmail)),
         ]);
-        if (!user.exists || user.get("email") !== newEmail) throw badUndoLink();
-        if (oldHeld.exists) throw emailTaken();
+        if (!emailUndoLive(undo, user.data())) throw badUndoLink();
 
-        txn.delete(undoRef);
-        if (newHeld.get("uid") === uid) txn.delete(newHeld.ref);
-        txn.set(oldHeld.ref, {uid});
-        for (const holder of formerHolders.docs) {
-            if (holder.id !== uid) txn.update(holder.ref, {formerEmails: FieldValue.arrayRemove(oldEmail)});
+        if (finishing) {
+            if (oldHeld.get("uid") !== uid) throw badUndoLink();
+        } else {
+            if (oldHeld.exists) throw emailTaken();
+            txn.update(undoRef, {restoredAt: FieldValue.serverTimestamp()});
+            if (newHeld.get("uid") === uid) txn.delete(newHeld.ref);
+            txn.set(oldHeld.ref, {uid});
+            for (const holder of formerHolders.docs) {
+                if (holder.id !== uid) txn.update(holder.ref, {formerEmails: FieldValue.arrayRemove(oldEmail)});
+            }
         }
 
         const former: string[] = user.get("formerEmails") ?? [];
         txn.update(user.ref, {
-            email: oldEmail,
-            formerEmails: former.filter(a => a !== oldEmail && a !== newEmail),
+            ...(finishing ? {} : {
+                email: oldEmail,
+                formerEmails: former.filter(a => a !== oldEmail && a !== newEmail),
+            }),
             ...(hasUploadedAvatar(user) ? {} : {photoURL: ""}),
-            emailChangedAt: FieldValue.delete(),
-            deleteAt: FieldValue.delete(),
-            deletionRequestedBy: FieldValue.delete(),
+            ...(user.get("deletionRequestedBy") === uid ? {
+                deleteAt: FieldValue.delete(),
+                deletionRequestedBy: FieldValue.delete(),
+            } : {}),
         });
 
         const google = googleBindingOf(credentials);
@@ -776,20 +867,29 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
             google: null,
         }, {merge: true});
 
-        const displayName: string = user.get("displayName") ?? "";
-        txn.set(recordRef(), recordDoc("account-email-undo", {
-            performedBy: uid,
-            performedByName: displayName,
-            targetUid: uid,
-            targetName: displayName,
-            targetEmail: oldEmail,
-            oldEmail: newEmail,
-        }));
+        if (!finishing) {
+            const displayName: string = user.get("displayName") ?? "";
+            txn.set(recordRef(), recordDoc("account-email-undo", {
+                performedBy: uid,
+                performedByName: displayName,
+                targetUid: uid,
+                targetName: displayName,
+                targetEmail: oldEmail,
+                oldEmail: newEmail,
+            }));
+        }
         return {uid, oldEmail, newEmail};
     });
 
     await endSessions(uid, null);
     await unlinkFirebaseGoogle(uid);
+
+    const userRef = db.collection("users").doc(uid);
+    await db.runTransaction(async (txn) => {
+        const user = await txn.get(userRef);
+        txn.delete(undoRef);
+        if (user.exists && user.get("email") === oldEmail) txn.update(userRef, {emailChangedAt: FieldValue.delete()});
+    });
     await sendNotice(await emailChangeUndoneMail(newEmail, readMailLanguage(input.language)));
     return {email: oldEmail};
 });
@@ -811,8 +911,9 @@ export const adminChangeEmail = onCall(ACCOUNT_CALL, async (request) => {
     if (!target.exists) throw new HttpsError("not-found", "User not found.");
     requireCanManage(caller.get("group"), target.get("group"));
 
-    const {oldEmail} = await moveEmail(targetUid, email, {uid, name: caller.get("displayName") ?? ""}, false);
+    const {oldEmail} = await moveEmail(targetUid, email, {uid, name: caller.get("displayName") ?? ""}, null);
     await sendNotice(await emailSetByStaffMail(email, language));
-    await afterEmailMoved(targetUid, oldEmail, email, language);
+    if (oldEmail) await sendNotice(await emailChangedMail(oldEmail, email, language));
+    await creditMovedEmail(targetUid, email);
     return {email};
 });

@@ -16,7 +16,14 @@ import {
     requireStaff,
 } from "../utils/auth";
 import { emailIndexRef } from "../utils/accountEmail";
-import { accountDeletionMail, limitNoticedChange, readMailLanguage, sendNotice } from "../utils/accountMail";
+import {
+    accountDeletionAfterMoveMail,
+    accountDeletionMail,
+    limitNoticedChange,
+    readMailLanguage,
+    sendNotice,
+} from "../utils/accountMail";
+import { liveEmailUndos } from "../utils/emailUndo";
 import { RESEND_API_KEY } from "../utils/resendClient";
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
@@ -575,6 +582,11 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
  * told at once, with the way to cancel: otherwise someone with a stolen sign-in
  * could quietly delete it. `deletionRequestedBy` says whose request it is, which
  * decides who may cancel it (cancelAccountDeletion).
+ *
+ * An account's own request also waits out any link that can still undo a recent
+ * move off an address (undoEmailChange), and that address is told too. Someone
+ * with a stolen sign-in could move the account and then delete it, and the link
+ * is its owner's way back, which cancels the deletion as well.
  */
 export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND_API_KEY]}, async (request) => {
     const input = (request.data ?? {}) as {targetUid?: string; language?: unknown};
@@ -583,9 +595,7 @@ export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND
     const targetUid = input.targetUid ? validateDocId(input.targetUid, "targetUid") : callerUid;
     if (targetUid === callerUid) await limitNoticedChange(callerUid, "deletion");
 
-    const deleteAt = deletionExpiresAt();
-
-    const notifyEmail = await db.runTransaction(async (txn) => {
+    const {deleteAt, notify} = await db.runTransaction(async (txn) => {
         const [callerSnap, targetSnap] = await Promise.all([
             txn.get(db.collection("users").doc(callerUid)),
             txn.get(db.collection("users").doc(targetUid)),
@@ -604,6 +614,14 @@ export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND
             throw new HttpsError("already-exists", "deletion-already-pending");
         }
 
+        const ownRequest = callerUid === targetUid;
+        const undos = ownRequest ? await liveEmailUndos(txn, targetUid, targetData) : [];
+        let deleteAt = deletionExpiresAt();
+        for (const undo of undos) {
+            const expiresAt: Timestamp = undo.get("expiresAt");
+            if (expiresAt.toMillis() > deleteAt.toMillis()) deleteAt = expiresAt;
+        }
+
         const callerName = callerSnap.exists
             ? (callerSnap.data()!.displayName ?? "")
             : (targetData.displayName ?? "");
@@ -615,11 +633,23 @@ export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND
             targetUid,
             targetName: targetData.displayName ?? "",
         }));
-        return callerUid === targetUid ? (targetData.email as string | undefined) ?? "" : "";
+        return {
+            deleteAt,
+            notify: ownRequest ? {
+                email: (targetData.email as string | undefined) ?? "",
+                // A link already followed has put the account back on its
+                // address, which is the one told above.
+                movedOff: undos.filter(undo => !undo.get("restoredAt")).map(undo => undo.get("oldEmail") as string),
+            } : null,
+        };
     });
 
-    if (notifyEmail) {
-        await sendNotice(await accountDeletionMail(notifyEmail, deleteAt.toDate(), readMailLanguage(input.language)));
+    if (notify) {
+        const language = readMailLanguage(input.language);
+        if (notify.email) await sendNotice(await accountDeletionMail(notify.email, deleteAt.toDate(), language));
+        for (const oldEmail of new Set(notify.movedOff)) {
+            await sendNotice(await accountDeletionAfterMoveMail(oldEmail, deleteAt.toDate(), language));
+        }
     }
     return {deleteAt: deleteAt.toDate().toISOString()};
 });

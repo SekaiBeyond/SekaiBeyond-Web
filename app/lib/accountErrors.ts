@@ -22,6 +22,10 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
             return isEnglish ? 'That’s already your email.' : '这已是您的邮箱。';
         case 'email-change-locked':
             return isEnglish ? 'Your email can only change once a month.' : '邮箱每月只能更改一次。';
+        case 'deletion-pending':
+            return isEnglish
+                ? 'Your account is due to be deleted, so its email can’t change unless the deletion is cancelled.'
+                : '您的账号即将被删除，取消删除前无法更改邮箱。';
         case 'weak-password':
             return isEnglish ? 'Passwords need at least 8 characters.' : '密码至少需要 8 个字符。';
         case 'breached-password':

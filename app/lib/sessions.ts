@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { collection, doc, onSnapshot, query, type QueryDocumentSnapshot, where } from 'firebase/firestore';
 import { toDate } from '~/lib/collectionCache';
-import { callTouchSession, functionsErrorCode, getFirebaseDb } from '~/lib/firebase';
+import { callTouchSession, functionsErrorCode, functionsErrorDetails, getFirebaseDb } from '~/lib/firebase';
 
 /**
  * The devices signed in to an account, one doc each in users/{uid}/sessions,
@@ -21,6 +21,10 @@ export interface DeviceSession {
 
 /** How old this device's last-active time may get before it's brought up to date. */
 const TOUCH_INTERVAL_MS = 15 * 60_000;
+
+/** How long after a failed touch the next one waits, doubling each time up to the longest. */
+const TOUCH_RETRY_MS = 2_000;
+const TOUCH_RETRY_MAX_MS = 60_000;
 
 /** This sign-in's session ID, or null when its token can't be read. */
 export async function currentSessionId(user: User): Promise<string | null> {
@@ -53,17 +57,36 @@ export async function sessionEnded(): Promise<boolean> {
  * it, marks it active on load and when its tab comes back after a while, and
  * calls `onEnded` once it has been signed out from another device. Returns a
  * stop function, safe to call twice.
+ *
+ * A touch that fails is tried again, sooner at first. The server refuses a
+ * sign-in that hasn't listed itself within its first minutes
+ * (UNLISTED_GRACE_SECONDS in functions/src/utils/sessions.ts), and a first
+ * touch can fail on nothing worse than the rate limit it shares with every
+ * other call, or a dropped connection.
  */
 export function watchOwnSession(uid: string, sessionId: string, onEnded: () => void): () => void {
     // When the doc says it was last active; null before it exists.
     let lastActive: number | null = null;
     let touching = false;
     let stopped = false;
+    let retryDelay = TOUCH_RETRY_MS;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const end = () => {
         if (stopped) return;
         stop();
         onEnded();
+    };
+
+    // `waitMs` is how long the server said to wait, when it was a rate limit.
+    const retryLater = (waitMs = 0) => {
+        if (stopped || retryTimer !== null) return;
+        const delay = Math.min(Math.max(retryDelay, waitMs), TOUCH_RETRY_MAX_MS);
+        retryDelay = Math.min(retryDelay * 2, TOUCH_RETRY_MAX_MS);
+        retryTimer = setTimeout(() => {
+            retryTimer = null;
+            touchIfStale();
+        }, delay);
     };
 
     const touchIfStale = () => {
@@ -75,9 +98,14 @@ export function watchOwnSession(uid: string, sessionId: string, onEnded: () => v
                 // Without waiting for the doc, so a doc that can't be read
                 // isn't touched on every return to the tab.
                 lastActive = Date.now();
+                retryDelay = TOUCH_RETRY_MS;
             })
             .catch(err => {
-                if (functionsErrorCode(err) === 'session-ended') end();
+                if (functionsErrorCode(err) === 'session-ended') {
+                    end();
+                    return;
+                }
+                retryLater(functionsErrorDetails<{retryAfterMs?: number}>(err)?.retryAfterMs);
             })
             .finally(() => {
                 touching = false;
@@ -109,6 +137,7 @@ export function watchOwnSession(uid: string, sessionId: string, onEnded: () => v
         stopped = true;
         unsubscribe();
         document.removeEventListener('visibilitychange', onVisible);
+        if (retryTimer !== null) clearTimeout(retryTimer);
     }
 
     return stop;

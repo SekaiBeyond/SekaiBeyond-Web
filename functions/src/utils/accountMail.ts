@@ -83,6 +83,16 @@ export async function requireCodeMailRoom(): Promise<void> {
     if (sentToday >= dailyLimit("code") || !roomThisHour) throw mailUnavailable();
 }
 
+/**
+ * Refuses as a notice would when none could go out today: for a change whose
+ * notice has to arrive, checked before anything that can't be taken back, such
+ * as using up the caller's code.
+ */
+export async function requireNoticeMailRoom(): Promise<void> {
+    const {sentToday} = await computeEmailQuotaDetail();
+    if (sentToday >= dailyLimit("notice")) throw mailUnavailable();
+}
+
 /** For a heads-up after the fact: what it's about has happened, so a failure stops at the log. */
 export async function sendNotice(envelope: ResendEnvelope): Promise<void> {
     try {
@@ -340,6 +350,42 @@ export async function accountDeletionMail(
         html: page("Your account is due to be deleted", [
             `Someone signed in to your account asked for it to be deleted. From ${when}, it and everything in it will be gone for good.`,
             `Wasn't you? <a href="${settings}">Sign in and cancel it in Settings</a>, then change your password to sign out your other devices. If you can't sign in, use Forgot password.`,
+            contact,
+        ]),
+    };
+}
+
+/**
+ * To the address an account moved off, while the link that undoes the move
+ * still works, when that account asks to be deleted. Someone who took it over
+ * may be deleting it, and its owner can no longer sign in to cancel: the link
+ * cancels the deletion too, and the deletion waits until the link has expired.
+ */
+export async function accountDeletionAfterMoveMail(
+    to: string,
+    deleteAt: Date,
+    language: MailLanguage,
+): Promise<ResendEnvelope> {
+    const contact = await contactLine(language);
+    const when = escapeHtml(deleteAt.toLocaleString(language === "zh" ? "zh-CN" : "en-US", {
+        dateStyle: "long",
+        timeStyle: "short",
+        timeZone: SITE_TIME_ZONE,
+    }));
+    return language === "zh" ? {
+        to,
+        subject: "您的 Sekai Beyond 账号即将被删除",
+        html: page("账号即将被删除", [
+            `最近从此邮箱改用其他邮箱的 Sekai Beyond 账号申请了删除账号。自 ${when} 起，账号及其中的所有内容将被永久删除。`,
+            "如果邮箱更改不是您本人的操作，请使用更改时发送到此邮箱的邮件中的“撤销此更改”链接。它会恢复账号并取消删除，在此之前一直有效。",
+            contact,
+        ]),
+    } : {
+        to,
+        subject: "Your Sekai Beyond account is due to be deleted",
+        html: page("Your account is due to be deleted", [
+            `The Sekai Beyond account that recently moved off this address has asked to be deleted. From ${when}, it and everything in it will be gone for good.`,
+            "If you didn't change its email, use the Undo this change link in the email we sent here when it changed. It puts the account back and cancels the deletion, and works until then.",
             contact,
         ]),
     };

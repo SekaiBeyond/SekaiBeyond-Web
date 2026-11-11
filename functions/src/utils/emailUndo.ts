@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { Timestamp } from "firebase-admin/firestore";
 import { PUBLIC_ORIGIN } from "./config";
 import { db } from "./firebase";
 
@@ -30,3 +31,31 @@ export const isEmailUndoToken = (value: unknown): value is string =>
 
 // After the #, so it never reaches a server's logs or anyone's Referer header.
 export const emailUndoUrl = (token: string): string => `${PUBLIC_ORIGIN}/undo-email#token=${token}`;
+
+/**
+ * Whether an emailUndos doc can still be followed, given its account's user doc
+ * `user`: it hasn't expired, and the account is still where the link left it. A
+ * link not yet used needs the account on the address it moved to. One whose
+ * restore went through but whose signing out didn't (`restoredAt`) needs it back
+ * on the old one, so following it again can finish the job.
+ */
+export function emailUndoLive(
+    undo: FirebaseFirestore.DocumentSnapshot,
+    user: FirebaseFirestore.DocumentData | undefined,
+): boolean {
+    const expiresAt: unknown = undo.get("expiresAt");
+    if (!(expiresAt instanceof Timestamp) || expiresAt.toMillis() <= Date.now() || !user) return false;
+    return undo.get("restoredAt")
+        ? user.email === undo.get("oldEmail")
+        : user.email === undo.get("newEmail");
+}
+
+/** The account's links that can still be followed (see emailUndoLive), read inside `txn`. */
+export async function liveEmailUndos(
+    txn: FirebaseFirestore.Transaction,
+    uid: string,
+    user: FirebaseFirestore.DocumentData | undefined,
+): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
+    const undos = await txn.get(db.collection("emailUndos").where("uid", "==", uid));
+    return undos.docs.filter(undo => emailUndoLive(undo, user));
+}

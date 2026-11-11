@@ -13,13 +13,17 @@ import { db } from "./firebase";
 export type CodePurpose = "signup" | "password" | "email-change";
 
 export const CODE_TTL_MINUTES = 10;
-const CODE_ATTEMPTS = 5;
+export const CODE_ATTEMPTS = 5;
 const MIN_GAP_MS = 60_000;
 const WINDOW_MS = 60 * 60_000;
 const SENDS_PER_WINDOW = 5;
 
+/** Names the code for `purpose` at `email`, here and in the limits on checking it. */
+export const emailCodeKey = (purpose: CodePurpose, email: string): string =>
+    createHash("sha256").update(`${purpose}|${email}`).digest("hex");
+
 function codeRef(purpose: CodePurpose, email: string): FirebaseFirestore.DocumentReference {
-    return db.collection("emailCodes").doc(createHash("sha256").update(`${purpose}|${email}`).digest("hex"));
+    return db.collection("emailCodes").doc(emailCodeKey(purpose, email));
 }
 
 const hashCode = (email: string, code: string): string =>
