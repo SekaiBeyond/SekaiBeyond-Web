@@ -25,7 +25,6 @@ import {
     emailIndexRef,
     FORMER_EMAILS_MAX,
     nextEmailChangeAt,
-    normalizeEmail,
 } from "../utils/accountEmail";
 import {
     consumeRateLimit,
@@ -438,50 +437,10 @@ export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
     return {token: await signInToken(uid)};
 });
 
-/**
- * An account of ours that Firebase Auth has this Google account on, but the
- * migration (functions/scripts/migrate-accounts.mts) missed, such as one made
- * while it ran. Without this its owner would be asked to make a second account.
- * An account with a credentials doc has moved over, so Google being off it
- * means it was unbound.
- *
- * An address another account holds is left off, as the migration leaves it for
- * a person to settle; the migration's next run indexes it once it's free.
- */
-async function adoptFromFirebase(google: GoogleIdentity): Promise<string | null> {
-    let uid: string;
-    try {
-        uid = (await getAuth().getUserByProviderUid("google.com", google.sub)).uid;
-    } catch (err) {
-        if ((err as {code?: string})?.code === "auth/user-not-found") return null;
-        throw err;
-    }
-    const userRef = db.collection("users").doc(uid);
-
-    return db.runTransaction(async (txn) => {
-        const [user, credentials] = await Promise.all([txn.get(userRef), txn.get(credentialsRef(uid))]);
-        if (!user.exists || credentials.exists) return null;
-
-        const storedEmail: string = user.get("email") ?? "";
-        const email = normalizeEmail(storedEmail) || (google.emailVerified ? google.email : "");
-        const held = email ? await txn.get(emailIndexRef(email)) : null;
-        const free = !!held && !held.exists && !await addressHeldForUndo(email, txn, uid);
-        if (email && !free) console.warn(`adoptFromFirebase: ${uid} adopted without its address, held by another account`);
-
-        txn.set(credentialsRef(uid), {passwordHash: null, google: toBinding(google)});
-        txn.set(googleIndexRef(google.sub), {uid});
-        if (free) {
-            txn.set(emailIndexRef(email), {uid});
-            if (email !== storedEmail) txn.update(userRef, {email});
-        }
-        return uid;
-    });
-}
-
 /** The account bound to a Google sign-in, if there is one, kept up to date with what Google says now. */
 async function accountForGoogle(google: GoogleIdentity): Promise<string | null> {
     const uid: string | undefined = (await googleIndexRef(google.sub).get()).get("uid");
-    if (!uid) return adoptFromFirebase(google);
+    if (!uid) return null;
 
     const credentials = await credentialsRef(uid).get();
     const bound = googleBindingOf(credentials);
