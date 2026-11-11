@@ -393,6 +393,7 @@ export const SignInModal = () => {
                                 : (isEnglish ? 'Create Account' : '创建账号'))}
                         </form>
                         <div className="auth-links">
+                            {googleNeedsCode && googleCodeSent && resendLink('signup')}
                             <button
                                 type="button"
                                 className="auth-link"
@@ -403,6 +404,7 @@ export const SignInModal = () => {
                             >
                                 {isEnglish ? 'I already have an account' : '我已有账号'}
                             </button>
+                            {backToSignIn}
                         </div>
                     </>
                 )}
@@ -434,6 +436,7 @@ export const SignInModal = () => {
                                     className="auth-link"
                                     onClick={() => {
                                         setEmail(pendingGoogle.email);
+                                        setGoogleCodeSent(false);
                                         goTo('google-account');
                                     }}
                                 >
@@ -443,6 +446,7 @@ export const SignInModal = () => {
                             <button type="button" className="auth-link" onClick={() => goTo('forgot')}>
                                 {isEnglish ? 'Forgot password?' : '忘记密码？'}
                             </button>
+                            {backToSignIn}
                         </div>
                     </>
                 )}

@@ -114,10 +114,10 @@ for (const doc of userDocs) {
     if (moved.has(doc.id)) continue;
     const record = authUsers.get(doc.id);
     const authEmail = normalize(record?.email);
-    const storedEmail = normalize(doc.get("email"));
+    const storedEmail = typeof doc.get("email") === "string" ? doc.get("email") : "";
     moves.push({
         uid: doc.id,
-        email: authEmail || storedEmail,
+        email: authEmail || normalize(storedEmail),
         fromAuth: authEmail !== "",
         record,
         ref: doc.ref,

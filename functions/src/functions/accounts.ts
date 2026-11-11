@@ -23,6 +23,7 @@ import {
     emailIndexRef,
     FORMER_EMAILS_MAX,
     nextEmailChangeAt,
+    normalizeEmail,
 } from "../utils/accountEmail";
 import {
     consumeRateLimit,
@@ -48,6 +49,7 @@ import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, type ResendEnvelope } from "../utils/resendClient";
 import { callerAddressKey } from "../utils/scans";
 import { endSessions, sessionIdOf, signInToken } from "../utils/sessions";
+import { STORAGE_HOST } from "../utils/storage";
 import { sanitizeDisplayText, validateDocId, validateEmail } from "../utils/validation";
 
 /**
@@ -216,6 +218,11 @@ const toBinding = (google: GoogleIdentity): GoogleBinding => ({
     signUpName: google.name,
 });
 
+const hasUploadedAvatar = (user: FirebaseFirestore.DocumentSnapshot): boolean => {
+    const url: unknown = user.get("photoURL");
+    return typeof url === "string" && url.includes(STORAGE_HOST);
+};
+
 interface NewAccount {
     email: string;
     displayName: string;
@@ -368,11 +375,15 @@ async function adoptFromFirebase(google: GoogleIdentity): Promise<string | null>
         const [user, credentials] = await Promise.all([txn.get(userRef), txn.get(credentialsRef(uid))]);
         if (!user.exists || credentials.exists) return null;
 
-        const email: string = user.get("email") ?? "";
+        const storedEmail: string = user.get("email") ?? "";
+        const email = normalizeEmail(storedEmail) || (google.emailVerified ? google.email : "");
         const held = email ? await txn.get(emailIndexRef(email)) : null;
         txn.set(credentialsRef(uid), {passwordHash: null, google: toBinding(google)});
         txn.set(googleIndexRef(google.sub), {uid});
-        if (held && !held.exists) txn.set(emailIndexRef(email), {uid});
+        if (held && !held.exists) {
+            txn.set(emailIndexRef(email), {uid});
+            if (email !== storedEmail) txn.update(userRef, {email});
+        }
         return uid;
     });
 }
@@ -390,6 +401,12 @@ async function accountForGoogle(google: GoogleIdentity): Promise<string | null> 
             "google.name": google.name,
             "google.photoURL": google.photoURL,
         });
+        if (bound.photoURL !== google.photoURL) {
+            const user = await db.collection("users").doc(uid).get();
+            if (user.exists && !hasUploadedAvatar(user)) {
+                await user.ref.update({photoURL: google.photoURL.slice(0, 500)});
+            }
+        }
     }
     return uid;
 }
@@ -465,6 +482,9 @@ async function bindGoogleTo(uid: string, google: GoogleIdentity, language: MailL
 
         txn.set(credentials.ref, {google: toBinding(google)}, {merge: true});
         txn.set(held.ref, {uid});
+        if (!hasUploadedAvatar(user)) {
+            txn.update(user.ref, {photoURL: google.photoURL.slice(0, 500)});
+        }
         const displayName: string = user.get("displayName") ?? "";
         txn.set(recordRef(), recordDoc("account-google-bind", {
             performedBy: uid,
@@ -538,6 +558,9 @@ export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
 
         txn.update(credentials.ref, {google: null});
         txn.delete(googleIndexRef(google.sub));
+        if (!hasUploadedAvatar(user) && user.get("photoURL")) {
+            txn.update(user.ref, {photoURL: ""});
+        }
         const displayName: string = user.get("displayName") ?? "";
         txn.set(recordRef(), recordDoc("account-google-unbind", {
             performedBy: uid,
@@ -718,11 +741,12 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         const oldEmail: string = undo.get("oldEmail");
         const newEmail: string = undo.get("newEmail");
 
-        const [user, credentials, oldHeld, newHeld] = await Promise.all([
+        const [user, credentials, oldHeld, newHeld, formerHolders] = await Promise.all([
             txn.get(db.collection("users").doc(uid)),
             txn.get(credentialsRef(uid)),
             txn.get(emailIndexRef(oldEmail)),
             txn.get(emailIndexRef(newEmail)),
+            txn.get(db.collection("users").where("formerEmails", "array-contains", oldEmail)),
         ]);
         if (!user.exists || user.get("email") !== newEmail) throw badUndoLink();
         if (oldHeld.exists) throw emailTaken();
@@ -730,11 +754,15 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         txn.delete(undoRef);
         if (newHeld.get("uid") === uid) txn.delete(newHeld.ref);
         txn.set(oldHeld.ref, {uid});
+        for (const holder of formerHolders.docs) {
+            if (holder.id !== uid) txn.update(holder.ref, {formerEmails: FieldValue.arrayRemove(oldEmail)});
+        }
 
         const former: string[] = user.get("formerEmails") ?? [];
         txn.update(user.ref, {
             email: oldEmail,
             formerEmails: former.filter(a => a !== oldEmail && a !== newEmail),
+            ...(hasUploadedAvatar(user) ? {} : {photoURL: ""}),
             emailChangedAt: FieldValue.delete(),
             deleteAt: FieldValue.delete(),
             deletionRequestedBy: FieldValue.delete(),

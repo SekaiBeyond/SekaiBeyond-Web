@@ -187,7 +187,7 @@ async function requireLiveSession(uid: string, token: DecodedIdToken): Promise<b
     const live = snap?.exists
         ? !snap.get("endedAt")
         : !!sessionId && Date.now() / 1000 - token.auth_time < UNLISTED_GRACE_SECONDS
-            && signedInSinceSessionsEnded(token, (await db.collection("users").doc(uid).get()).data());
+        && signedInSinceSessionsEnded(token, (await db.collection("users").doc(uid).get()).data());
     if (!live) {
         throw new HttpsError("unauthenticated", "This device has been signed out.", {code: "session-ended"});
     }

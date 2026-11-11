@@ -271,7 +271,7 @@ const DeletionRow = ({deleteAt, ownRequest, showToast}: {
 export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const language = isEnglish ? 'en' : 'zh';
-    const {user, profile} = useAuth();
+    const {user, profile, refreshProfile} = useAuth();
     const [methods, setMethods] = useState<SignInMethods | null>(null);
     const [failed, setFailed] = useState(false);
     const [editing, setEditing] = useState<'email' | 'password' | null>(null);
@@ -302,7 +302,8 @@ export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
         try {
             await callBindGoogle({idToken, language});
             setBindingGoogle(false);
-            await load();
+            await Promise.all([load(), refreshProfile().catch(() => {
+            })]);
             showToast(isEnglish ? 'Google account bound.' : '已绑定 Google 账号。', 'success');
         } catch (err) {
             showToast(accountErrorMessage(err, isEnglish), 'error');
@@ -321,7 +322,8 @@ export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
         setGoogleBusy(true);
         try {
             await callUnbindGoogle({language});
-            await load();
+            await Promise.all([load(), refreshProfile().catch(() => {
+            })]);
             showToast(isEnglish ? 'Google account unbound.' : '已解绑 Google 账号。', 'success');
         } catch (err) {
             showToast(accountErrorMessage(err, isEnglish), 'error');

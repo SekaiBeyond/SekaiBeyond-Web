@@ -57,6 +57,7 @@ export async function renderGoogleButton(
     handler: (idToken: string) => void,
 ): Promise<void> {
     const google = await loadGoogle();
+    if (!parent.isConnected) return;
     if (!initialized) {
         google.accounts.id.initialize({
             client_id: CLIENT_ID!,

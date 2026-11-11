@@ -1060,22 +1060,45 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
         chunks.push(emails.slice(i, i + 30));
     }
 
-    const snaps = await Promise.all(chunks.map(chunk =>
-        db.collection("users").where("email", "in", chunk).get()
-    ));
+    const users = db.collection("users");
+    const [currentSnaps, formerSnaps] = await Promise.all([
+        Promise.all(chunks.map(chunk => users.where("email", "in", chunk).get())),
+        Promise.all(chunks.map(chunk => users.where("formerEmails", "array-contains-any", chunk).get())),
+    ]);
 
-    const holders = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
-    for (const doc of snaps.flatMap(snap => snap.docs)) {
+    const addHolder = (
+        map: Map<string, Map<string, FirebaseFirestore.QueryDocumentSnapshot>>,
+        email: string,
+        doc: FirebaseFirestore.QueryDocumentSnapshot,
+    ) => {
+        const docs = map.get(email) ?? new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+        docs.set(doc.id, doc);
+        map.set(email, docs);
+    };
+
+    const currentHolders = new Map<string, Map<string, FirebaseFirestore.QueryDocumentSnapshot>>();
+    for (const doc of currentSnaps.flatMap(snap => snap.docs)) {
         const email = doc.get("email");
-        if (typeof email !== "string") continue;
-        holders.set(email, [...holders.get(email) ?? [], doc]);
+        if (typeof email === "string") addHolder(currentHolders, email, doc);
+    }
+
+    const wanted = new Set(emails);
+    const formerHolders = new Map<string, Map<string, FirebaseFirestore.QueryDocumentSnapshot>>();
+    for (const doc of formerSnaps.flatMap(snap => snap.docs)) {
+        const former: unknown = doc.get("formerEmails");
+        if (!Array.isArray(former)) continue;
+        for (const email of former) {
+            if (typeof email === "string" && wanted.has(email)) addHolder(formerHolders, email, doc);
+        }
     }
 
     const accounts: {email: string; uid?: string; displayName?: string}[] = [];
-    for (const [email, docs] of holders) {
-        if (docs.length !== 1) continue;
+    for (const email of emails) {
+        const docs = currentHolders.get(email) ?? formerHolders.get(email);
+        if (docs?.size !== 1) continue;
+        const [doc] = docs.values();
         accounts.push(namesAccounts
-            ? {email, uid: docs[0].id, displayName: docs[0].get("displayName") ?? ""}
+            ? {email, uid: doc.id, displayName: doc.get("displayName") ?? ""}
             : {email});
     }
 
