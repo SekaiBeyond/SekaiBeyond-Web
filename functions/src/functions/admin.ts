@@ -38,7 +38,11 @@ import { eventLocationText, MAX_ROOMS, type Room, ROOM_ID_RE, venueRooms } from 
 import { dropVenueParking, refreshVenueParking } from "./parking";
 
 /** An upload from the admin panel, once the caller is confirmed as core staff: where it goes, and the file. */
-async function readAdminUpload(request: CallableRequest): Promise<{path: string; dataBase64: string; contentType: string}> {
+async function readAdminUpload(request: CallableRequest): Promise<{
+    path: string;
+    dataBase64: string;
+    contentType: string
+}> {
     const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
@@ -758,22 +762,18 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         // against the side it isn't carrying: that catches both an item pointing
         // at a missing room and a room deleted while still in use.
         if (updateData.rooms !== undefined || updateData.schedule !== undefined) {
-            const rooms = updateData.rooms ?? stored.rooms;
-            // Rooms never saved means the page is on the code defaults, which the
-            // server can't see.
-            if (rooms !== undefined) {
-                const schedule = (updateData.schedule ?? stored.schedule ?? []) as {room?: string}[];
-                const ids = new Set((rooms as {id?: string}[]).map(r => r?.id));
-                const missing = [...new Set(
-                    schedule.map(item => item?.room ?? "").filter(room => room && !ids.has(room)),
-                )];
-                if (missing.length > 0) {
-                    throw new HttpsError(
-                        "failed-precondition",
-                        `The schedule still uses ${missing.length === 1 ? "a room" : "rooms"} that would not exist: ` +
-                        `${missing.join(", ")}. Reassign those items first.`,
-                    );
-                }
+            const rooms = (updateData.rooms ?? stored.rooms ?? []) as {id?: string}[];
+            const schedule = (updateData.schedule ?? stored.schedule ?? []) as {room?: string}[];
+            const ids = new Set(rooms.map(r => r?.id));
+            const missing = [...new Set(
+                schedule.map(item => item?.room ?? "").filter(room => room && !ids.has(room)),
+            )];
+            if (missing.length > 0) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    `The schedule still uses ${missing.length === 1 ? "a room" : "rooms"} that would not exist: ` +
+                    `${missing.join(", ")}. Reassign those items first.`,
+                );
             }
         }
 
@@ -891,8 +891,7 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     const lng = validateCoordinate(input.lng, "lng", -180, 180);
 
     const {buildingCode, suggestedLots} = venueUwFields(input);
-    // A save from an editor older than rooms sends none, and keeps the venue's.
-    const roomsSent = input.rooms === undefined ? null : venueRoomsInput(input.rooms);
+    const rooms = venueRoomsInput(input.rooms);
 
     const docId = venueId ?? db.collection("venues").doc().id;
 
@@ -900,14 +899,11 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
         // The events in a room this save removes, which lose it; a past event
         // too, which then shows the venue's name without that room.
         const losing: {ref: FirebaseFirestore.DocumentReference; roomIds: string[]}[] = [];
-        let rooms = roomsSent ?? [];
         if (venueId) {
             const existing = await txn.get(db.collection("venues").doc(venueId));
             if (!existing.exists) throw new HttpsError("not-found", "Venue not found.");
-            const before = venueRooms(existing.data());
-            rooms = roomsSent ?? before;
             const kept = new Set(rooms.map(r => r.id));
-            const removed = before.some(r => !kept.has(r.id));
+            const removed = venueRooms(existing.data()).some(r => !kept.has(r.id));
             if (removed) {
                 const using = await Promise.all(["upcomingEvents", "pastEvents"].map(col =>
                     txn.get(db.collection(col).where("venueId", "==", venueId))));

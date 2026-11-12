@@ -85,13 +85,9 @@ export function venueRooms(venue: FirebaseFirestore.DocumentData | undefined): R
         .filter(r => r.id.length > 0);
 }
 
-/**
- * An event's `roomIds` from a save: rooms of its venue, so none without one.
- * null when the save sends none, as one from an editor older than rooms does
- * (see roomIdsKept).
- */
-export function validateRoomIds(raw: unknown, venueId: string): string[] | null {
-    if (raw === undefined) return null;
+/** An event's `roomIds` from a save: rooms of its venue, so none without one. */
+export function validateRoomIds(raw: unknown, venueId: string): string[] {
+    if (!Array.isArray(raw)) throw new HttpsError("invalid-argument", "roomIds must be a list.");
     const roomIds = validateStringArray(raw, "roomIds", MAX_ROOMS, 64);
     for (const id of roomIds) {
         if (!ROOM_ID_RE.test(id)) throw new HttpsError("invalid-argument", "Invalid roomIds.");
@@ -100,15 +96,6 @@ export function validateRoomIds(raw: unknown, venueId: string): string[] | null 
         throw new HttpsError("invalid-argument", "Pick a venue for the rooms.");
     }
     return roomIds;
-}
-
-/**
- * The rooms a save that sends none keeps: the event's own, while its venue
- * stays. `existing` is the saved event, or undefined for a new one.
- */
-export function roomIdsKept(existing: FirebaseFirestore.DocumentData | undefined, venueId: string): string[] {
-    if (!existing || existing.venueId !== venueId || !Array.isArray(existing.roomIds)) return [];
-    return existing.roomIds.filter((id: unknown): id is string => typeof id === "string");
 }
 
 /**

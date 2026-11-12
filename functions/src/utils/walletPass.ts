@@ -12,8 +12,8 @@ import { eventLocationText } from "./events";
 import { db } from "./firebase";
 import { isoOrNull } from "./helpers";
 import { siteDay } from "./siteTime";
-import { formatEventDateForEmail, ticketIdOf, ticketTypeStyle } from "./ticketEmail";
-import { isApiOrder, ticketClaimUrl } from "./tickets";
+import { formatEventDateForEmail, ticketTypeStyle } from "./ticketEmail";
+import { isApiOrder, type NewTicket, ticketClaimUrl } from "./tickets";
 
 /**
  * Apple and Google Wallet passes for emailed tickets, made by WalletWallet
@@ -270,12 +270,12 @@ async function eventLocation(data: FirebaseFirestore.DocumentData): Promise<stri
 // ticket only. The admin preview (WalletPassPreview) mirrors this layout.
 function passBody(
     event: {id: string; data: FirebaseFirestore.DocumentData},
-    ticket: any,
+    ticket: Partial<NewTicket>,
     contactEmail: string,
     location: string,
     settings: WalletPassSettings,
 ) {
-    const id = ticketIdOf(ticket);
+    const id = ticket.ticketId ?? "";
     const {label, walletColor, walletLabel} = ticketTypeStyle(ticket);
     const titleCn = str(event.data.titleCn);
     const title = str(event.data.title) || titleCn || "Event";
@@ -395,7 +395,7 @@ export async function walletPassFor(
     // one's own.
     type Claim = {shareUrl: string} | {refusal: WalletPassRefusal} | {waitOn: FirebaseFirestore.DocumentReference} | {
         ref: FirebaseFirestore.DocumentReference;
-        ticket: any;
+        ticket: Partial<NewTicket>;
         event: {id: string; data: FirebaseFirestore.DocumentData};
         settings: WalletPassSettings;
     };
@@ -412,7 +412,7 @@ export async function walletPassFor(
             const settingsSnap = await txn.get(walletPassSettingsRef(eventRef));
             const attendee = attendees.docs[0];
             const data = attendee?.data();
-            const ticket = (data?.tickets as any[] | undefined)?.find(t => ticketIdOf(t) === ticketId);
+            const ticket = (data?.tickets as Partial<NewTicket>[] | undefined)?.find(t => t?.ticketId === ticketId);
             // Only tickets this site emails, whose emails are what link here. An
             // archived event's are gone from upcomingEvents.
             if (!eventSnap.exists || !ticket || data!.source === "hometown"

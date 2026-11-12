@@ -10,7 +10,6 @@ import {
     readConInfo,
     requireConYearFree,
     requireVenueRooms,
-    roomIdsKept,
     validateConInput,
     validateRoomIds,
     validateVenueId,
@@ -150,17 +149,15 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
 
     const {result, oldIcon} = await adminTransaction(uid, async (txn, callerSnap) => {
         let prevIcon = "";
-        let stored: FirebaseFirestore.DocumentData | undefined;
         if (eventId) {
             const existing = await txn.get(db.collection("pastEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
-            stored = existing.data();
-            prevIcon = stored?.icon ?? "";
+            prevIcon = existing.data()?.icon ?? "";
         }
         // The year follows the date, so moving a Con to another year moves it there.
         const con = markedCon ? conForDay(date) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
-        const venueRoomIds = await requireVenueRooms(txn, venueId, roomIds ?? roomIdsKept(stored, venueId));
+        const venueRoomIds = await requireVenueRooms(txn, venueId, roomIds);
         // A Con has no tags.
         const keptTagIds = con ? [] : await existingTagIds(txn, tagIds);
         await requireNewlyLinkedFilesExist([icon], [prevIcon]);
@@ -266,11 +263,9 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         let prevPoster = "";
         let prevEmailHeaderBg = "";
         let wasPublished = false;
-        let stored: FirebaseFirestore.DocumentData | undefined;
         if (eventId) {
             const existing = await txn.get(db.collection("upcomingEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
-            stored = existing.data();
             prevPoster = existing.data()?.poster ?? "";
             prevEmailHeaderBg = existing.data()?.emailHeaderBg ?? "";
             wasPublished = existing.data()?.published ?? false;
@@ -278,7 +273,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         // The year is the start's, the day archiving gives it.
         const con = markedCon ? conForDay(siteDay(startAt.toMillis())) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
-        const venueRoomIds = await requireVenueRooms(txn, venueId, roomIds ?? roomIdsKept(stored, venueId));
+        const venueRoomIds = await requireVenueRooms(txn, venueId, roomIds);
         await requireNewlyLinkedFilesExist([poster, emailHeaderBg], [prevPoster, prevEmailHeaderBg]);
 
         // Paid events use tickets, so purge claim codes left from a free→paid

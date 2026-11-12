@@ -56,8 +56,8 @@ import {
     isHometownTicketId,
     isScannedTicket,
     type NewTicket,
-    ticketClaimUrl,
     TICKET_TYPES,
+    ticketClaimUrl,
 } from "../utils/tickets";
 
 function validateTicketCount(value: unknown): number {
