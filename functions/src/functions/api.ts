@@ -16,7 +16,14 @@ import {
 import { signedInSinceSessionsEnded } from "../utils/sessions";
 import { RESEND_QUEUE_CAP } from "../utils/config";
 import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
-import { eventLocationText, getEventDoc, readConInfo, staffEventsIn } from "../utils/events";
+import {
+    eventLocationText,
+    getEventDoc,
+    readConInfo,
+    RESERVED_ID_RE,
+    soonestFirst,
+    staffEventsIn,
+} from "../utils/events";
 import { db } from "../utils/firebase";
 import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "../utils/quota";
 import { recordDoc, recordRef } from "../utils/records";
@@ -66,8 +73,6 @@ const SELLABLE_TICKET_TYPES = ["normal", "early-bird", "student", "early-bird-st
 const ORDER_TICKETS_MAX = 50;
 
 const EVENT_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
-/** Firestore keeps IDs like __x__ for itself and refuses to read one, so no event has one (see findEvent). */
-const RESERVED_ID_RE = /^__.*__$/;
 /** It names the order's doc (see apiOrderAttendeeId), so nothing a path can't hold. */
 const ORDER_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -261,9 +266,6 @@ function requirePerson(caller: Caller): Person {
     return caller.person;
 }
 
-/** The events a person is event staff for here, archived ones too. */
-const staffEventsOf = (person: Person): string[] => staffEventsIn(person.user);
-
 /**
  * Whether the caller may see an event: a key every one, a person the ones the
  * site would show them (firestore.rules): every archived one, and an
@@ -275,7 +277,7 @@ function canSee(caller: Caller, snap: FirebaseFirestore.DocumentSnapshot, archiv
     const {person} = caller;
     return snap.get("published") === true
         || isStaffOrAbove(person.user.get("group"))
-        || staffEventsOf(person).includes(snap.id);
+        || staffEventsIn(person.user).includes(snap.id);
 }
 
 function requireEventAccess(key: ApiKey, eventId: string): void {
@@ -440,11 +442,9 @@ async function heldEvents(eventIds: string[]): Promise<[Snapshot[], Snapshot[]]>
         db.getAll(...eventIds.map(id => db.collection("upcomingEvents").doc(id))),
         db.getAll(...eventIds.map(id => db.collection("pastEvents").doc(id))),
     ]);
-    const startMs = (s: Snapshot) => (s.get("startAt") as Timestamp).toMillis();
     const date = (s: Snapshot) => s.get("date") as string;
     return [
-        upcoming.filter(s => s.get("startAt") instanceof Timestamp)
-            .sort((a, b) => startMs(a) - startMs(b) || byId(a, b)),
+        soonestFirst(upcoming),
         past.filter(s => typeof s.get("date") === "string")
             .sort((a, b) => (date(a) < date(b) ? 1 : date(a) > date(b) ? -1 : 0) || byId(b, a)),
     ];
@@ -528,7 +528,7 @@ function getMe(caller: Caller): ApiReply {
     const person = requirePerson(caller);
     const me = personJson(person.user);
     if (!person.app.scopes.includes("event-staff:read")) return {status: 200, body: me};
-    return {status: 200, body: {...me, eventStaffEvents: staffEventsOf(person)}};
+    return {status: 200, body: {...me, eventStaffEvents: staffEventsIn(person.user)}};
 }
 
 /** Staff and above, as the admin panel lists them: only to a person who's staff here. */
@@ -550,7 +550,7 @@ async function listTeam(caller: Caller): Promise<ApiReply> {
 async function listEventStaff(caller: Caller, eventId: string): Promise<ApiReply> {
     const person = requirePerson(caller);
     requireCallerScope(caller, "event-staff:read");
-    if (!isStaffOrAbove(person.user.get("group")) && !staffEventsOf(person).includes(eventId)) {
+    if (!isStaffOrAbove(person.user.get("group")) && !staffEventsIn(person.user).includes(eventId)) {
         throw new ApiError(403, "not-allowed", "Only staff and this event's own staff can see its staff.");
     }
     await findEvent(eventId);

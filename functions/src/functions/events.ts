@@ -15,7 +15,7 @@ import {
     validateRoomIds,
     validateVenueId,
 } from "../utils/events";
-import { signOutOfApps } from "../utils/apps";
+import { signOutOfEventStaffApps } from "../utils/apps";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
@@ -704,7 +704,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
 
     // So their next sign-in to an app names it (mintAppToken), which names
     // unarchived events only.
-    if (result.added && !isPastEvent) await signOutOfApps(targetUid);
+    if (result.added && !isPastEvent) await signOutOfEventStaffApps(targetUid);
     return result;
 });
 export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
@@ -745,6 +745,6 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
 
     // So their next sign-in to an app no longer names it (mintAppToken). An
     // archived event isn't named, nor a deleted one, which counts as archived.
-    if (result.removed && !archived) await signOutOfApps(targetUid);
+    if (result.removed && !archived) await signOutOfEventStaffApps(targetUid);
     return result;
 });

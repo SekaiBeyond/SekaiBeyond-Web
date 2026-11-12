@@ -8,6 +8,7 @@ import {
     APP_REDIRECT_URIS_MAX,
     APP_SCOPES,
     appsCol,
+    claimsChange,
     FIREBASE_PROJECT_ID_RE,
     hasSignIn,
     isAppScope,
@@ -16,6 +17,7 @@ import {
     readApp,
     type RegisteredApp,
     SERVICE_ACCOUNT_RE,
+    signEveryoneOutOf,
 } from "../utils/apps";
 import { staffEventsIn } from "../utils/events";
 import { db } from "../utils/firebase";
@@ -202,7 +204,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
     const create = input.create === true;
     const fields = parseAppInput(request.data);
 
-    await adminTransaction(uid, async (txn, callerSnap) => {
+    const before = await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = appsCol().doc(appId);
         const [snap, owner] = await Promise.all([
             txn.get(ref),
@@ -227,7 +229,12 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             appId,
             appName: fields.name,
         }));
+        return readApp(snap);
     });
+    // Its sign-ins carry claims as of when they were made (mintAppToken), so
+    // ones from before now carry the wrong ones. Signed out from the project
+    // they're in, the one before if the app moved.
+    if (before && claimsChange(before, fields)) await signEveryoneOutOf(before);
     return {saved: true};
 });
 

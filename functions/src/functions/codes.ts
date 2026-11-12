@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
-import { signOutOfApps } from "../utils/apps";
+import { signOutOfEventStaffApps } from "../utils/apps";
 import { db } from "../utils/firebase";
 import { type CodeKind, codeKind, issueCode, normalizeCode } from "../utils/codes";
 import { getEventDoc } from "../utils/events";
@@ -578,7 +578,7 @@ async function redeemStaffCode(uid: string, code: string) {
     });
 
     // So their next sign-in to an app names it, as assignEventStaff does.
-    if (!isPastEvent) await signOutOfApps(uid);
+    if (!isPastEvent) await signOutOfEventStaffApps(uid);
     return result;
 }
 
