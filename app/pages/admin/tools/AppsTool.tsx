@@ -776,10 +776,10 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                         <p>
                                             {isEnglish ? 'Send people to ' : '将用户引导至 '}
                                             <code
-                                                className="record-code">{`${window.location.origin}/authorize?app=${app.id}&state=<random>`}</code>
+                                                className="record-code">{`${window.location.origin}/authorize?app=${app.id}&state=<random>&code_challenge=<SHA-256 of verifier>&code_challenge_method=S256`}</code>
                                             {isEnglish
-                                                ? '. They come back to one of these with #token=…&state=…; check the state, then signInWithCustomToken(token):'
-                                                : '。登录后会返回以下地址之一，并附带 #token=…&state=…；核对 state 后调用 signInWithCustomToken(token)：'}
+                                                ? '. They come back to one of these with #code=…&state=…; check the state, POST {code, codeVerifier} to /api/v1/token, then signInWithCustomToken(token):'
+                                                : '。登录后会返回以下地址之一，并附带 #code=…&state=…；核对 state 后把 {code, codeVerifier} POST 到 /api/v1/token，再调用 signInWithCustomToken(token)：'}
                                         </p>
                                         <ul>{app.redirectUris.map(uri => <li key={uri}><code
                                             className="record-code">{uri}</code></li>)}</ul>

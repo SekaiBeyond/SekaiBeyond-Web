@@ -1,16 +1,17 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { GoogleAuth } from "google-auth-library";
-import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
+import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol } from "../utils/apiKeys";
 import {
     APP_ID_RE,
     APP_MAINTAINERS_MAX,
     APP_REDIRECT_URIS_MAX,
     appsCol,
+    CODE_CHALLENGE_RE,
     FIREBASE_PROJECT_ID_RE,
     hasSignIn,
-    mintAppToken,
+    issueSignInCode,
     newAppId,
     normalizeRedirectUri,
     readApp,
@@ -312,17 +313,21 @@ export const getAppSignInInfo = onCall({maxInstances: 20}, async (request) => {
 });
 
 /**
- * Signs the caller in to an app: a custom token for its Firebase project (see
- * mintAppToken), and where the sign-in page hands it, with the app's `state`.
- * Any account may sign in to any app: the app decides what that account may do
- * there, and its keys' scopes what of the site it reads.
+ * Signs the caller in to an app: a one-time code (see issueSignInCode), and
+ * where the sign-in page hands it, with the app's `state`. The app trades it
+ * for the sign-in at POST /v1/token. Any account may sign in to any app: the
+ * app decides what that account may do there, and its keys' scopes what of the
+ * site it reads.
  */
-export const issueAppToken = onCall({maxInstances: 10}, async (request) => {
+export const issueAppCode = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
-    const input = (request.data ?? {}) as {appId?: unknown; redirectUri?: unknown};
+    const input = (request.data ?? {}) as {appId?: unknown; redirectUri?: unknown; codeChallenge?: unknown};
     const app = await findApp(input.appId);
     const redirectUri = redirectFor(app, input.redirectUri);
-    const user = await db.collection("users").doc(uid).get();
-    const token = await mintAppToken(app, uid, normalizeGroup(user.get("group")));
-    return {token, redirectUri};
+    if (typeof input.codeChallenge !== "string" || !CODE_CHALLENGE_RE.test(input.codeChallenge)) {
+        throw new HttpsError("invalid-argument",
+            "codeChallenge must be the base64url SHA-256 of a code verifier.", {code: "bad-challenge"});
+    }
+    const code = await issueSignInCode(app, uid, redirectUri, input.codeChallenge);
+    return {code, redirectUri};
 });

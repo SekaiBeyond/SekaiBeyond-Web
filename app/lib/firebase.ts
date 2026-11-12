@@ -637,9 +637,13 @@ export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}
     httpsCallable<typeof data, {name: string; maintainerNames: string[]}>(
         getFunctions(), 'getAppSignInInfo')(data);
 
-/** A sign-in to an app for the caller, and where to hand it. */
-export const callIssueAppToken = (data: {appId: string; redirectUri?: string}) =>
-    httpsCallable<typeof data, {token: string; redirectUri: string}>(getFunctions(), 'issueAppToken')(data);
+/**
+ * A one-time code for the caller to sign in to an app with, and where to hand
+ * it. The app trades it at /api/v1/token with the verifier `codeChallenge` was
+ * made from.
+ */
+export const callIssueAppCode = (data: {appId: string; redirectUri?: string; codeChallenge: string}) =>
+    httpsCallable<typeof data, {code: string; redirectUri: string}>(getFunctions(), 'issueAppCode')(data);
 
 export const callUpdateEventEmailTemplate = (data: {
     eventId: string;

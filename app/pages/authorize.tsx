@@ -3,20 +3,26 @@ import { useSearchParams } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { PageNav } from '~/components/PageNav';
-import { APP_ID_RE, callGetAppSignInInfo, callIssueAppToken, errorSuffix, functionsErrorCode, } from '~/lib/firebase';
+import { APP_ID_RE, callGetAppSignInInfo, callIssueAppCode, errorSuffix, functionsErrorCode, } from '~/lib/firebase';
 
 /** The random value an app sends, to tell the sign-in it gets back is the one it asked for. */
 const STATE_RE = /^[A-Za-z0-9_-]{16,128}$/;
+
+/** The base64url SHA-256 of the code verifier the app keeps (PKCE's S256, the one method taken). */
+const CODE_CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
 
 type Info = {name: string; maintainerNames: string[]};
 
 /**
  * Sign in with Sekai Beyond: where a registered app (see
  * functions/src/utils/apps.ts) sends people, as
- * /authorize?app=…&state=…[&redirect_uri=…]. It says which app it is and what
- * it will see of them, and Continue hands a sign-in for the app back to it, with the
- * same state, at one of the places registered for it. Nothing happens until
- * Continue, so a link alone can't sign anyone in to an app.
+ * /authorize?app=…&state=…&code_challenge=…&code_challenge_method=S256[&redirect_uri=…].
+ * It says which app it is and what it will see of them, and Continue hands the
+ * app a one-time code, with the same state, at one of the places registered
+ * for it. The app trades the code for the sign-in at /api/v1/token, with the
+ * verifier only it holds, so what's in the address bar can't sign anyone in.
+ * Nothing happens until Continue, so a link alone can't sign anyone in to an
+ * app.
  */
 export const AuthorizePage = () => {
     const {isEnglish} = useLanguage();
@@ -24,8 +30,10 @@ export const AuthorizePage = () => {
     const [searchParams] = useSearchParams();
     const appId = searchParams.get('app') ?? '';
     const rawState = searchParams.get('state') ?? '';
+    const codeChallenge = searchParams.get('code_challenge') ?? '';
     const redirectUri = searchParams.get('redirect_uri') || undefined;
-    const linkOk = APP_ID_RE.test(appId) && STATE_RE.test(rawState);
+    const linkOk = APP_ID_RE.test(appId) && STATE_RE.test(rawState) && CODE_CHALLENGE_RE.test(codeChallenge)
+        && searchParams.get('code_challenge_method') === 'S256';
 
     // Null while loading; 'bad-link' when the app or the place to hand back to isn't registered.
     const [info, setInfo] = useState<Info | 'bad-link' | 'error' | null>(null);
@@ -53,10 +61,10 @@ export const AuthorizePage = () => {
         setBusy(true);
         setError('');
         try {
-            const {data} = await callIssueAppToken({appId, redirectUri});
+            const {data} = await callIssueAppCode({appId, redirectUri, codeChallenge});
             // In the fragment, which never reaches a server. Replaced, so Back
             // doesn't return here.
-            window.location.replace(`${data.redirectUri}#${new URLSearchParams({token: data.token, state: rawState})}`);
+            window.location.replace(`${data.redirectUri}#${new URLSearchParams({code: data.code, state: rawState})}`);
         } catch (err) {
             setError((isEnglish ? 'Couldn’t sign you in. Please try again.' : '登录失败，请重试。') + errorSuffix(err, isEnglish));
             setBusy(false);

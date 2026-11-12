@@ -4,7 +4,20 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { checkApiKeyRateLimit, consumeRateLimit, normalizeGroup, type UserGroup } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol, type ApiScope, hashApiKey, isApiKeyShaped } from "../utils/apiKeys";
-import { APP_ID_RE, appOrigins, hasSignIn, type RegisteredApp, registeredApps, verifyAppIdToken, } from "../utils/apps";
+import {
+    APP_ID_RE,
+    appOrigins,
+    appsCol,
+    CODE_VERIFIER_RE,
+    hasSignIn,
+    mintAppToken,
+    readApp,
+    redeemSignInCode,
+    type RegisteredApp,
+    registeredApps,
+    SIGN_IN_CODE_RE,
+    verifyAppIdToken,
+} from "../utils/apps";
 import { signedInSinceSessionsEnded } from "../utils/sessions";
 import { RESEND_QUEUE_CAP } from "../utils/config";
 import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
@@ -41,6 +54,10 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
  *   they are here. Nothing else: what of the site an app reads is up to its
  *   keys' scopes alone.
  *
+ * And an app, from its page or its server, to trade the code /authorize hands
+ * it for that sign-in, with the code verifier it made (PKCE).
+ *
+ *   POST /api/v1/token                             a code and its verifier
  *   GET  /api/v1/me                                a person
  *   GET  /api/v1/team                              a key, team:read
  *   GET  /api/v1/events                            a key, events:read
@@ -57,9 +74,9 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
  * staff, within the events it's held to: its app decides who of its own sees
  * them.
  *
- * No App Check: the key or the sign-in is the credential. A key is server to
- * server, and must never ship inside an app. A registered app's pages may call
- * /v1/me from a browser (CORS), with a person's sign-in.
+ * No App Check: the key, the sign-in or the code is the credential. A key is
+ * server to server, and must never ship inside an app. A registered app's
+ * pages may call /v1/token and /v1/me from a browser (CORS).
  */
 
 /** Tickets one order may hold, as one attendee may hold anywhere else. */
@@ -169,7 +186,7 @@ function peekClaims(jwt: string): Record<string, unknown> | null {
 const PERSON_RATE_LIMIT_MAX = 60;
 
 /**
- * The person an app's ID token is for: one issueAppToken signed in, to an app
+ * The person an app's ID token is for: one /v1/token signed in, to an app
  * still registered, from that app's project. Whether their account is still
  * there, and still signed in, is read now, so signing out everywhere here
  * ends it here at once, whatever the app's own project still allows.
@@ -480,6 +497,45 @@ function byGroupThenName(a: PersonJson, b: PersonJson): number {
         return i === -1 ? TEAM_GROUPS.length : i;
     };
     return rank(a) - rank(b) || a.displayName.localeCompare(b.displayName) || (a.uid < b.uid ? -1 : 1);
+}
+
+/**
+ * Trades a code /authorize handed an app (issueAppCode) for the sign-in it
+ * stands for: a custom token for the app's project, made now, so its claims
+ * are as of now (mintAppToken). Asked with the code verifier the app made, by
+ * its page from the origin the code was handed back to, or by its server,
+ * which sends no Origin. Every way the code itself can be wrong gets the same
+ * answer, so none can be told apart by trying.
+ */
+async function exchangeSignInCode(body: unknown, origin: string | undefined): Promise<ApiReply> {
+    const input = (body && typeof body === "object" ? body : {}) as {code?: unknown; codeVerifier?: unknown};
+    if (typeof input.code !== "string" || !SIGN_IN_CODE_RE.test(input.code)
+        || typeof input.codeVerifier !== "string" || !CODE_VERIFIER_RE.test(input.codeVerifier)) {
+        throw new ApiError(400, "invalid-request", "Send {\"code\", \"codeVerifier\"} as JSON.");
+    }
+    const invalid = new ApiError(400, "invalid-code", "This sign-in code isn't valid. Sign in to the app again.");
+    const signIn = await redeemSignInCode(input.code, input.codeVerifier);
+    if (!signIn) throw invalid;
+    if (origin !== undefined && origin !== new URL(signIn.redirectUri).origin) throw invalid;
+    // Removed, sign-in turned off, or the place it was handed to taken off since.
+    const app = readApp(await appsCol().doc(signIn.appId).get());
+    if (!app || !hasSignIn(app) || !app.redirectUris.includes(signIn.redirectUri)) throw invalid;
+
+    const user = await db.collection("users").doc(signIn.uid).get();
+    const endedAt: unknown = user.get("sessionsEndedAt");
+    if (!user.exists || (endedAt instanceof Timestamp && endedAt.toMillis() >= signIn.createdAt.toMillis())) {
+        throw new ApiError(401, "session-ended", "This sign-in has been signed out. Sign in to the app again.");
+    }
+    let token: string;
+    try {
+        token = await mintAppToken(app, signIn.uid, normalizeGroup(user.get("group")));
+    } catch (err) {
+        // Most likely the grant of Service Account Token Creator missing on the app's project.
+        console.error(`[api] couldn't sign ${signIn.uid} in to ${app.id}`, err);
+        throw new ApiError(500, "sign-in-failed",
+            "Couldn't sign you in to the app. Try again; if it keeps happening, tell the app's maintainers.");
+    }
+    return {status: 200, body: {token}};
 }
 
 /** The person calling, as they are now, which their sign-in's claims may lag (mintAppToken). */
@@ -816,6 +872,7 @@ async function getOrder(key: ApiKey, eventId: string, orderId: string): Promise<
 }
 
 type Route =
+    | {kind: "token"}
     | {kind: "me"}
     | {kind: "team"}
     | {kind: "events"}
@@ -825,6 +882,7 @@ type Route =
     | {kind: "order"; eventId: string; orderId: string};
 
 const ROUTE_METHODS: Record<Route["kind"], string> = {
+    token: "POST",
     me: "GET",
     team: "GET",
     events: "GET",
@@ -841,6 +899,7 @@ const ROUTE_METHODS: Record<Route["kind"], string> = {
 function matchRoute(path: string): Route | null {
     const segments = path.replace(/^\/api(?=\/)/, "").split("/").filter(Boolean);
     if (segments[0] !== "v1") return null;
+    if (segments.length === 2 && segments[1] === "token") return {kind: "token"};
     if (segments.length === 2 && segments[1] === "me") return {kind: "me"};
     if (segments.length === 2 && segments[1] === "team") return {kind: "team"};
     if (segments[1] !== "events") return null;
@@ -899,16 +958,18 @@ export const api = onRequest({
     };
     const fail = (status: number, code: string, message: string) => send(status, {error: {code, message}});
 
+    const route = matchRoute(req.path);
     if (req.method === "OPTIONS" && corsOrigin) {
+        // A page posts its JSON to /v1/token, and gets the rest with a sign-in.
+        const token = route?.kind === "token";
         res.set("Access-Control-Allow-Origin", corsOrigin);
-        res.set("Access-Control-Allow-Methods", "GET");
-        res.set("Access-Control-Allow-Headers", "Authorization");
+        res.set("Access-Control-Allow-Methods", token ? "POST" : "GET");
+        res.set("Access-Control-Allow-Headers", token ? "Content-Type" : "Authorization");
         res.set("Access-Control-Max-Age", "3600");
         res.status(204).end();
         return;
     }
 
-    const route = matchRoute(req.path);
     if (!route) {
         fail(404, "not-found", "No such endpoint.");
         return;
@@ -920,6 +981,11 @@ export const api = onRequest({
     }
 
     try {
+        if (route.kind === "token") {
+            const reply = await exchangeSignInCode(req.body, req.get("Origin"));
+            send(reply.status, reply.body);
+            return;
+        }
         caller = await authenticate(req.get("Authorization"));
         const reply = route.kind === "me" ? getMe(caller)
             : route.kind === "team" ? await listTeam(requireKey(caller))

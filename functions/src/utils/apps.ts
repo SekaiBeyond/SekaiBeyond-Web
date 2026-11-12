@@ -1,9 +1,9 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { HttpsError } from "firebase-functions/v2/https";
 import { type App, initializeApp } from "firebase-admin/app";
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
-import type { Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
 
 /**
@@ -11,8 +11,9 @@ import { db } from "./firebase";
  * app, that connect to Sekai Beyond. Core staff register apps in the Apps tool
  * (functions/apps.ts). An app may:
  *
- * - sign people in with their accounts here (issueAppToken), which tells it
- *   who they are here and nothing more (/v1/me in functions/api.ts);
+ * - sign people in with their accounts here (issueAppCode, then POST /v1/token
+ *   in functions/api.ts), which tells it who they are here and nothing more
+ *   (/v1/me);
  * - hold server-to-server API keys (utils/apiKeys.ts), which read the site's
  *   data as far as their scopes go and sell tickets, with the app's ID as the
  *   namespace its order numbers live in. Who of the app's own sees what a key
@@ -184,6 +185,87 @@ function adminFor(app: Pick<AppDoc, "firebaseProjectId" | "serviceAccount">): Ap
  */
 export function mintAppToken(app: RegisteredApp, uid: string, group: string): Promise<string> {
     return getAuth(adminFor(app)).createCustomToken(uid, {app: app.id, group, mintedAt: Date.now()});
+}
+
+/**
+ * How long a sign-in code lasts. The app trades it as soon as its page loads,
+ * so this only has to cover a slow connection.
+ */
+export const SIGN_IN_CODE_TTL_MS = 2 * 60 * 1000;
+
+/** A code challenge: the base64url SHA-256 of a code verifier, the one method (S256) taken. */
+export const CODE_CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
+
+/** A code verifier: 43–128 of RFC 7636's unreserved characters. */
+export const CODE_VERIFIER_RE = /^[A-Za-z0-9._~-]{43,128}$/;
+
+/** A sign-in code: 32 random bytes, base64url. */
+export const SIGN_IN_CODE_RE = /^[A-Za-z0-9_-]{43}$/;
+
+/**
+ * A sign-in code's doc, under the code's SHA-256, so the codes can't be read
+ * back out of the database. Server only (see firestore.rules); a TTL policy
+ * (firestore.indexes.json) deletes one nobody traded.
+ */
+export interface SignInCodeDoc {
+    appId: string;
+    uid: string;
+    /** Where it was handed back to: from a browser, only that origin may trade it. */
+    redirectUri: string;
+    codeChallenge: string;
+    createdAt: Timestamp;
+    expiresAt: Timestamp;
+}
+
+const signInCodeRef = (code: string) =>
+    db.collection("appSignInCodes").doc(createHash("sha256").update(code).digest("hex"));
+
+/**
+ * A one-time code for `uid` to sign in to `app` with, handed back at
+ * `redirectUri`. Signing in hands an app this rather than a sign-in, so the
+ * address bar, its history and whatever else reads them never hold anything
+ * that signs anyone in: the app trades the code for one at POST /v1/token with
+ * the code verifier that only it holds, whose SHA-256 is `codeChallenge`
+ * (PKCE, RFC 7636).
+ */
+export async function issueSignInCode(
+    app: RegisteredApp,
+    uid: string,
+    redirectUri: string,
+    codeChallenge: string,
+): Promise<string> {
+    const code = randomBytes(32).toString("base64url");
+    const now = Date.now();
+    const doc: SignInCodeDoc = {
+        appId: app.id,
+        uid,
+        redirectUri,
+        codeChallenge,
+        createdAt: Timestamp.fromMillis(now),
+        expiresAt: Timestamp.fromMillis(now + SIGN_IN_CODE_TTL_MS),
+    };
+    await signInCodeRef(code).create(doc);
+    return code;
+}
+
+/**
+ * What a sign-in code was issued for, if it's live and `codeVerifier` is the
+ * verifier its challenge was made from, else null. A code works once: it's
+ * deleted the first time it's offered, whatever comes of it, so one offered
+ * with the wrong verifier, or by someone who saw it first, is gone.
+ */
+export async function redeemSignInCode(code: string, codeVerifier: string): Promise<SignInCodeDoc | null> {
+    const ref = signInCodeRef(code);
+    const signIn = await db.runTransaction(async txn => {
+        const snap = await txn.get(ref);
+        if (!snap.exists) return null;
+        txn.delete(ref);
+        return snap.data() as SignInCodeDoc;
+    });
+    if (!signIn || signIn.expiresAt.toMillis() <= Date.now()) return null;
+    const challenge = Buffer.from(createHash("sha256").update(codeVerifier).digest("base64url"));
+    const expected = Buffer.from(signIn.codeChallenge);
+    return challenge.length === expected.length && timingSafeEqual(challenge, expected) ? signIn : null;
 }
 
 /** An ID token from the app's Firebase project, checked as Firebase Auth issued it. Throws if it isn't one. */
