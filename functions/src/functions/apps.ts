@@ -8,6 +8,7 @@ import {
     APP_REDIRECT_URIS_MAX,
     APP_SCOPES,
     appsCol,
+    claimsChange,
     FIREBASE_PROJECT_ID_RE,
     hasSignIn,
     isAppScope,
@@ -16,7 +17,9 @@ import {
     readApp,
     type RegisteredApp,
     SERVICE_ACCOUNT_RE,
+    signEveryoneOutOf,
 } from "../utils/apps";
+import { staffEventsIn } from "../utils/events";
 import { db } from "../utils/firebase";
 import { recordDoc, recordRef } from "../utils/records";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
@@ -201,7 +204,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
     const create = input.create === true;
     const fields = parseAppInput(request.data);
 
-    await adminTransaction(uid, async (txn, callerSnap) => {
+    const before = await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = appsCol().doc(appId);
         const [snap, owner] = await Promise.all([
             txn.get(ref),
@@ -226,7 +229,12 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             appId,
             appName: fields.name,
         }));
+        return readApp(snap);
     });
+    // Its sign-ins carry claims as of when they were made (mintAppToken), so
+    // ones from before now carry the wrong ones. Signed out from the project
+    // they're in, the one before if the app moved.
+    if (before && claimsChange(before, fields)) await signEveryoneOutOf(before);
     return {saved: true};
 });
 
@@ -302,6 +310,10 @@ export const issueAppToken = onCall({maxInstances: 10}, async (request) => {
     const input = (request.data ?? {}) as {appId?: unknown; redirectUri?: unknown};
     const app = await findApp(input.appId);
     const redirectUri = redirectFor(app, input.redirectUri);
-    const group = normalizeGroup((await db.collection("users").doc(uid).get()).get("group"));
-    return {token: await mintAppToken(app, uid, group), redirectUri};
+    const user = await db.collection("users").doc(uid).get();
+    const token = await mintAppToken(app, uid, {
+        group: normalizeGroup(user.get("group")),
+        eventStaffEvents: staffEventsIn(user),
+    });
+    return {token, redirectUri};
 });

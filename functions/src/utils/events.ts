@@ -1,6 +1,27 @@
 import { HttpsError } from "firebase-functions/v2/https";
+import { Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
+import { toStringIds } from "./publicProfile";
 import { validateDocId, validateStr, validateStringArray } from "./validation";
+
+/** The events a user is event staff for, from their user doc, archived ones too. */
+export const staffEventsIn = (user: FirebaseFirestore.DocumentSnapshot): string[] =>
+    toStringIds(user.get("eventStaffEvents"));
+
+/** Firestore keeps IDs like __x__ for itself and refuses to read one, so no event has one. */
+export const RESERVED_ID_RE = /^__.*__$/;
+
+/**
+ * Unarchived events (upcomingEvents docs) in the site's order: soonest start
+ * first, then by ID, as a query ordered by startAt has them. One missing its
+ * start isn't one, as on the site's lists.
+ */
+export function soonestFirst<T extends FirebaseFirestore.DocumentSnapshot>(snaps: T[]): T[] {
+    const startMs = (snap: T) => (snap.get("startAt") as Timestamp).toMillis();
+    return snaps
+        .filter(snap => snap.get("startAt") instanceof Timestamp)
+        .sort((a, b) => startMs(a) - startMs(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
 
 /**
  * An event's doc from whichever collection holds it: upcomingEvents, or

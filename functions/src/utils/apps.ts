@@ -1,6 +1,7 @@
 import { type App, initializeApp } from "firebase-admin/app";
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
-import type { Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
+import { RESERVED_ID_RE, soonestFirst } from "./events";
 import { db } from "./firebase";
 
 /**
@@ -156,14 +157,75 @@ function adminFor(app: Pick<AppDoc, "firebaseProjectId" | "serviceAccount">): Ap
 }
 
 /**
- * A custom token to sign in to the app's Firebase project as `uid`, the
- * account's uid here. Its claims are on every ID token the sign-in renews to:
- * `app`, which app it's for; `group`, the account's group here when it signed
- * in, which /v1/me has as it is now; and `mintedAt`, as on this project's own
- * sign-ins, so signing out everywhere here reaches it (signedInSinceSessionsEnded).
+ * The most a sign-in's claims may take, as JSON. Firebase Auth refuses a
+ * custom token whose claims are over 1,000 bytes, and they ride along on every
+ * call the app makes to its Firestore, so `eventStaff` is cut to fit under.
  */
-export function mintAppToken(app: RegisteredApp, uid: string, group: string): Promise<string> {
-    return getAuth(adminFor(app)).createCustomToken(uid, {app: app.id, group, mintedAt: Date.now()});
+const APP_CLAIMS_MAX_BYTES = 900;
+
+/** An event ID a user doc may hold that can be read: one a doc can have (see validateDocId). */
+const isReadableEventId = (id: string) => id.length > 0 && id.length <= 128 && !/[/\0]/.test(id) && !RESERVED_ID_RE.test(id);
+
+/**
+ * The unarchived events among `eventIds`, in the order a sign-in names them:
+ * those yet to end, soonest first, then any over but not yet archived, which
+ * is done by hand. So when they don't all fit, the ones left off are over or
+ * furthest off. An archived or deleted event isn't in upcomingEvents.
+ */
+async function unarchivedInClaimOrder(eventIds: string[]): Promise<string[]> {
+    const ids = [...new Set(eventIds.filter(isReadableEventId))];
+    if (ids.length === 0) return [];
+    const events = soonestFirst(await db.getAll(...ids.map(id => db.collection("upcomingEvents").doc(id))));
+    const now = Date.now();
+    const over = (snap: FirebaseFirestore.DocumentSnapshot) => {
+        const endAt: unknown = snap.get("endAt");
+        return endAt instanceof Timestamp && endAt.toMillis() <= now;
+    };
+    return [...events.filter(snap => !over(snap)), ...events.filter(over)].map(snap => snap.id);
+}
+
+/** `claims` with `eventStaff`: as many of `eventIds`, in order, as fit in APP_CLAIMS_MAX_BYTES. */
+function withEventStaff<T extends object>(claims: T, eventIds: string[]): T & {eventStaff: string[]} {
+    const eventStaff: string[] = [];
+    let bytes = Buffer.byteLength(JSON.stringify({...claims, eventStaff}));
+    for (const id of eventIds) {
+        const more = Buffer.byteLength(JSON.stringify(id)) + (eventStaff.length > 0 ? 1 : 0);
+        if (bytes + more > APP_CLAIMS_MAX_BYTES) break;
+        eventStaff.push(id);
+        bytes += more;
+    }
+    return {...claims, eventStaff};
+}
+
+/**
+ * A custom token to sign in to the app's Firebase project as `uid`, the
+ * account's uid here. Its claims are on every ID token the sign-in renews to,
+ * so an app's security rules can go by them:
+ *
+ * - `app`, which app it's for;
+ * - `group`, the account's group here;
+ * - `eventStaff`, only for an app with event-staff:read: the unarchived events
+ *   the account is event staff for (see unarchivedInClaimOrder), as many as
+ *   fit (APP_CLAIMS_MAX_BYTES). /v1/me lists every one;
+ * - `mintedAt`, as on this project's own sign-ins, so signing out everywhere
+ *   here reaches it (signedInSinceSessionsEnded).
+ *
+ * They're as of the sign-in, and a change to them signs the account out of
+ * the apps whose sign-ins carry them (signOutOfApps, signOutOfEventStaffApps,
+ * signEveryoneOutOf), so its next sign-in has them as they are now. /v1/me
+ * has them as they are now. A custom token works for an hour, so one taken
+ * before a change and used after carries the claims from before: apps check
+ * that a sign-in was used soon after `mintedAt` (see the docs).
+ */
+export async function mintAppToken(
+    app: RegisteredApp,
+    uid: string,
+    person: {group: string; eventStaffEvents: string[]},
+): Promise<string> {
+    const auth = getAuth(adminFor(app));
+    const claims = {app: app.id, group: person.group, mintedAt: Date.now()};
+    if (!app.scopes.includes("event-staff:read")) return auth.createCustomToken(uid, claims);
+    return auth.createCustomToken(uid, withEventStaff(claims, await unarchivedInClaimOrder(person.eventStaffEvents)));
 }
 
 /** An ID token from the app's Firebase project, checked as Firebase Auth issued it. Throws if it isn't one. */
@@ -171,15 +233,48 @@ export function verifyAppIdToken(app: RegisteredApp, idToken: string): Promise<D
     return getAuth(adminFor(app)).verifyIdToken(idToken);
 }
 
-const userNotFound = (err: unknown) => (err as {code?: string})?.code === "auth/user-not-found";
+const errorCode = (err: unknown) => (err as {code?: unknown})?.code;
+const userNotFound = (err: unknown) => errorCode(err) === "auth/user-not-found";
 
 /**
- * Does `action` to `uid` in every app's Firebase project, once each. Logged,
- * not thrown: it follows a change already made here, which mustn't fail for
- * it, and an app whose owner hasn't granted Firebase Authentication Admin
- * fails every time. The API refuses such a sign-in from then on regardless.
+ * Whether a call to an app's Firebase Auth may work if tried again: the
+ * network, a quota, or the server failing. Not a missing grant, which fails
+ * every time and would only hold up the change behind it.
  */
-async function acrossApps(uid: string, action: "revoke" | "delete"): Promise<void> {
+function mayPassOnRetry(err: unknown): boolean {
+    const code = errorCode(err);
+    if (code === "app/network-error" || code === "app/network-timeout" || code === "auth/quota-exceeded") return true;
+    if (code !== "auth/internal-error") return false;
+    const status = (err as {httpResponse?: {status?: unknown}})?.httpResponse?.status;
+    return typeof status !== "number" || status === 429 || status >= 500;
+}
+
+const RETRY_DELAYS_MS = [500, 2000];
+
+/** `call`, tried again after each of RETRY_DELAYS_MS for as long as it fails in a way that may pass. */
+async function withRetries<T>(call: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await call();
+        } catch (err) {
+            if (attempt >= RETRY_DELAYS_MS.length || !mayPassOnRetry(err)) throw err;
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+        }
+    }
+}
+
+/**
+ * Does `action` to `uid` in the Firebase project of every app with sign-in,
+ * or of those `which` picks, once each. Logged, not thrown: it follows a
+ * change already made here, which mustn't fail for it, and an app whose owner
+ * hasn't granted Firebase Authentication Admin fails every time. The API
+ * refuses such a sign-in from then on regardless.
+ */
+async function acrossApps(
+    uid: string,
+    action: "revoke" | "delete",
+    which: (app: RegisteredApp) => boolean = () => true,
+): Promise<void> {
     let apps: RegisteredApp[];
     try {
         // Fresh, so an app registered a moment ago isn't missed.
@@ -188,21 +283,68 @@ async function acrossApps(uid: string, action: "revoke" | "delete"): Promise<voi
         console.error(`[apps] couldn't list apps to ${action} ${uid} in`, err);
         return;
     }
-    const byProject = new Map(apps.filter(hasSignIn).map(app => [app.firebaseProjectId, app]));
+    // Apps can share a project: it's picked if any of them is.
+    const byProject = new Map(apps.filter(app => hasSignIn(app) && which(app)).map(app => [app.firebaseProjectId, app]));
     await Promise.all([...byProject.values()].map(async app => {
         const auth = getAuth(adminFor(app));
         try {
-            if (action === "revoke") await auth.revokeRefreshTokens(uid);
-            else await auth.deleteUser(uid);
+            await withRetries(() => action === "revoke" ? auth.revokeRefreshTokens(uid) : auth.deleteUser(uid));
         } catch (err) {
             // Someone who never signed in to it has nothing there.
-            if (!userNotFound(err)) console.warn(`[apps] ${action} in ${app.id} failed for ${uid}`, err);
+            if (!userNotFound(err)) console.error(`[apps] ${action} in ${app.id} failed for ${uid}`, err);
         }
     }));
 }
 
-/** Signs `uid` out of every app: its sign-ins can't renew, so each ends within the hour an ID token lasts. */
+/**
+ * Signs `uid` out of every app: its sign-ins can't renew, so each ends within
+ * the hour an ID token lasts, and its next one has its claims as they are now
+ * (mintAppToken). Call it once a change is made, not in its transaction.
+ */
 export const signOutOfApps = (uid: string) => acrossApps(uid, "revoke");
+
+const carriesEventStaff = (app: Pick<AppDoc, "scopes">) => app.scopes.includes("event-staff:read");
+
+/**
+ * Signs `uid` out of the apps whose sign-ins carry `eventStaff`, those with
+ * event-staff:read, for a change to which unarchived events it staffs.
+ */
+export const signOutOfEventStaffApps = (uid: string) => acrossApps(uid, "revoke", carriesEventStaff);
+
+/** Whether changing an app from `before` to `after` changes which claims its sign-ins carry. */
+export const claimsChange = (before: Pick<AppDoc, "scopes">, after: Pick<AppDoc, "scopes">) =>
+    carriesEventStaff(before) !== carriesEventStaff(after);
+
+/**
+ * Signs everyone signed in to `app` with an account here out of it: each user
+ * of its project made by a sign-in from here, which has no provider of its
+ * own, unlike one the app made itself. For a change to the claims its
+ * sign-ins carry, so each person's next sign-in has them. Logged, not thrown,
+ * as acrossApps. Says how many it signed out.
+ */
+export async function signEveryoneOutOf(app: RegisteredApp): Promise<number> {
+    if (!hasSignIn(app)) return 0;
+    const auth = getAuth(adminFor(app));
+    let count = 0;
+    try {
+        let pageToken: string | undefined;
+        do {
+            const page = await withRetries(() => auth.listUsers(1000, pageToken));
+            const ours = page.users.filter(user => user.providerData.length === 0);
+            // A page at a time, as far under Auth's rate limit as a page of 1,000 is.
+            for (let i = 0; i < ours.length; i += 50) {
+                await Promise.all(ours.slice(i, i + 50).map(user => withRetries(() => auth.revokeRefreshTokens(user.uid))
+                    .then(() => count++, err => {
+                        if (!userNotFound(err)) console.error(`[apps] revoke in ${app.id} failed for ${user.uid}`, err);
+                    })));
+            }
+            pageToken = page.pageToken;
+        } while (pageToken);
+    } catch (err) {
+        console.error(`[apps] couldn't list ${app.id}'s users to sign them out`, err);
+    }
+    return count;
+}
 
 /** Deletes a deleted account's user from every app, which signs it out there too. */
 export const deleteFromApps = (uid: string) => acrossApps(uid, "delete");
