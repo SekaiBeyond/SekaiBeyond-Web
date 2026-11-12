@@ -3,35 +3,18 @@ import { useSearchParams } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { PageNav } from '~/components/PageNav';
-import {
-    APP_ID_RE,
-    type AppScope,
-    callGetAppSignInInfo,
-    callIssueAppToken,
-    errorSuffix,
-    functionsErrorCode,
-} from '~/lib/firebase';
+import { APP_ID_RE, callGetAppSignInInfo, callIssueAppToken, errorSuffix, functionsErrorCode, } from '~/lib/firebase';
 
 /** The random value an app sends, to tell the sign-in it gets back is the one it asked for. */
 const STATE_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
-/** What each scope lets an app see, as the person signing in is told it. */
-const SCOPE_TEXT: Record<AppScope, {en: string; zh: string}> = {
-    'events:read': {en: 'The events you can see here', zh: '您在本站可以查看的活动'},
-    'team:read': {en: 'The team list, if you’re staff', zh: '团队名单（如果您是工作人员）'},
-    'event-staff:read': {
-        en: 'Which events you’re staff for, and the staff of events you can see the staff of',
-        zh: '您担任工作人员的活动，以及您有权查看的活动工作人员名单',
-    },
-};
-
-type Info = {name: string; maintainerNames: string[]; scopes: AppScope[]};
+type Info = {name: string; maintainerNames: string[]};
 
 /**
  * Sign in with Sekai Beyond: where a registered app (see
  * functions/src/utils/apps.ts) sends people, as
  * /authorize?app=…&state=…[&redirect_uri=…]. It says which app it is and what
- * it will see, and Continue hands a sign-in for the app back to it, with the
+ * it will see of them, and Continue hands a sign-in for the app back to it, with the
  * same state, at one of the places registered for it. Nothing happens until
  * Continue, so a link alone can't sign anyone in to an app.
  */
@@ -132,9 +115,6 @@ export const AuthorizePage = () => {
                             </p>
                             <ul className="authorize-scopes">
                                 <li>{isEnglish ? 'Your name, photo and role here' : '您在本站的名称、头像和角色'}</li>
-                                {info.scopes.map(scope => (
-                                    <li key={scope}>{isEnglish ? SCOPE_TEXT[scope].en : SCOPE_TEXT[scope].zh}</li>
-                                ))}
                             </ul>
                             <p className="admin-helper-text">
                                 {isEnglish

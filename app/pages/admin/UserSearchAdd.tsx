@@ -15,6 +15,8 @@ interface UserSearchAddProps {
     /** Shown when a completed search has no addable results. */
     noMatchMessage: string;
     showToast: ShowToast;
+    /** In a labelled form field, which spaces it, so it keeps no margins of its own. */
+    inField?: boolean;
 }
 
 /**
@@ -29,6 +31,7 @@ export function UserSearchAdd({
                                   addingLabel,
                                   noMatchMessage,
                                   showToast,
+                                  inField = false,
                               }: UserSearchAddProps) {
     const {isEnglish} = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
@@ -58,8 +61,8 @@ export function UserSearchAdd({
 
     return (
         <div className="admin-event-staff-add"
-             style={{marginTop: 16, flexDirection: 'column', alignItems: 'stretch', gap: 8}}>
-            <div className="admin-search">
+             style={{marginTop: inField ? 0 : 16, flexDirection: 'column', alignItems: 'stretch', gap: 8}}>
+            <div className="admin-search" style={inField ? {marginBottom: 0} : undefined}>
                 <input
                     type="text"
                     className="admin-input"

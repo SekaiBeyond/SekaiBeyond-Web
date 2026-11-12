@@ -1960,6 +1960,18 @@
     color: var(--color-text-muted);
 }
 
+/* Apps tool form: the sign-in fields, boxed under the checkbox that shows them. */
+.admin-app-signin-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 14px;
+    border: 1px solid rgba(255, 107, 157, 0.14);
+    border-radius: 10px;
+    background: rgba(255, 107, 157, 0.03);
+    min-width: 0;
+}
+
 /* Apps tool: who registered an app and who looks after it, a labelled row each. */
 .admin-app-people {
     display: flex;
@@ -3455,6 +3467,13 @@ select.admin-tickets-tag:focus {
     font-size: 13px;
     font-weight: 700;
     color: var(--color-text);
+}
+
+/* A note under a field's input, which the rule above would otherwise style as a second label. */
+.admin-tickets-template-field > .admin-helper-text {
+    font-weight: 400;
+    color: #aaa;
+    margin-bottom: 0;
 }
 
 .admin-tickets-template-textarea {

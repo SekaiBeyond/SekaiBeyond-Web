@@ -3,8 +3,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { HttpsError } from "firebase-functions/v2/https";
 import { type App, initializeApp } from "firebase-admin/app";
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
-import { Timestamp } from "firebase-admin/firestore";
-import { RESERVED_ID_RE, soonestFirst } from "./events";
+import type { Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
 
 /**
@@ -12,11 +11,12 @@ import { db } from "./firebase";
  * app, that connect to Sekai Beyond. Core staff register apps in the Apps tool
  * (functions/apps.ts). An app may:
  *
- * - sign people in with their accounts here (issueAppToken), and read what of
- *   the site's data that person may see here, as far as the scopes the app was
- *   given allow (the person routes of functions/api.ts);
- * - hold server-to-server API keys (utils/apiKeys.ts) for the ticket API, with
- *   the app's ID as the namespace its order numbers live in;
+ * - sign people in with their accounts here (issueAppToken), which tells it
+ *   who they are here and nothing more (/v1/me in functions/api.ts);
+ * - hold server-to-server API keys (utils/apiKeys.ts), which read the site's
+ *   data as far as their scopes go and sell tickets, with the app's ID as the
+ *   namespace its order numbers live in. Who of the app's own sees what a key
+ *   reads is the app's to decide;
  * - or both.
  *
  * A sign-in is a Firebase custom token for the app's own Firebase project,
@@ -26,17 +26,6 @@ import { db } from "./firebase";
  * and, for signing out here to sign people out there too, Firebase
  * Authentication Admin on their project.
  */
-
-/**
- * What an app may read for the person signed in to it, each within what that
- * person may see here. Each person route of the API names the one it needs.
- */
-export const APP_SCOPES = ["events:read", "team:read", "event-staff:read"] as const;
-export type AppScope = typeof APP_SCOPES[number];
-
-export function isAppScope(raw: unknown): raw is AppScope {
-    return typeof raw === "string" && (APP_SCOPES as readonly string[]).includes(raw);
-}
 
 /** An app's ID: what it signs people in with (/authorize?app=…), and its doc's name. */
 export const APP_ID_RE = /^[a-z0-9-]{1,32}$/;
@@ -95,8 +84,6 @@ interface AppDoc {
      * in. Their origins may call the API from a browser.
      */
     redirectUris: string[];
-    /** What it may read for the person signed in; empty when sign-in is off. */
-    scopes: AppScope[];
     /** The Firebase project its sign-ins are for, "" when sign-in is off. */
     firebaseProjectId: string;
     /** The service account of that project its sign-ins are signed as, "" when sign-in is off. */
@@ -120,7 +107,8 @@ export const appsCol = () => db.collection("apps");
 
 export function readApp(snap: FirebaseFirestore.DocumentSnapshot): RegisteredApp | null {
     // `ownerUid`: the one maintainer an app had before it could have several,
-    // until it's next saved (saveApp deletes it).
+    // until it's next saved (saveApp deletes it, and `scopes`, what it once
+    // read for the person signed in, which nothing reads).
     const data = snap.data() as (Partial<AppDoc> & {ownerUid?: string}) | undefined;
     if (!data) return null;
     return {
@@ -128,7 +116,6 @@ export function readApp(snap: FirebaseFirestore.DocumentSnapshot): RegisteredApp
         name: data.name ?? snap.id,
         maintainerUids: data.maintainerUids ?? (data.ownerUid ? [data.ownerUid] : []),
         redirectUris: data.redirectUris ?? [],
-        scopes: (data.scopes ?? []).filter(isAppScope),
         firebaseProjectId: data.firebaseProjectId ?? "",
         serviceAccount: data.serviceAccount ?? "",
         createdBy: data.createdBy ?? "",
@@ -180,75 +167,23 @@ function adminFor(app: Pick<AppDoc, "firebaseProjectId" | "serviceAccount">): Ap
 }
 
 /**
- * The most a sign-in's claims may take, as JSON. Firebase Auth refuses a
- * custom token whose claims are over 1,000 bytes, and they ride along on every
- * call the app makes to its Firestore, so `eventStaff` is cut to fit under.
- */
-const APP_CLAIMS_MAX_BYTES = 900;
-
-/** An event ID a user doc may hold that can be read: one a doc can have (see validateDocId). */
-const isReadableEventId = (id: string) => id.length > 0 && id.length <= 128 && !/[/\0]/.test(id) && !RESERVED_ID_RE.test(id);
-
-/**
- * The unarchived events among `eventIds`, in the order a sign-in names them:
- * those yet to end, soonest first, then any over but not yet archived, which
- * is done by hand. So when they don't all fit, the ones left off are over or
- * furthest off. An archived or deleted event isn't in upcomingEvents.
- */
-async function unarchivedInClaimOrder(eventIds: string[]): Promise<string[]> {
-    const ids = [...new Set(eventIds.filter(isReadableEventId))];
-    if (ids.length === 0) return [];
-    const events = soonestFirst(await db.getAll(...ids.map(id => db.collection("upcomingEvents").doc(id))));
-    const now = Date.now();
-    const over = (snap: FirebaseFirestore.DocumentSnapshot) => {
-        const endAt: unknown = snap.get("endAt");
-        return endAt instanceof Timestamp && endAt.toMillis() <= now;
-    };
-    return [...events.filter(snap => !over(snap)), ...events.filter(over)].map(snap => snap.id);
-}
-
-/** `claims` with `eventStaff`: as many of `eventIds`, in order, as fit in APP_CLAIMS_MAX_BYTES. */
-function withEventStaff<T extends object>(claims: T, eventIds: string[]): T & {eventStaff: string[]} {
-    const eventStaff: string[] = [];
-    let bytes = Buffer.byteLength(JSON.stringify({...claims, eventStaff}));
-    for (const id of eventIds) {
-        const more = Buffer.byteLength(JSON.stringify(id)) + (eventStaff.length > 0 ? 1 : 0);
-        if (bytes + more > APP_CLAIMS_MAX_BYTES) break;
-        eventStaff.push(id);
-        bytes += more;
-    }
-    return {...claims, eventStaff};
-}
-
-/**
  * A custom token to sign in to the app's Firebase project as `uid`, the
  * account's uid here. Its claims are on every ID token the sign-in renews to,
  * so an app's security rules can go by them:
  *
  * - `app`, which app it's for;
  * - `group`, the account's group here;
- * - `eventStaff`, only for an app with event-staff:read: the unarchived events
- *   the account is event staff for (see unarchivedInClaimOrder), as many as
- *   fit (APP_CLAIMS_MAX_BYTES). /v1/me lists every one;
  * - `mintedAt`, as on this project's own sign-ins, so signing out everywhere
  *   here reaches it (signedInSinceSessionsEnded).
  *
- * They're as of the sign-in, and a change to them signs the account out of
- * the apps whose sign-ins carry them (signOutOfApps, signOutOfEventStaffApps,
- * signEveryoneOutOf), so its next sign-in has them as they are now. /v1/me
- * has them as they are now. A custom token works for an hour, so one taken
- * before a change and used after carries the claims from before: apps check
+ * They're as of the sign-in, and a change of group signs the account out of
+ * every app (signOutOfApps), so its next sign-in has the group as it is now.
+ * /v1/me has it as it is now. A custom token works for an hour, so one taken
+ * before a change and used after carries the group from before: apps check
  * that a sign-in was used soon after `mintedAt` (see the docs).
  */
-export async function mintAppToken(
-    app: RegisteredApp,
-    uid: string,
-    person: {group: string; eventStaffEvents: string[]},
-): Promise<string> {
-    const auth = getAuth(adminFor(app));
-    const claims = {app: app.id, group: person.group, mintedAt: Date.now()};
-    if (!app.scopes.includes("event-staff:read")) return auth.createCustomToken(uid, claims);
-    return auth.createCustomToken(uid, withEventStaff(claims, await unarchivedInClaimOrder(person.eventStaffEvents)));
+export function mintAppToken(app: RegisteredApp, uid: string, group: string): Promise<string> {
+    return getAuth(adminFor(app)).createCustomToken(uid, {app: app.id, group, mintedAt: Date.now()});
 }
 
 /** An ID token from the app's Firebase project, checked as Firebase Auth issued it. Throws if it isn't one. */
@@ -288,16 +223,12 @@ async function withRetries<T>(call: () => Promise<T>): Promise<T> {
 
 /**
  * Does `action` to `uid` in the Firebase project of every app with sign-in,
- * or of those `which` picks, once each. Logged, not thrown: it follows a
- * change already made here, which mustn't fail for it, and an app whose maintainers
- * haven't granted Firebase Authentication Admin fails every time. The API
- * refuses such a sign-in from then on regardless.
+ * once each. Logged, not thrown: it follows a change already made here, which
+ * mustn't fail for it, and an app whose maintainers haven't granted Firebase
+ * Authentication Admin fails every time. The API refuses such a sign-in from
+ * then on regardless.
  */
-async function acrossApps(
-    uid: string,
-    action: "revoke" | "delete",
-    which: (app: RegisteredApp) => boolean = () => true,
-): Promise<void> {
+async function acrossApps(uid: string, action: "revoke" | "delete"): Promise<void> {
     let apps: RegisteredApp[];
     try {
         // Fresh, so an app registered a moment ago isn't missed.
@@ -306,8 +237,8 @@ async function acrossApps(
         console.error(`[apps] couldn't list apps to ${action} ${uid} in`, err);
         return;
     }
-    // Apps can share a project: it's picked if any of them is.
-    const byProject = new Map(apps.filter(app => hasSignIn(app) && which(app)).map(app => [app.firebaseProjectId, app]));
+    // Apps can share a project: each is reached once.
+    const byProject = new Map(apps.filter(hasSignIn).map(app => [app.firebaseProjectId, app]));
     await Promise.all([...byProject.values()].map(async app => {
         const auth = getAuth(adminFor(app));
         try {
@@ -325,49 +256,6 @@ async function acrossApps(
  * (mintAppToken). Call it once a change is made, not in its transaction.
  */
 export const signOutOfApps = (uid: string) => acrossApps(uid, "revoke");
-
-const carriesEventStaff = (app: Pick<AppDoc, "scopes">) => app.scopes.includes("event-staff:read");
-
-/**
- * Signs `uid` out of the apps whose sign-ins carry `eventStaff`, those with
- * event-staff:read, for a change to which unarchived events it staffs.
- */
-export const signOutOfEventStaffApps = (uid: string) => acrossApps(uid, "revoke", carriesEventStaff);
-
-/** Whether changing an app from `before` to `after` changes which claims its sign-ins carry. */
-export const claimsChange = (before: Pick<AppDoc, "scopes">, after: Pick<AppDoc, "scopes">) =>
-    carriesEventStaff(before) !== carriesEventStaff(after);
-
-/**
- * Signs everyone signed in to `app` with an account here out of it: each user
- * of its project made by a sign-in from here, which has no provider of its
- * own, unlike one the app made itself. For a change to the claims its
- * sign-ins carry, so each person's next sign-in has them. Logged, not thrown,
- * as acrossApps. Says how many it signed out.
- */
-export async function signEveryoneOutOf(app: RegisteredApp): Promise<number> {
-    if (!hasSignIn(app)) return 0;
-    const auth = getAuth(adminFor(app));
-    let count = 0;
-    try {
-        let pageToken: string | undefined;
-        do {
-            const page = await withRetries(() => auth.listUsers(1000, pageToken));
-            const ours = page.users.filter(user => user.providerData.length === 0);
-            // A page at a time, as far under Auth's rate limit as a page of 1,000 is.
-            for (let i = 0; i < ours.length; i += 50) {
-                await Promise.all(ours.slice(i, i + 50).map(user => withRetries(() => auth.revokeRefreshTokens(user.uid))
-                    .then(() => count++, err => {
-                        if (!userNotFound(err)) console.error(`[apps] revoke in ${app.id} failed for ${user.uid}`, err);
-                    })));
-            }
-            pageToken = page.pageToken;
-        } while (pageToken);
-    } catch (err) {
-        console.error(`[apps] couldn't list ${app.id}'s users to sign them out`, err);
-    }
-    return count;
-}
 
 /** Deletes a deleted account's user from every app, which signs it out there too. */
 export const deleteFromApps = (uid: string) => acrossApps(uid, "delete");

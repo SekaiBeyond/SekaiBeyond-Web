@@ -2,8 +2,13 @@ import * as crypto from "crypto";
 import type { Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
 
-/** What a key may do. Each API route names the one it needs (see functions/api.ts). */
-export const API_SCOPES = ["events:read", "tickets:read", "tickets:write"] as const;
+/**
+ * What a key may do. Each API route names the one it needs (see functions/api.ts).
+ * Every read of the site's data is a key's: a person's sign-in to an app only
+ * says who they are. A key reads as far as its scopes go, and its app decides
+ * who of its own sees what.
+ */
+export const API_SCOPES = ["events:read", "team:read", "event-staff:read", "tickets:read", "tickets:write"] as const;
 export type ApiScope = typeof API_SCOPES[number];
 
 export function isApiScope(raw: unknown): raw is ApiScope {

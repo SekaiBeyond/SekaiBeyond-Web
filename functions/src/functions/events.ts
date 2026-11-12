@@ -14,7 +14,6 @@ import {
     validateRoomIds,
     validateVenueId,
 } from "../utils/events";
-import { signOutOfEventStaffApps } from "../utils/apps";
 import { db } from "../utils/firebase";
 import { type BatchOp, commitInChunks, deleteOps } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
@@ -632,7 +631,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const eventId = validateDocId(input.eventId, "eventId");
 
-    const {isPastEvent, ...result} = await adminTransaction(uid, async (txn, callerSnap) => {
+    return adminTransaction(uid, async (txn, callerSnap) => {
         const [targetSnap, {snap: eventSnap, archived: isPastEvent}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
             getEventDoc(eventId, txn),
@@ -654,7 +653,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
             : (alreadyAttended ? "none" : "add");
 
         if (alreadyStaff && attendanceAction === "none") {
-            return {added: false, attendeeRemoved: false, isPastEvent};
+            return {added: false, attendeeRemoved: false};
         }
 
         // Past the early return, at least one of these changes.
@@ -684,14 +683,8 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         return {
             added: !alreadyStaff,
             attendeeRemoved: attendanceAction === "remove",
-            isPastEvent,
         };
     });
-
-    // So their next sign-in to an app names it (mintAppToken), which names
-    // unarchived events only.
-    if (result.added && !isPastEvent) await signOutOfEventStaffApps(targetUid);
-    return result;
 });
 export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -700,8 +693,8 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const eventId = validateDocId(input.eventId, "eventId");
 
-    const {archived, ...result} = await adminTransaction(uid, async (txn, callerSnap) => {
-        const [targetSnap, {snap: eventSnap, archived}] = await Promise.all([
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const [targetSnap, {snap: eventSnap}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
             getEventDoc(eventId, txn),
         ]);
@@ -709,7 +702,7 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
         const targetData = targetSnap.data()!;
         const existing: string[] = targetData.eventStaffEvents ?? [];
         if (!existing.includes(eventId)) {
-            return {removed: false, archived};
+            return {removed: false};
         }
 
         // An event deleted since keeps its ID in the record.
@@ -726,11 +719,6 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
         }));
-        return {removed: true, archived};
+        return {removed: true};
     });
-
-    // So their next sign-in to an app no longer names it (mintAppToken). An
-    // archived event isn't named, nor a deleted one, which counts as archived.
-    if (result.removed && !archived) await signOutOfEventStaffApps(targetUid);
-    return result;
 });

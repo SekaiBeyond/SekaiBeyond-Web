@@ -549,7 +549,7 @@ export const callGetWalletPassStatus = () =>
     httpsCallable<Record<string, never>, WalletPassStatus>(getFunctions(), 'getWalletPassStatus')({});
 
 /** What an API key may do. Mirrors API_SCOPES in functions/src/utils/apiKeys.ts. */
-export const API_SCOPES = ['events:read', 'tickets:read', 'tickets:write'] as const;
+export const API_SCOPES = ['events:read', 'team:read', 'event-staff:read', 'tickets:read', 'tickets:write'] as const;
 export type ApiScope = typeof API_SCOPES[number];
 
 export interface ApiKeySummary {
@@ -581,10 +581,6 @@ export const callRenameApiKey = (data: {keyId: string; name: string}) =>
 export const callRevokeApiKey = (data: {keyId: string}) =>
     httpsCallable<typeof data, {revoked: boolean}>(getFunctions(), 'revokeApiKey')(data);
 
-/** What an app may read for the person signed in to it. Mirrors APP_SCOPES in functions/src/utils/apps.ts. */
-export const APP_SCOPES = ['events:read', 'team:read', 'event-staff:read'] as const;
-export type AppScope = typeof APP_SCOPES[number];
-
 /** An app's ID. Mirrors APP_ID_RE in functions/src/utils/apps.ts. */
 export const APP_ID_RE = /^[a-z0-9-]{1,32}$/;
 
@@ -609,7 +605,6 @@ export interface AppSummary {
     /** Who looks after it, up to APP_MAINTAINERS_MAX, in the order they were added. */
     maintainers: AppPerson[];
     redirectUris: string[];
-    scopes: AppScope[];
     firebaseProjectId: string;
     serviceAccount: string;
     keys: ApiKeySummary[];
@@ -621,7 +616,6 @@ interface AppFields {
     name: string;
     maintainerUids: string[];
     redirectUris: string[];
-    scopes: AppScope[];
     firebaseProjectId: string;
     serviceAccount: string;
 }
@@ -640,7 +634,7 @@ export const callDeleteApp = (data: {appId: string}) =>
 
 /** What the sign-in page shows of an app. Needs no sign-in. */
 export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>
-    httpsCallable<typeof data, {name: string; maintainerNames: string[]; scopes: AppScope[]}>(
+    httpsCallable<typeof data, {name: string; maintainerNames: string[]}>(
         getFunctions(), 'getAppSignInInfo')(data);
 
 /** A sign-in to an app for the caller, and where to hand it. */

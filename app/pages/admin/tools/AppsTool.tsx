@@ -6,9 +6,7 @@ import {
     type ApiKeySummary,
     type ApiScope,
     APP_MAINTAINERS_MAX,
-    APP_SCOPES,
     type AppPerson,
-    type AppScope,
     type AppSummary,
     callCreateApiKey,
     callDeleteApp,
@@ -31,29 +29,21 @@ interface AppsToolProps {
     showToast: ShowToast;
 }
 
-const APP_SCOPE_LABELS: Record<AppScope, {en: string; zh: string; descEn: string; descZh: string}> = {
-    'events:read': {
-        en: 'Read events', zh: '读取活动',
-        descEn: 'The events the person signed in can see here: published ones, and unpublished ones too if they\'re staff or that event\'s staff.',
-        descZh: '登录者在本站可以查看的活动：已发布的活动；如果登录者是工作人员或该活动的工作人员，也包括未发布的活动。',
-    },
-    'team:read': {
-        en: 'Read the team', zh: '读取团队',
-        descEn: 'Staff and above, with names, photos, groups and titles, if the person signed in is staff.',
-        descZh: '工作人员及以上成员的名称、头像、组别和头衔（仅限登录者为工作人员时）。',
-    },
-    'event-staff:read': {
-        en: 'Read event staff', zh: '读取活动工作人员',
-        descEn: 'Which events the person signed in is staff for, on their sign-in and from /v1/me; and an event\'s staff, if the person signed in is staff, or staff of that event. Adding or removing it signs everyone out of the app.',
-        descZh: '登录者担任工作人员的活动（写在其登录凭证中，也可从 /v1/me 读取）；以及某个活动的工作人员名单（仅限登录者为工作人员或该活动的工作人员时）。添加或移除此项会让所有人退出该应用。',
-    },
-};
-
 const KEY_SCOPE_LABELS: Record<ApiScope, {en: string; zh: string; descEn: string; descZh: string}> = {
     'events:read': {
         en: 'Read events', zh: '读取活动',
         descEn: 'List every event, archived ones included, and look one up.',
         descZh: '列出所有活动（包括已归档的活动），并查询单个活动。',
+    },
+    'team:read': {
+        en: 'Read the team', zh: '读取团队',
+        descEn: 'Staff and above, with names, photos, groups and titles. The app decides who of its own sees them.',
+        descZh: '工作人员及以上成员的名称、头像、组别和头衔。由应用自行决定其用户中谁可以查看。',
+    },
+    'event-staff:read': {
+        en: 'Read event staff', zh: '读取活动工作人员',
+        descEn: 'Any event\'s staff, within the events the key is held to. The app decides who of its own sees them.',
+        descZh: '任意活动的工作人员名单（仅限此密钥可用的活动）。由应用自行决定其用户中谁可以查看。',
     },
     'tickets:write': {
         en: 'Sell tickets', zh: '售票',
@@ -86,7 +76,6 @@ interface Draft {
     maintainers: AppPerson[];
     signIn: boolean;
     redirectUris: string;
-    scopes: AppScope[];
     firebaseProjectId: string;
     serviceAccount: string;
 }
@@ -96,7 +85,6 @@ const EMPTY_DRAFT: Draft = {
     maintainers: [],
     signIn: true,
     redirectUris: '',
-    scopes: [],
     firebaseProjectId: '',
     serviceAccount: '',
 };
@@ -225,16 +213,12 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             maintainers: app.maintainers,
             signIn: app.redirectUris.length > 0,
             redirectUris: app.redirectUris.join('\n'),
-            scopes: APP_SCOPES.filter(s => app.scopes.includes(s)),
             firebaseProjectId: app.firebaseProjectId,
             serviceAccount: app.serviceAccount,
         });
         setEditing(app);
         setShowForm(true);
     };
-
-    const toggleScope = (scope: AppScope) =>
-        set('scopes', draft.scopes.includes(scope) ? draft.scopes.filter(s => s !== scope) : [...draft.scopes, scope]);
 
     const addMaintainer = (user: {uid: string; displayName: string; photoURL: string}) => setDraft(prev =>
         prev.maintainers.length >= APP_MAINTAINERS_MAX || prev.maintainers.some(m => m.uid === user.uid) ? prev : {
@@ -266,7 +250,6 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                 name: draft.name.trim(),
                 maintainerUids: draft.maintainers.map(m => m.uid),
                 redirectUris: draft.signIn ? redirectLines(draft.redirectUris) : [],
-                scopes: draft.signIn ? draft.scopes : [],
                 firebaseProjectId: draft.signIn ? draft.firebaseProjectId.trim() : '',
                 serviceAccount: draft.signIn ? draft.serviceAccount.trim() : '',
             };
@@ -495,8 +478,8 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
 
             <p className="admin-helper-text admin-section-mb">
                 {isEnglish
-                    ? 'Apps are our own projects and trusted partners\' systems, like SKBY Manager or a ticket seller. People can sign in to an app with their account here, and its server can hold API keys for the ticket API. Who may do what in the app, and its own data, are up to its maintainers.'
-                    : '应用是我们自己的项目或可信合作方的系统（例如 SKBY Manager 或售票应用）。用户可以用本站账号登录应用，其服务器也可持有门票 API 的密钥。应用内谁能做什么、以及应用自己的数据，都由应用的维护者决定。'}
+                    ? 'Apps are our own projects and trusted partners\' systems, like SKBY Manager or a ticket seller. People can sign in to an app with their account here, which tells it who they are. Its server can hold API keys that read events, the team and event staff, and sell tickets, as far as each key\'s scopes go. Who may do what in the app, and who there sees what, is up to its maintainers.'
+                    : '应用是我们自己的项目或可信合作方的系统（例如 SKBY Manager 或售票应用）。用户可以用本站账号登录应用，让应用知道他们是谁。应用的服务器可以持有 API 密钥，在各密钥的权限范围内读取活动、团队和活动工作人员，以及售票。应用内谁能做什么、谁能看到什么，都由应用的维护者决定。'}
             </p>
 
             <div ref={createdRef}/>
@@ -549,7 +532,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                             className="admin-input"
                             value={draft.name}
                             onChange={e => set('name', e.target.value)}
-                            placeholder="SKBY Manager"
+                            placeholder={isEnglish ? 'e.g. SKBY Manager' : '例如：SKBY Manager'}
                             maxLength={60}
                             disabled={saving}
                         />
@@ -589,6 +572,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                 addingLabel={isEnglish ? 'Adding...' : '添加中...'}
                                 noMatchMessage={isEnglish ? 'No matching users.' : '没有匹配的用户。'}
                                 showToast={showToast}
+                                inField
                             />
                         ) : (
                             <span className="admin-helper-text">
@@ -599,8 +583,8 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                         )}
                         <span className="admin-helper-text">
                             {isEnglish
-                                ? `Who looks after it, up to ${APP_MAINTAINERS_MAX}. Shown when people sign in to it. Optional. Whoever registers it shows as its creator separately, so needn't be one.`
-                                : `负责维护该应用的人，最多 ${APP_MAINTAINERS_MAX} 位，登录时会显示。可不填。登记该应用的人会单独显示为创建者，不必同时列为维护者。`}
+                                ? 'Optional. Shown when people sign in to it. Whoever registers it is shown as its creator, so needn\'t be listed here.'
+                                : '可不填。用户登录时会显示。登记该应用的人会显示为创建者，无需在此列出。'}
                         </span>
                     </div>
 
@@ -615,14 +599,14 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                             <strong>{isEnglish ? 'People sign in to it with their account here' : '用户用本站账号登录此应用'}</strong>
                             <span className="admin-helper-text admin-api-key-option-desc">
                                 {isEnglish
-                                    ? 'Leave unticked for a server-only app that only uses API keys.'
-                                    : '如果只是使用 API 密钥的后端服务，请取消勾选。'}
+                                    ? 'Signing in tells the app who someone is: their name, photo, group and title, never their email. Leave it unticked for an app that only uses API keys.'
+                                    : '登录只会告诉应用对方是谁：名称、头像、组别和头衔，不包括邮箱。如果应用只使用 API 密钥，请取消勾选。'}
                             </span>
                         </span>
                     </label>
 
                     {draft.signIn && (
-                        <>
+                        <div className="admin-app-signin-fields">
                             <label className="admin-tickets-template-field">
                                 <span>{isEnglish ? 'Redirect URIs' : '回调地址'}</span>
                                 <textarea
@@ -631,36 +615,15 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                     onChange={e => set('redirectUris', e.target.value)}
                                     placeholder={'https://skby-manager.web.app/\nhttp://127.0.0.1:5000/'}
                                     rows={3}
+                                    spellCheck={false}
                                     disabled={saving}
                                 />
                                 <span className="admin-helper-text">
                                     {isEnglish
-                                        ? 'One per line: where sign-in may hand people back to. https, or http on localhost or 127.0.0.1 for testing. Pages on these sites may also call the API from a browser.'
-                                        : '每行一个：登录后可以返回的地址。须为 https；测试时可用 localhost 或 127.0.0.1 的 http 地址。这些网站上的页面也可以在浏览器中调用 API。'}
+                                        ? 'One per line, where sign-in may hand people back to: https, or http on localhost or 127.0.0.1 for testing. Pages on these sites may also call /v1/me from a browser.'
+                                        : '每行一个，登录后可以返回的地址：须为 https，测试时可用 localhost 或 127.0.0.1 的 http 地址。这些网站上的页面也可以在浏览器中调用 /v1/me。'}
                                 </span>
                             </label>
-
-                            <fieldset className="admin-api-key-fieldset" disabled={saving}>
-                                <legend>{isEnglish ? 'What it may read for the person signed in' : '可为登录者读取的内容'}</legend>
-                                <p className="admin-helper-text">
-                                    {isEnglish
-                                        ? 'Every app gets the person\'s name, photo and group. Never their email.'
-                                        : '每个应用都能获得登录者的名称、头像和组别，但不会获得邮箱。'}
-                                </p>
-                                {APP_SCOPES.map(scope => (
-                                    <label key={scope} className="admin-checkbox-label admin-api-key-option">
-                                        <input type="checkbox" checked={draft.scopes.includes(scope)}
-                                               onChange={() => toggleScope(scope)}/>
-                                        <span>
-                                            <strong>{isEnglish ? APP_SCOPE_LABELS[scope].en : APP_SCOPE_LABELS[scope].zh}</strong>
-                                            {' '}<code className="record-code">{scope}</code>
-                                            <span className="admin-helper-text admin-api-key-option-desc">
-                                                {isEnglish ? APP_SCOPE_LABELS[scope].descEn : APP_SCOPE_LABELS[scope].descZh}
-                                            </span>
-                                        </span>
-                                    </label>
-                                ))}
-                            </fieldset>
 
                             <label className="admin-tickets-template-field">
                                 <span>{isEnglish ? 'Firebase project ID' : 'Firebase 项目 ID'}</span>
@@ -668,9 +631,15 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                     className="admin-input"
                                     value={draft.firebaseProjectId}
                                     onChange={e => set('firebaseProjectId', e.target.value.trim())}
-                                    placeholder="skby-manager"
+                                    placeholder={isEnglish ? 'e.g. skby-manager' : '例如：skby-manager'}
+                                    spellCheck={false}
                                     disabled={saving}
                                 />
+                                <span className="admin-helper-text">
+                                    {isEnglish
+                                        ? 'The app\'s own Firebase project, which people are signed in to.'
+                                        : '应用自己的 Firebase 项目，用户将登录到该项目。'}
+                                </span>
                             </label>
 
                             <label className="admin-tickets-template-field">
@@ -680,15 +649,16 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                     value={draft.serviceAccount}
                                     onChange={e => set('serviceAccount', e.target.value.trim())}
                                     placeholder="firebase-adminsdk-xxxxx@skby-manager.iam.gserviceaccount.com"
+                                    spellCheck={false}
                                     disabled={saving}
                                 />
                                 <span className="admin-helper-text">
                                     {isEnglish
-                                        ? 'A service account of that project, usually its Firebase Admin SDK one. Sign-ins to the app are signed as it.'
-                                        : '该项目的服务账号，通常是其 Firebase Admin SDK 服务账号。应用的登录凭证将以它的身份签名。'}
+                                        ? 'One of that project\'s service accounts, usually its Firebase Admin SDK one. Sign-ins to the app are signed as it.'
+                                        : '该项目的服务账号之一，通常是其 Firebase Admin SDK 服务账号。应用的登录凭证将以它的身份签名。'}
                                 </span>
                             </label>
-                        </>
+                        </div>
                     )}
                 </div>
             </CreateSection>
@@ -752,19 +722,15 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                     </div>
                                 </div>
                                 <div className="admin-api-key-tags">
-                                    {!signInEnabled ? (
+                                    {signInEnabled ? (
+                                        <span className="admin-tickets-tag admin-tickets-tag-used">
+                                            {isEnglish ? 'User sign-in' : '已开启用户登录'}
+                                        </span>
+                                    ) : (
                                         <span className="admin-tickets-tag admin-tickets-tag-unlinked">
                                             {isEnglish ? 'No user sign-in' : '未开启用户登录'}
                                         </span>
-                                    ) : app.scopes.length === 0 ? (
-                                        <span className="admin-tickets-tag admin-tickets-tag-unlinked">
-                                            {isEnglish ? 'Sign-in only' : '仅登录'}
-                                        </span>
-                                    ) : app.scopes.map(scope => (
-                                        <span key={scope} className="admin-tickets-tag admin-tickets-tag-used">
-                                            {isEnglish ? APP_SCOPE_LABELS[scope]?.en ?? scope : APP_SCOPE_LABELS[scope]?.zh ?? scope}
-                                        </span>
-                                    ))}
+                                    )}
                                 </div>
                                 <dl className="admin-app-people">
                                     <div className="admin-app-people-row">

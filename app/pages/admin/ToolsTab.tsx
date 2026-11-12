@@ -44,8 +44,8 @@ const TOOLS: ToolDef[] = [
         id: 'apps',
         title: 'Apps',
         titleCn: '应用',
-        description: 'Register apps people sign in to with their account here, like SKBY Manager, or that call the ticket API from a server with an API key.',
-        descriptionCn: '登记可用本站账号登录的应用（例如 SKBY Manager），或从服务器使用 API 密钥调用门票 API 的应用。',
+        description: 'Register apps, like SKBY Manager or a ticket seller, that sign people in with their account here, or read events, the team and event staff and sell tickets with API keys.',
+        descriptionCn: '登记应用（例如 SKBY Manager 或售票应用）：让用户用本站账号登录，或使用 API 密钥读取活动、团队和活动工作人员以及售票。',
         adminOnly: true,
     },
 ];

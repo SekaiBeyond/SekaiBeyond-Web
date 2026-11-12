@@ -7,22 +7,17 @@ import {
     APP_ID_RE,
     APP_MAINTAINERS_MAX,
     APP_REDIRECT_URIS_MAX,
-    APP_SCOPES,
     appsCol,
-    claimsChange,
     FIREBASE_PROJECT_ID_RE,
     hasSignIn,
-    isAppScope,
     mintAppToken,
     newAppId,
     normalizeRedirectUri,
     readApp,
     type RegisteredApp,
     SERVICE_ACCOUNT_RE,
-    signEveryoneOutOf,
     validateAppId,
 } from "../utils/apps";
-import { staffEventsIn } from "../utils/events";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
 import { recordDoc, recordRef } from "../utils/records";
@@ -31,9 +26,10 @@ import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/valida
 /**
  * Registering apps people sign in to with their accounts here (see
  * utils/apps.ts), and signing them in. Registering is core staff's, as API
- * keys are: an app is the club's arrangement with its maintainers, and only decides
- * what the site tells the app and serves it. What the app does with that, and
- * who may do what in it, is its own business.
+ * keys are: an app is the club's arrangement with its maintainers. Signing in
+ * tells the app who someone is here; what of the site it reads is its keys'
+ * scopes. What the app does with that, and who may do what in it, is its own
+ * business.
  */
 
 const APP_NAME_MAX = 60;
@@ -42,7 +38,6 @@ interface AppInput {
     name: string;
     maintainerUids: string[];
     redirectUris: string[];
-    scopes: (typeof APP_SCOPES)[number][];
     firebaseProjectId: string;
     serviceAccount: string;
 }
@@ -59,7 +54,6 @@ function parseAppInput(raw: unknown): AppInput {
     const maintainerUids = [...new Set(rawMaintainers.map(uid => validateDocId(uid, "maintainerUids")))];
 
     const rawUris = input.redirectUris === undefined ? [] : input.redirectUris;
-    const rawScopes = input.scopes === undefined ? [] : input.scopes;
     const rawProject = input.firebaseProjectId === undefined ? "" : input.firebaseProjectId;
     const rawServiceAccount = input.serviceAccount === undefined ? "" : input.serviceAccount;
 
@@ -76,17 +70,10 @@ function parseAppInput(raw: unknown): AppInput {
         return normalized;
     }))];
 
-    if (!Array.isArray(rawScopes) || !rawScopes.every(isAppScope)) {
-        throw new HttpsError("invalid-argument", `scopes may only name: ${APP_SCOPES.join(", ")}.`);
-    }
-    // In APP_SCOPES order and once each, however they came. None is fine: the
-    // app then gets who someone is and nothing else.
-    const scopes = APP_SCOPES.filter(s => (rawScopes as string[]).includes(s));
-
     // An app that only holds API keys leaves sign-in blank; one that signs
     // people in needs where to hand them back to, its project and its service account.
-    if (redirectUris.length === 0 && scopes.length === 0 && rawProject === "" && rawServiceAccount === "") {
-        return {name, maintainerUids, redirectUris: [], scopes: [], firebaseProjectId: "", serviceAccount: ""};
+    if (redirectUris.length === 0 && rawProject === "" && rawServiceAccount === "") {
+        return {name, maintainerUids, redirectUris: [], firebaseProjectId: "", serviceAccount: ""};
     }
     if (redirectUris.length === 0) {
         throw new HttpsError("invalid-argument",
@@ -102,7 +89,6 @@ function parseAppInput(raw: unknown): AppInput {
         name,
         maintainerUids,
         redirectUris,
-        scopes,
         firebaseProjectId: rawProject,
         serviceAccount: rawServiceAccount,
     };
@@ -203,7 +189,6 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
             creator: app.createdBy ? appPerson(app.createdBy, users, app.createdByName) : null,
             maintainers: app.maintainerUids.map(id => appPerson(id, users)),
             redirectUris: app.redirectUris,
-            scopes: app.scopes,
             firebaseProjectId: app.firebaseProjectId,
             serviceAccount: app.serviceAccount,
             keys: keysByApp.get(app.id) ?? [],
@@ -228,7 +213,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
     const appId = create ? newAppId() : validateAppId(input.appId);
     const fields = parseAppInput(request.data);
 
-    const before = await adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = appsCol().doc(appId);
         const maintainerRefs = fields.maintainerUids.map(id => db.collection("users").doc(id));
         const [snap, maintainers] = await Promise.all([
@@ -246,8 +231,10 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
         if (create) {
             txn.create(ref, {...fields, createdBy: uid, createdByName: callerName, createdAt: now, updatedAt: now});
         } else {
-            // ownerUid: the one maintainer it had before it could have several (see readApp).
-            txn.update(ref, {...fields, ownerUid: FieldValue.delete(), updatedAt: now});
+            // Left over from before (see readApp): ownerUid, the one maintainer
+            // it had before it could have several, and scopes, what it once
+            // read for the person signed in.
+            txn.update(ref, {...fields, ownerUid: FieldValue.delete(), scopes: FieldValue.delete(), updatedAt: now});
         }
         txn.set(recordRef(), recordDoc(create ? "app-create" : "app-update", {
             performedBy: uid,
@@ -255,12 +242,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             appId,
             appName: fields.name,
         }));
-        return readApp(snap);
     });
-    // Its sign-ins carry claims as of when they were made (mintAppToken), so
-    // ones from before now carry the wrong ones. Signed out from the project
-    // they're in, the one before if the app moved.
-    if (before && claimsChange(before, fields)) await signEveryoneOutOf(before);
     return {saved: true, appId};
 });
 
@@ -313,8 +295,8 @@ function redirectFor(app: RegisteredApp, raw: unknown): string {
 }
 
 /**
- * What the sign-in page shows of an app before anyone signs in: its name, the
- * names of its maintainers, and what it will be able to see. Refuses an
+ * What the sign-in page shows of an app before anyone signs in: its name and
+ * the names of its maintainers. Refuses an
  * unknown app, or a place to hand back to that isn't its own, before anyone
  * is asked to sign in.
  */
@@ -326,14 +308,14 @@ export const getAppSignInInfo = onCall({maxInstances: 20}, async (request) => {
     const maintainerNames = app.maintainerUids.map(id => appPerson(id, users))
         .filter(person => !person.deleted && person.name)
         .map(person => person.name);
-    return {name: app.name, maintainerNames, scopes: app.scopes};
+    return {name: app.name, maintainerNames};
 });
 
 /**
  * Signs the caller in to an app: a custom token for its Firebase project (see
  * mintAppToken), and where the sign-in page hands it, with the app's `state`.
  * Any account may sign in to any app: the app decides what that account may do
- * there, and the API what of the site it may see here.
+ * there, and its keys' scopes what of the site it reads.
  */
 export const issueAppToken = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -341,9 +323,6 @@ export const issueAppToken = onCall({maxInstances: 10}, async (request) => {
     const app = await findApp(input.appId);
     const redirectUri = redirectFor(app, input.redirectUri);
     const user = await db.collection("users").doc(uid).get();
-    const token = await mintAppToken(app, uid, {
-        group: normalizeGroup(user.get("group")),
-        eventStaffEvents: staffEventsIn(user),
-    });
+    const token = await mintAppToken(app, uid, normalizeGroup(user.get("group")));
     return {token, redirectUri};
 });

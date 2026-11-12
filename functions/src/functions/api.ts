@@ -2,28 +2,13 @@ import * as crypto from "crypto";
 import { type FunctionsErrorCode, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { DecodedIdToken } from "firebase-admin/auth";
-import { checkApiKeyRateLimit, consumeRateLimit, isStaffOrAbove, normalizeGroup, type UserGroup } from "../utils/auth";
+import { checkApiKeyRateLimit, consumeRateLimit, normalizeGroup, type UserGroup } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol, type ApiScope, hashApiKey, isApiKeyShaped } from "../utils/apiKeys";
-import {
-    APP_ID_RE,
-    appOrigins,
-    type AppScope,
-    hasSignIn,
-    type RegisteredApp,
-    registeredApps,
-    verifyAppIdToken,
-} from "../utils/apps";
+import { APP_ID_RE, appOrigins, hasSignIn, type RegisteredApp, registeredApps, verifyAppIdToken, } from "../utils/apps";
 import { signedInSinceSessionsEnded } from "../utils/sessions";
 import { RESEND_QUEUE_CAP } from "../utils/config";
 import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
-import {
-    eventLocationText,
-    getEventDoc,
-    readConInfo,
-    RESERVED_ID_RE,
-    soonestFirst,
-    staffEventsIn,
-} from "../utils/events";
+import { eventLocationText, getEventDoc, readConInfo, RESERVED_ID_RE, soonestFirst, } from "../utils/events";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
 import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "../utils/quota";
@@ -45,20 +30,22 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
 /**
  * The site's API. Two kinds of caller use it:
  *
- * - A registered app's server, with a key from the Apps tool, so tickets sold
- *   in another app (the Chinese app first) land on the same list, and scan at
- *   the same door, as ours. Documented at https://docs.sekaibeyond.com/en/ticket-api,
- *   with a page per endpoint and per object under
+ * - A registered app's server, with a key from the Apps tool, to read the
+ *   events, the team and events' staff, and so tickets sold in another app
+ *   (the Chinese app first) land on the same list, and scan at the same door,
+ *   as ours. Documented at https://docs.sekaibeyond.com/en/ticket-api, with a
+ *   page per endpoint and per object under
  *   https://docs.sekaibeyond.com/en/api-reference.
  * - A person signed in to a registered app (see utils/apps.ts), with the ID
- *   token of that sign-in, from the app's server or its pages. They're shown
- *   what they may see here, and no more than the app's scopes allow.
+ *   token of that sign-in, from the app's server or its pages, to learn who
+ *   they are here. Nothing else: what of the site an app reads is up to its
+ *   keys' scopes alone.
  *
- *   GET  /api/v1/me                                a person, no scope (more with event-staff:read)
- *   GET  /api/v1/team                              a person, team:read
- *   GET  /api/v1/events                            events:read
- *   GET  /api/v1/events/{eventId}                  events:read
- *   GET  /api/v1/events/{eventId}/staff            a person, event-staff:read
+ *   GET  /api/v1/me                                a person
+ *   GET  /api/v1/team                              a key, team:read
+ *   GET  /api/v1/events                            a key, events:read
+ *   GET  /api/v1/events/{eventId}                  a key, events:read
+ *   GET  /api/v1/events/{eventId}/staff            a key, event-staff:read
  *   POST /api/v1/events/{eventId}/orders           a key, tickets:write
  *   GET  /api/v1/events/{eventId}/orders/{orderId} a key, tickets:read
  *
@@ -66,12 +53,13 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
  * (pastEvents), told apart by `archived`, each with the fields the site reads
  * for it. Archiving keeps an event's ID and moves its attendees along, so an
  * event's URLs, and its orders', outlive the archive. A key is shown every
- * event, free, unpublished and archived ones too: the seller filters. A person
- * is shown the ones they could see on the site.
+ * event, free, unpublished and archived ones too, and the team and any event's
+ * staff, within the events it's held to: its app decides who of its own sees
+ * them.
  *
  * No App Check: the key or the sign-in is the credential. A key is server to
  * server, and must never ship inside an app. A registered app's pages may call
- * from a browser (CORS), with a person's sign-in only.
+ * /v1/me from a browser (CORS), with a person's sign-in.
  */
 
 /** Tickets one order may hold, as one attendee may hold anywhere else. */
@@ -245,20 +233,11 @@ function requireScope(key: ApiKey, scope: ApiScope): void {
     }
 }
 
-/** A scope of the key's, or for a person, of their app's. */
-function requireCallerScope(caller: Caller, scope: AppScope): void {
-    if (caller.kind === "key") {
-        if (!(caller.key.scopes as string[]).includes(scope)) {
-            throw new ApiError(403, "missing-scope", `This API key lacks the ${scope} scope.`);
-        }
-    } else if (!caller.person.app.scopes.includes(scope)) {
-        throw new ApiError(403, "missing-scope", `This app lacks the ${scope} scope.`);
-    }
-}
-
+/** The key calling, for every route but /v1/me: a person's sign-in reads nothing of the site. */
 function requireKey(caller: Caller): ApiKey {
     if (caller.kind !== "key") {
-        throw new ApiError(403, "api-key-required", "Orders need an API key: a person's sign-in can't place or read them.");
+        throw new ApiError(403, "api-key-required",
+            "This needs an API key: a person's sign-in only reaches /v1/me. Call it from the app's server with the app's key.");
     }
     return caller.key;
 }
@@ -269,20 +248,6 @@ function requirePerson(caller: Caller): Person {
             "This is about a person: call it with their sign-in to a registered app, not an API key.");
     }
     return caller.person;
-}
-
-/**
- * Whether the caller may see an event: a key every one, a person the ones the
- * site would show them (firestore.rules): every archived one, and an
- * unarchived one once it's published, or before that to staff and its own
- * event staff.
- */
-function canSee(caller: Caller, snap: FirebaseFirestore.DocumentSnapshot, archived: boolean): boolean {
-    if (caller.kind === "key" || archived) return true;
-    const {person} = caller;
-    return snap.get("published") === true
-        || isStaffOrAbove(person.user.get("group"))
-        || staffEventsIn(person.user).includes(snap.id);
 }
 
 function requireEventAccess(key: ApiKey, eventId: string): void {
@@ -455,21 +420,18 @@ async function heldEvents(eventIds: string[]): Promise<[Snapshot[], Snapshot[]]>
 }
 
 /**
- * Every event the caller may see (canSee), in the site's own order: unarchived
- * soonest first, then archived latest first. Like the site's lists, an event
- * missing its sort field isn't one.
+ * Every event the key may use, in the site's own order: unarchived soonest
+ * first, then archived latest first. Like the site's lists, an event missing
+ * its sort field isn't one.
  */
-async function listEvents(caller: Caller): Promise<ApiReply> {
-    requireCallerScope(caller, "events:read");
-    const held = caller.kind === "key" ? caller.key.eventIds : [];
-    const [allUpcoming, allPast] = held.length > 0
-        ? await heldEvents(held)
+async function listEvents(key: ApiKey): Promise<ApiReply> {
+    requireScope(key, "events:read");
+    const [upcoming, past] = key.eventIds.length > 0
+        ? await heldEvents(key.eventIds)
         : await Promise.all([
             db.collection("upcomingEvents").orderBy("startAt", "asc").get().then(snap => snap.docs),
             db.collection("pastEvents").orderBy("date", "desc").get().then(snap => snap.docs),
         ]);
-    const upcoming = allUpcoming.filter(snap => canSee(caller, snap, false));
-    const past = allPast.filter(snap => canSee(caller, snap, true));
     const venues = await venuesOf([...upcoming, ...past]);
     const events = [
         ...upcoming.map(snap => eventJson({archived: false, snap}, venues)),
@@ -478,12 +440,10 @@ async function listEvents(caller: Caller): Promise<ApiReply> {
     return {status: 200, body: {events}};
 }
 
-async function getEvent(caller: Caller, eventId: string): Promise<ApiReply> {
-    requireCallerScope(caller, "events:read");
-    if (caller.kind === "key") requireEventAccess(caller.key, eventId);
+async function getEvent(key: ApiKey, eventId: string): Promise<ApiReply> {
+    requireScope(key, "events:read");
+    requireEventAccess(key, eventId);
     const event = await findEvent(eventId);
-    // As if it weren't there, as the site has it for them.
-    if (!canSee(caller, event.snap, event.archived)) throw new ApiError(404, "event-not-found", "Event not found.");
     return {status: 200, body: eventJson(event, await venuesOf([event.snap]))};
 }
 
@@ -522,41 +482,26 @@ function byGroupThenName(a: PersonJson, b: PersonJson): number {
     return rank(a) - rank(b) || a.displayName.localeCompare(b.displayName) || (a.uid < b.uid ? -1 : 1);
 }
 
-/**
- * The person calling, as they are now, which their sign-in's claims may lag
- * (mintAppToken). With event-staff:read, it adds every event they're event
- * staff for, archived ones too: kept out of personJson, as /team and an
- * event's staff must never show that of anyone.
- */
+/** The person calling, as they are now, which their sign-in's claims may lag (mintAppToken). */
 function getMe(caller: Caller): ApiReply {
-    const person = requirePerson(caller);
-    const me = personJson(person.user);
-    if (!person.app.scopes.includes("event-staff:read")) return {status: 200, body: me};
-    return {status: 200, body: {...me, eventStaffEvents: staffEventsIn(person.user)}};
+    return {status: 200, body: personJson(requirePerson(caller).user)};
 }
 
-/** Staff and above, as the admin panel lists them: only to a person who's staff here. */
-async function listTeam(caller: Caller): Promise<ApiReply> {
-    const person = requirePerson(caller);
-    requireCallerScope(caller, "team:read");
-    if (!isStaffOrAbove(person.user.get("group"))) {
-        throw new ApiError(403, "not-allowed", "Only staff can see the team.");
-    }
+/** Staff and above, as the admin panel lists them. */
+async function listTeam(key: ApiKey): Promise<ApiReply> {
+    requireScope(key, "team:read");
     const snap = await db.collection("users").where("group", "in", TEAM_GROUPS).select(...PERSON_FIELDS).get();
     return {status: 200, body: {people: snap.docs.map(personJson).sort(byGroupThenName)}};
 }
 
 /**
- * An event's staff, to staff here and to that event's own staff, as the admin
- * panel shows them. Asked before the event is looked up, so no one else can
+ * An event's staff, as the admin panel shows them, to a key held to it or to
+ * none. Asked before the event is looked up, so a key held to others can't
  * tell which events exist. Kept on archive, like the event's ID.
  */
-async function listEventStaff(caller: Caller, eventId: string): Promise<ApiReply> {
-    const person = requirePerson(caller);
-    requireCallerScope(caller, "event-staff:read");
-    if (!isStaffOrAbove(person.user.get("group")) && !staffEventsIn(person.user).includes(eventId)) {
-        throw new ApiError(403, "not-allowed", "Only staff and this event's own staff can see its staff.");
-    }
+async function listEventStaff(key: ApiKey, eventId: string): Promise<ApiReply> {
+    requireScope(key, "event-staff:read");
+    requireEventAccess(key, eventId);
     await findEvent(eventId);
     const snap = await db.collection("users")
         .where("eventStaffEvents", "array-contains", eventId)
@@ -977,10 +922,10 @@ export const api = onRequest({
     try {
         caller = await authenticate(req.get("Authorization"));
         const reply = route.kind === "me" ? getMe(caller)
-            : route.kind === "team" ? await listTeam(caller)
-                : route.kind === "events" ? await listEvents(caller)
-                    : route.kind === "event" ? await getEvent(caller, route.eventId)
-                        : route.kind === "event-staff" ? await listEventStaff(caller, route.eventId)
+            : route.kind === "team" ? await listTeam(requireKey(caller))
+                : route.kind === "events" ? await listEvents(requireKey(caller))
+                    : route.kind === "event" ? await getEvent(requireKey(caller), route.eventId)
+                        : route.kind === "event-staff" ? await listEventStaff(requireKey(caller), route.eventId)
                             : route.kind === "orders" ? await createOrder(requireKey(caller), route.eventId, req.body)
                                 : await getOrder(requireKey(caller), route.eventId, route.orderId);
         send(reply.status, reply.body);
