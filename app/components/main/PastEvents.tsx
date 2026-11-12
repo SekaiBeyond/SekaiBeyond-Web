@@ -4,7 +4,7 @@ import { EventImageModal } from "~/components/EventImageModal";
 import { usePastEvents } from "~/lib/pastEvents";
 import { useTags } from "~/lib/tags";
 import { eventLocationDisplay, useVenues } from "~/lib/venues";
-import { localized } from "~/lib/localized";
+import { eitherLanguage, localized } from "~/lib/localized";
 
 export const PastEvents = () => {
     const {isEnglish} = useLanguage();
@@ -95,9 +95,7 @@ export const PastEvents = () => {
                                         {localized(isEnglish, event.description, event.descriptionCn)}
                                     </p>
                                     {(() => {
-                                        const recapHref = isEnglish
-                                            ? (event.recapLink || event.recapLinkCn)
-                                            : (event.recapLinkCn || event.recapLink);
+                                        const recapHref = eitherLanguage(isEnglish, event.recapLink, event.recapLinkCn);
                                         return recapHref ? (
                                             <a
                                                 className="event-recap-link"

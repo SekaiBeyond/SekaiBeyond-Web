@@ -1,3 +1,4 @@
+import { eitherLanguage } from '~/lib/localized';
 import type { Tag } from '~/lib/tags';
 
 interface TagMultiSelectProps {
@@ -35,7 +36,7 @@ export const TagMultiSelect = ({tags, selected, onChange, isEnglish}: TagMultiSe
                                 onClick={() => toggle(t.id)}
                                 aria-pressed={active}
                             >
-                                {isEnglish ? (t.name || t.nameCn) : (t.nameCn || t.name)}
+                                {eitherLanguage(isEnglish, t.name, t.nameCn)}
                             </button>
                         );
                     })}

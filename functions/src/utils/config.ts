@@ -38,7 +38,7 @@ function envCount(name: string, fallback: number): number {
 // Held back from ticket and passport mail, so a big send can't stop someone
 // getting a sign-up code: a code can't wait out the overflow queue. At most half
 // the cap, so a small cap isn't all reserve.
-export const ACCOUNT_MAIL_RESERVE = Math.min(envCount("ACCOUNT_MAIL_RESERVE", 20), Math.floor(RESEND_DAILY_CAP / 2));
+const ACCOUNT_MAIL_RESERVE = Math.min(envCount("ACCOUNT_MAIL_RESERVE", 20), Math.floor(RESEND_DAILY_CAP / 2));
 // What ticket and passport mail may use. Account mail may use all of RESEND_DAILY_CAP.
 export const BULK_MAIL_CAP = RESEND_DAILY_CAP - ACCOUNT_MAIL_RESERVE;
 // Held back from code emails for the notices that tell an account what just

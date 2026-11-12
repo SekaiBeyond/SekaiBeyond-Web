@@ -30,7 +30,7 @@ const hashCode = (email: string, code: string): string =>
     createHmac("sha256", accountPepper()).update(`${email}|${code}`).digest("hex");
 
 /** A code just issued, and the doc it replaced, if any, for withdrawEmailCode to put back. */
-export interface IssuedCode {
+interface IssuedCode {
     code: string;
     previous: FirebaseFirestore.DocumentData | null;
 }

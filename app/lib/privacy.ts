@@ -4,19 +4,16 @@
  */
 const PROFILE_SECTIONS = ['badges', 'events', 'passports'] as const;
 
-export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
+type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 
 export type ProfileVisibility = Record<ProfileSection, boolean>;
 
 export type PrivacyKey = 'passportPage' | ProfileSection;
 
+/** The stored map, with anything unset visible: only an explicit `false` hides a section. */
 export const readVisibility = (raw: unknown): ProfileVisibility => {
     const stored = (raw ?? {}) as Record<string, unknown>;
-    return {
-        badges: stored.badges !== false,
-        events: stored.events !== false,
-        passports: stored.passports !== false,
-    };
+    return Object.fromEntries(PROFILE_SECTIONS.map(section => [section, stored[section] !== false])) as ProfileVisibility;
 };
 
 interface PrivacyRow {

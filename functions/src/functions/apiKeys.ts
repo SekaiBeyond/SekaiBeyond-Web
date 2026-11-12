@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
-import { APP_ID_RE, appsCol, readApp } from "../utils/apps";
+import { appsCol, readApp, validateAppId } from "../utils/apps";
 import { getEventDoc } from "../utils/events";
 import { recordDoc, recordRef } from "../utils/records";
 import { sanitizeDisplayText, validateDocId, validateStr, validateStringArray } from "../utils/validation";
@@ -42,10 +42,7 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
         eventIds?: unknown;
         expiresInDays?: unknown;
     };
-    if (typeof input.appId !== "string" || !APP_ID_RE.test(input.appId)) {
-        throw new HttpsError("invalid-argument", "appId must be 1–32 lowercase letters, digits and -.");
-    }
-    const appId = input.appId;
+    const appId = validateAppId(input.appId);
     const name = sanitizeDisplayText(validateStr(input.name, "name", API_KEY_NAME_MAX, true));
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
     if (!Array.isArray(input.scopes) || input.scopes.length === 0 || !input.scopes.every(isApiScope)) {

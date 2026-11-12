@@ -25,12 +25,20 @@ import {
     staffEventsIn,
 } from "../utils/events";
 import { db } from "../utils/firebase";
+import { isoOrNull } from "../utils/helpers";
 import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "../utils/quota";
 import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, ResendSendError, sendEmails } from "../utils/resendClient";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
 import { walletPassesOnFor } from "../utils/walletPass";
-import { apiOrderAttendeeId, buildFreshTickets, isApiOrder, type NewTicket, ticketClaimUrl } from "../utils/tickets";
+import {
+    apiOrderAttendeeId,
+    buildFreshTickets,
+    isApiOrder,
+    type NewTicket,
+    SELLABLE_TICKET_TYPES,
+    ticketClaimUrl,
+} from "../utils/tickets";
 import { sanitizeDisplayText, validateOptionalEmail, validateStr } from "../utils/validation";
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 
@@ -65,9 +73,6 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
  * server, and must never ship inside an app. A registered app's pages may call
  * from a browser (CORS), with a person's sign-in only.
  */
-
-/** The types a seller may sell. Comp, guest and vendor tickets are given out by staff, never bought. */
-const SELLABLE_TICKET_TYPES = ["normal", "early-bird", "student", "early-bird-student", "vip"];
 
 /** Tickets one order may hold, as one attendee may hold anywhere else. */
 const ORDER_TICKETS_MAX = 50;
@@ -286,7 +291,6 @@ function requireEventAccess(key: ApiKey, eventId: string): void {
     }
 }
 
-const iso = (t: unknown): string | null => t instanceof Timestamp ? t.toDate().toISOString() : null;
 const str = (v: unknown): string => typeof v === "string" ? v : "";
 
 /** An event's doc, from whichever collection holds it. */
@@ -362,13 +366,13 @@ function eventJson(event: FoundEvent, venues: Venues) {
             recapLinkCn: str(data.recapLinkCn),
             published: data.published === true,
             paid: data.paid === true,
-            deleteAt: iso(data.deleteAt),
+            deleteAt: isoOrNull(data.deleteAt),
         };
     }
     return {
         ...shared,
-        startAt: iso(data.startAt),
-        endAt: iso(data.endAt),
+        startAt: isoOrNull(data.startAt),
+        endAt: isoOrNull(data.endAt),
         poster: str(data.poster),
         posterCredit: str(data.posterCredit),
         emailHeaderBg: str(data.emailHeaderBg),
@@ -379,7 +383,7 @@ function eventJson(event: FoundEvent, venues: Venues) {
         customButtonLink: str(data.customButtonLink),
         published: data.published === true,
         paid: data.paid === true,
-        deleteAt: iso(data.deleteAt),
+        deleteAt: isoOrNull(data.deleteAt),
     };
 }
 
@@ -410,8 +414,8 @@ function orderJson(eventId: string, data: FirebaseFirestore.DocumentData) {
     return {
         orderId: str(data.apiOrderId),
         eventId,
-        createdAt: iso(data.createdAt),
-        updatedAt: iso(data.updatedAt),
+        createdAt: isoOrNull(data.createdAt),
+        updatedAt: isoOrNull(data.updatedAt),
         buyer: {name: str(data.name), email: str(data.email)},
         emailStatus: emailStatus(data),
         ticketCount: tickets.length,
@@ -420,9 +424,9 @@ function orderJson(eventId: string, data: FirebaseFirestore.DocumentData) {
             type: t.type ?? "normal",
             qr: ticketClaimUrl(t.ticketId ?? "", eventId),
             status: ticketStatus(t),
-            createdAt: iso(t.createdAt),
+            createdAt: isoOrNull(t.createdAt),
             redeemed: t.redeemed === true,
-            redeemedAt: iso(t.redeemedAt),
+            redeemedAt: isoOrNull(t.redeemedAt),
             voided: t.voided === true,
         })),
     };

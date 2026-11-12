@@ -18,9 +18,11 @@ import {
     type RegisteredApp,
     SERVICE_ACCOUNT_RE,
     signEveryoneOutOf,
+    validateAppId,
 } from "../utils/apps";
 import { staffEventsIn } from "../utils/events";
 import { db } from "../utils/firebase";
+import { isoOrNull } from "../utils/helpers";
 import { recordDoc, recordRef } from "../utils/records";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
 
@@ -33,8 +35,6 @@ import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/valida
  */
 
 const APP_NAME_MAX = 60;
-
-const isoOrNull = (t: unknown) => t instanceof Timestamp ? t.toDate().toISOString() : null;
 
 interface AppInput {
     name: string;
@@ -100,13 +100,6 @@ function parseAppInput(raw: unknown): AppInput {
         firebaseProjectId: rawProject,
         serviceAccount: rawServiceAccount,
     };
-}
-
-function validateAppId(raw: unknown): string {
-    if (typeof raw !== "string" || !APP_ID_RE.test(raw)) {
-        throw new HttpsError("invalid-argument", "appId must be 1–32 lowercase letters, digits and -.");
-    }
-    return raw;
 }
 
 let signer: Promise<string> | null = null;

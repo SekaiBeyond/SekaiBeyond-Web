@@ -14,7 +14,7 @@ import {
     subjectLine,
 } from "../utils/emailTemplate";
 import { db } from "../utils/firebase";
-import { commitInChunks } from "../utils/helpers";
+import { type BatchOp, commitInChunks } from "../utils/helpers";
 import {
     ACTIVATE_URL_PLACEHOLDER,
     ACTIVATION_CODE_PLACEHOLDER,
@@ -23,7 +23,9 @@ import {
     type MintingDesign,
     mintPassport,
     passportNoteRef,
+    PASSPORTS,
     readMintingDesign,
+    SECRETS,
     validatePassportNote,
 } from "../utils/passports";
 import {
@@ -167,7 +169,7 @@ export const emailPassports = onCall(
         });
         const deferred = recipients.slice(sendCount + queueCount);
 
-        const ops: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
+        const ops: BatchOp[] = [];
         const outgoing: {email: string; passportId: string; envelope: ResendEnvelope}[] = [];
         const seen = new Set<string>();
         const by = {uid, name: performedByName};
@@ -197,7 +199,7 @@ export const emailPassports = onCall(
                     queuedBy: uid,
                     queuedAt: FieldValue.serverTimestamp(),
                     recipientCount: 1,
-                    targetPath: `passports/${passportId}`,
+                    targetPath: `${PASSPORTS}/${passportId}`,
                 }));
             } else {
                 outgoing.push({
@@ -238,8 +240,8 @@ export const emailPassports = onCall(
         if (unsent.length > 0) {
             try {
                 await commitInChunks(unsent.map(({passportId}) => (batch) => {
-                    batch.delete(db.collection("passports").doc(passportId));
-                    batch.delete(db.collection("passportSecrets").doc(passportId));
+                    batch.delete(db.collection(PASSPORTS).doc(passportId));
+                    batch.delete(db.collection(SECRETS).doc(passportId));
                     batch.delete(passportNoteRef(passportId));
                 }));
             } catch (err) {

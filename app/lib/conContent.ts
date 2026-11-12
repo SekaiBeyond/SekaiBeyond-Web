@@ -13,7 +13,7 @@ import type { Localized } from '~/pages/convention/i18n';
 
 export const CON_NAME: Localized = {en: 'Sekai Beyond Con', zh: '彼世界动漫游戏展'};
 
-export interface NavLink {
+interface NavLink {
     id: string
     label: Localized
 }
@@ -48,7 +48,7 @@ interface ConHeroVideo {
     webm: string;
 }
 
-export interface Room {
+interface Room {
     id: string
     name: Localized
     accent: RoomAccent
@@ -67,7 +67,7 @@ export interface Maid {
     poster: string
 }
 
-export interface MaidCafe {
+interface MaidCafe {
     theme: Localized
     intro: Localized
     location: Localized
@@ -120,7 +120,7 @@ export interface InPersonSession {
     end: string
 }
 
-export interface InPersonSales {
+interface InPersonSales {
     location: Localized
     note: Localized
     sessions: InPersonSession[]

@@ -91,9 +91,12 @@ export async function saveUpload(path: string, buffer: Buffer, contentType: stri
 
 // Download URLs are Firebase Storage's, or under the emulators the Storage
 // emulator's, which it serves over plain http.
-export const STORAGE_HOST = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? "firebasestorage.googleapis.com";
+const STORAGE_HOST = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? "firebasestorage.googleapis.com";
 export const STORAGE_ORIGIN = `${process.env.FIREBASE_STORAGE_EMULATOR_HOST ? "http" : "https"}://${STORAGE_HOST}`;
 const STORAGE_PATH_RE = new RegExp(`${STORAGE_HOST.replace(/\./g, "\\.")}/v0/b/[^/]+/o/([^?]+)`);
+
+/** Whether `url` is a file uploaded to Storage, rather than, say, a Google photo. */
+export const isStorageUrl = (url: unknown): boolean => typeof url === "string" && url.includes(STORAGE_HOST);
 
 function extractStoragePath(downloadUrl: string): string | null {
     const match = downloadUrl.match(STORAGE_PATH_RE);

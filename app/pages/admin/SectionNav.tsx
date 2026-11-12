@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { useDismiss } from '~/lib/useDismiss';
 
 interface NavSection {
     /** The DOM id of the element the section starts at. */
@@ -97,24 +98,7 @@ export const SectionNav = ({sections}: SectionNavProps) => {
         if (settleTimer.current) clearTimeout(settleTimer.current);
     }, []);
 
-    // While open: close on outside click / Escape.
-    useEffect(() => {
-        if (!menuOpen) return;
-        const onDown = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setMenuOpen(false);
-            }
-        };
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setMenuOpen(false);
-        };
-        document.addEventListener('mousedown', onDown);
-        document.addEventListener('keydown', onKey);
-        return () => {
-            document.removeEventListener('mousedown', onDown);
-            document.removeEventListener('keydown', onKey);
-        };
-    }, [menuOpen]);
+    useDismiss(menuOpen, containerRef, () => setMenuOpen(false));
 
     if (sections.length < 2) return null;
 

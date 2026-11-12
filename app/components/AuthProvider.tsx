@@ -17,6 +17,7 @@ import {
     signOut as firebaseSignOut
 } from '~/lib/firebase';
 import { toDate } from '~/lib/collectionCache';
+import { eitherLanguage } from '~/lib/localized';
 import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
 import { openSignInModal } from '~/lib/signInModal';
 import { currentSessionId, sessionEnded, signInMovedOn, watchOwnSession } from '~/lib/sessions';
@@ -72,7 +73,7 @@ export function formatGroupWithTitle(
     isEnglish: boolean,
 ): string {
     const label = isEnglish ? GROUP_LABELS[group].en : GROUP_LABELS[group].zh;
-    const resolved = (isEnglish ? title || titleCn : titleCn || title)?.trim();
+    const resolved = eitherLanguage(isEnglish, title, titleCn).trim();
     return resolved ? `${label} - ${resolved}` : label;
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { useDismiss } from '~/lib/useDismiss';
 import {
     createMap,
     type MapLibreMap,
@@ -44,24 +45,7 @@ const LocationSearch = ({items, onPick, isEnglish}: LocationSearchProps) => {
     const [query, setQuery] = useState('');
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // While open: close on outside click / Escape.
-    useEffect(() => {
-        if (!open) return;
-        const onDown = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
-        };
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setOpen(false);
-        };
-        document.addEventListener('mousedown', onDown);
-        document.addEventListener('keydown', onKey);
-        return () => {
-            document.removeEventListener('mousedown', onDown);
-            document.removeEventListener('keydown', onKey);
-        };
-    }, [open]);
+    useDismiss(open, containerRef, () => setOpen(false));
 
     const q = query.trim().toLowerCase();
     const results = q ? items.filter(i => i.name.toLowerCase().includes(q)) : items;

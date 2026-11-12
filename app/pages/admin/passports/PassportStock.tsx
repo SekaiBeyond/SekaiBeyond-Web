@@ -10,7 +10,7 @@ import {
     type PassportStatus,
     passportStatusLabel,
 } from '~/lib/passports';
-import { downloadBlob } from '~/lib/zip';
+import { downloadBlob } from '~/lib/download';
 import { fetchUsersByUids, type ShowToast } from '../utils';
 import type { UserRecord } from '../types';
 import { buildPassportCsv, buildPassportIdCsv, usePassportPngExport } from './passportExport';

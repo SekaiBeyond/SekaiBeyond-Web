@@ -31,8 +31,9 @@ import { deletionPending } from "../utils/deletion";
 import { deleteFromApps, signOutOfApps } from "../utils/apps";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
+import { isoOrNull } from "../utils/helpers";
 import { pastEventIds, shelfPassports, toStringIds } from "../utils/publicProfile";
-import { decodeUpload, detectImageMime, MAX_UPLOAD_SIZE_MB, saveUpload, STORAGE_HOST } from "../utils/storage";
+import { decodeUpload, detectImageMime, isStorageUrl, MAX_UPLOAD_SIZE_MB, saveUpload } from "../utils/storage";
 import { sanitizeDisplayText, validateBoolean, validateDocId, validateInstant } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
@@ -63,7 +64,7 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     if (showBadges) {
         const rawEarnedAt = (data.badgeEarnedAt ?? {}) as Record<string, Timestamp>;
         for (const [k, v] of Object.entries(rawEarnedAt)) {
-            const iso = v?.toDate?.()?.toISOString();
+            const iso = isoOrNull(v);
             if (iso) badgeEarnedAt[k] = iso;
         }
     }
@@ -81,7 +82,7 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         displayName: data.displayName ?? "",
         photoURL: data.photoURL ?? "",
         bannerURL: data.bannerURL ?? "",
-        joinedAt: data.joinedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
+        joinedAt: isoOrNull(data.joinedAt) ?? new Date().toISOString(),
         attendedEvents: showEvents ? (data.attendedEvents ?? []) : [],
         eventStaffEvents,
         badges: showBadges ? (data.badges ?? []) : [],
@@ -293,9 +294,7 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
 
     // Without a membership you can't upload an avatar, but may remove one an
     // admin gave you.
-    const hasUploadedAvatar = typeof targetData.photoURL === "string"
-        && targetData.photoURL.includes(STORAGE_HOST);
-    if (isSelf && !canSetOwnImages(targetData) && !hasUploadedAvatar) {
+    if (isSelf && !canSetOwnImages(targetData) && !isStorageUrl(targetData.photoURL)) {
         throw new HttpsError("permission-denied", "An active membership is required to delete an avatar.");
     }
 
@@ -499,12 +498,12 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
             targetName: targetData.displayName ?? "",
-            oldExpiresAt: oldExpiry?.toDate?.()?.toISOString() ?? "",
-            newExpiresAt: newExpiry?.toDate?.()?.toISOString() ?? "",
+            oldExpiresAt: isoOrNull(oldExpiry) ?? "",
+            newExpiresAt: isoOrNull(newExpiry) ?? "",
             extendDays: hasExtendDays ? extendDays : null,
         }));
 
-        return {membershipExpiresAt: newExpiry?.toDate?.()?.toISOString() ?? null};
+        return {membershipExpiresAt: isoOrNull(newExpiry)};
     });
 });
 export const setUserTitle = onCall({maxInstances: 10}, async (request) => {

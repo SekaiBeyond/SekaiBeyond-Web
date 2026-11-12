@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callClaimEventCode, callRedeemTicket, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
-import { localized } from '~/lib/localized';
+import { eitherLanguage, localized } from '~/lib/localized';
 import { anonymousAttendeeName } from './admin/tickets/types';
 
 type ClaimState =
@@ -290,9 +290,7 @@ export const ClaimPage = () => {
                         </h2>
                         {eventInfo && (eventInfo.eventTitle || eventInfo.eventTitleCn) && (
                             <p className="claim-event-title">
-                                {isEnglish
-                                    ? (eventInfo.eventTitle || eventInfo.eventTitleCn)
-                                    : (eventInfo.eventTitleCn || eventInfo.eventTitle)}
+                                {eitherLanguage(isEnglish, eventInfo.eventTitle, eventInfo.eventTitleCn)}
                             </p>
                         )}
                     </>

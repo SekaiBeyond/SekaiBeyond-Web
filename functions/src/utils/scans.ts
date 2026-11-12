@@ -119,7 +119,7 @@ export async function recordScan(
         platform,
         expiresAt: scanExpiresAt(),
     });
-    // In the same commit. Two windows' grace on the TTL, like checkRateLimit.
+    // In the same commit. Two windows' grace on the TTL, like chargeRateLimit.
     batch.set(quotaRef, {
         count: FieldValue.increment(1),
         expiresAt: Timestamp.fromMillis(Date.now() + SCAN_QUOTA_WINDOW_MS * 2),

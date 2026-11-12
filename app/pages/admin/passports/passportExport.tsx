@@ -1,7 +1,8 @@
 import { type ReactNode } from 'react';
 import { buildCsv } from '~/lib/csv';
 import { passportScanUrl } from '~/lib/passports';
-import { buildZip, downloadBlob, type ZipEntry } from '~/lib/zip';
+import { downloadBlob } from '~/lib/download';
+import { buildZip, type ZipEntry } from '~/lib/zip';
 import { canvasToPng, useQrCanvasBatch } from '../tools/qr/qrExport';
 
 /**

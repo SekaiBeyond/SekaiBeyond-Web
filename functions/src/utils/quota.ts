@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { BULK_MAIL_CAP, RESEND_DAILY_CAP } from "./config";
 import { db } from "./firebase";
+import { isoOrNull } from "./helpers";
 
 // The quota cache (system/resendQuota), as two counters.
 //
@@ -54,7 +55,7 @@ export async function computeEmailQuotaDetail(): Promise<{
         dailyCap: RESEND_DAILY_CAP,
         confirmed,
         reserved,
-        observedAt: data?.observedAt?.toDate?.()?.toISOString?.() ?? null,
+        observedAt: isoOrNull(data?.observedAt),
     };
 }
 

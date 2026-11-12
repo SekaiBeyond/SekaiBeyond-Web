@@ -61,7 +61,7 @@ function countRecipientsOf(email: ListedEmail): number {
 // Null means unknown, never zero: the emulator, which never reaches Resend
 // whatever key functions/.secret.local gives it; no API key bound; the request
 // failed; or the key can't list emails (a sending-only key gets 401/403).
-export async function fetchProviderUsage(): Promise<ProviderUsage | null> {
+async function fetchProviderUsage(): Promise<ProviderUsage | null> {
     if (process.env.FUNCTIONS_EMULATOR === "true") return null;
 
     const apiKey = RESEND_API_KEY.value();

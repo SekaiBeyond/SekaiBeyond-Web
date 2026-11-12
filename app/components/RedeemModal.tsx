@@ -6,7 +6,7 @@ import { callRedeemCode, functionsErrorCode, functionsErrorDetails } from '~/lib
 import { formatSiteTime } from '~/lib/siteTime';
 import type { BadgeDef } from '~/lib/badges';
 import { useModalEffects } from '~/lib/useModalEffects';
-import { localized } from '~/lib/localized';
+import { eitherLanguage, localized } from '~/lib/localized';
 
 const OPEN_EVENT = 'open-redeem-modal';
 const PASSPORT_CLAIMED_EVENT = 'passport-claimed';
@@ -372,9 +372,7 @@ export const RedeemModal = () => {
                         </h2>
                         {eventInfo && (eventInfo.eventTitle || eventInfo.eventTitleCn) && (
                             <p className="claim-event-title redeem-centered-text">
-                                {isEnglish
-                                    ? (eventInfo.eventTitle || eventInfo.eventTitleCn)
-                                    : (eventInfo.eventTitleCn || eventInfo.eventTitle)}
+                                {eitherLanguage(isEnglish, eventInfo.eventTitle, eventInfo.eventTitleCn)}
                             </p>
                         )}
                         <button className="admin-btn admin-btn--dashed redeem-done-btn" onClick={close}>

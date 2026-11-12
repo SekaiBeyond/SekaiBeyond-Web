@@ -4,7 +4,7 @@
 
 /** WalletWallet's free colour presets. */
 export const WALLET_COLORS = ['dark', 'blue', 'green', 'red', 'purple', 'orange'] as const;
-export type WalletColor = typeof WALLET_COLORS[number];
+type WalletColor = typeof WALLET_COLORS[number];
 
 /** Lines an event can add to the back of its passes (WALLET_PASS_MAX_NOTES). */
 export const WALLET_PASS_MAX_NOTES = 4;
@@ -12,7 +12,7 @@ export const WALLET_PASS_MAX_NOTES = 4;
 /** The text top-left of every pass, for now in place of the event's headerText (WALLET_PASS_TOP_TEXT). */
 export const WALLET_PASS_TOP_TEXT = 'Sekai Beyond';
 
-export interface WalletPassNote {
+interface WalletPassNote {
     label: string;
     value: string;
 }

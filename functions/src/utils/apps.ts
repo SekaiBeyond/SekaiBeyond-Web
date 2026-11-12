@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from "node:timers/promises";
+import { HttpsError } from "firebase-functions/v2/https";
 import { type App, initializeApp } from "firebase-admin/app";
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
 import { Timestamp } from "firebase-admin/firestore";
@@ -38,6 +40,14 @@ export function isAppScope(raw: unknown): raw is AppScope {
 /** An app's ID: what it signs people in with (/authorize?app=…), and its doc's name. */
 export const APP_ID_RE = /^[a-z0-9-]{1,32}$/;
 
+/** An app's ID from a request, refused unless it's one an app can have. */
+export function validateAppId(raw: unknown): string {
+    if (typeof raw !== "string" || !APP_ID_RE.test(raw)) {
+        throw new HttpsError("invalid-argument", "appId must be 1–32 lowercase letters, digits and -.");
+    }
+    return raw;
+}
+
 /** A Google Cloud project ID, the emulator's demo- ones included. */
 export const FIREBASE_PROJECT_ID_RE = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/;
 
@@ -65,7 +75,7 @@ export function normalizeRedirectUri(raw: unknown): string | null {
 }
 
 /** An `apps` doc. Server only (see firestore.rules). */
-export interface AppDoc {
+interface AppDoc {
     name: string;
     /** The account that looks after it, "" for none. Shown on its sign-in page. */
     ownerUid: string;
@@ -258,7 +268,7 @@ async function withRetries<T>(call: () => Promise<T>): Promise<T> {
             return await call();
         } catch (err) {
             if (attempt >= RETRY_DELAYS_MS.length || !mayPassOnRetry(err)) throw err;
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+            await sleep(RETRY_DELAYS_MS[attempt]);
         }
     }
 }

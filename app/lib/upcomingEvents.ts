@@ -135,14 +135,13 @@ export function useUpcomingEventsByIds(ids: string[]): {
         }
     }, []);
 
+    // idsKey stands in for `ids`, whose identity can change every render.
     useEffect(() => {
         fetchById(ids);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idsKey]);
 
     const refresh = useCallback(async () => {
         await fetchById(ids);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idsKey]);
 
     return {upcomingEvents, loading, refresh};

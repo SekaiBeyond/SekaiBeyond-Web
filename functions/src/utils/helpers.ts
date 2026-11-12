@@ -1,5 +1,6 @@
 import * as crypto from "crypto";
 import { HttpsError } from "firebase-functions/v2/https";
+import { Timestamp } from "firebase-admin/firestore";
 import { BATCH_LIMIT } from "./config";
 import { db } from "./firebase";
 import { parseSiteTime } from "./siteTime";
@@ -47,9 +48,17 @@ export function validateCodeInTransaction(data: {
     }
 }
 
-export async function commitInChunks(
-    ops: ((batch: FirebaseFirestore.WriteBatch) => void)[]
-): Promise<void> {
+/** A Firestore Timestamp as an ISO string, or null for anything else, a missing field included. */
+export const isoOrNull = (t: unknown): string | null => t instanceof Timestamp ? t.toDate().toISOString() : null;
+
+/** One write for commitInChunks to put in a batch. */
+export type BatchOp = (batch: FirebaseFirestore.WriteBatch) => void;
+
+/** Deletes of `docs`, for commitInChunks. */
+export const deleteOps = (docs: {ref: FirebaseFirestore.DocumentReference}[]): BatchOp[] =>
+    docs.map(doc => batch => batch.delete(doc.ref));
+
+export async function commitInChunks(ops: BatchOp[]): Promise<void> {
     for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
         const chunk = ops.slice(i, i + BATCH_LIMIT);
         const batch = db.batch();

@@ -1,8 +1,8 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
-import { commitInChunks } from "../utils/helpers";
+import { type BatchOp, commitInChunks, isoOrNull } from "../utils/helpers";
 import { MAX_GRANT_DAYS, reducedExpiry, startedAtAfter } from "../utils/membership";
 import {
     formatActivationKey,
@@ -16,7 +16,9 @@ import {
     PASSPORT_TERM_DAYS,
     passportNoteDoc,
     passportNoteRef,
+    PASSPORTS,
     readMintingDesign,
+    SECRETS,
     validatePassportNote,
 } from "../utils/passports";
 import {
@@ -40,11 +42,27 @@ import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist
  * `membershipExpiresAt`.
  */
 
-const PASSPORTS = "passports";
-const SECRETS = "passportSecrets";
 const DESIGNS = "passportDesigns";
 
 const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap.data()?.displayName ?? "";
+
+/** A request's passport code, normalized, or refused. */
+function requirePassportId(raw: unknown): string {
+    const passportId = normalizePassportId(raw);
+    if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
+    return passportId;
+}
+
+/**
+ * A request's passport codes, normalized and each once, so a code listed twice
+ * isn't counted or acted on twice. Refused unless there are 1 to `max`.
+ */
+function readPassportIds(raw: unknown, max: number): string[] {
+    if (!Array.isArray(raw) || raw.length < 1 || raw.length > max) {
+        throw new HttpsError("invalid-argument", `passportIds must hold between 1 and ${max} passport codes.`);
+    }
+    return [...new Set(raw.map(requirePassportId))];
+}
 
 /**
  * Mint passports from one design, up to MAX_GENERATE_COUNT at a time. Each is
@@ -68,8 +86,8 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
     const design = await readMintingDesign(designId);
 
     const issued: {passportId: string; activationCode: string}[] = [];
-    const ops: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
-    const noteOps: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
+    const ops: BatchOp[] = [];
+    const noteOps: BatchOp[] = [];
     const seen = new Set<string>();
     const by = {uid, name: performerName(callerSnap)};
 
@@ -114,8 +132,7 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
     const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
-    const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
-    if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
+    const passportId = requirePassportId((request.data as {passportId?: unknown})?.passportId);
 
     const {key, salt, secretHash} = newActivationKey();
     const ref = db.collection(PASSPORTS).doc(passportId);
@@ -156,8 +173,7 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
-    const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
-    if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
+    const passportId = requirePassportId((request.data as {passportId?: unknown})?.passportId);
 
     const ref = db.collection(PASSPORTS).doc(passportId);
     const secretRef = db.collection(SECRETS).doc(passportId);
@@ -200,18 +216,7 @@ export const exportPassportKeys = onCall({maxInstances: 10}, async (request) => 
     const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
-    const input = (request.data as {passportIds?: unknown})?.passportIds;
-    if (!Array.isArray(input) || input.length < 1 || input.length > MAX_KEY_EXPORT_COUNT) {
-        throw new HttpsError(
-            "invalid-argument",
-            `passportIds must hold between 1 and ${MAX_KEY_EXPORT_COUNT} passport codes.`,
-        );
-    }
-    const normalized = [...new Set(input.map(normalizePassportId))];
-    if (normalized.some(id => id === null)) {
-        throw new HttpsError("invalid-argument", "Invalid passportId.");
-    }
-    const passportIds = normalized as string[];
+    const passportIds = readPassportIds((request.data as {passportIds?: unknown})?.passportIds, MAX_KEY_EXPORT_COUNT);
 
     // getAll keeps the order asked, so index i is the same passport in both
     // lists.
@@ -290,7 +295,7 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
     return {
         status: "claimed" as const,
         designId,
-        claimedAt: (passport.claimedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
+        claimedAt: isoOrNull(passport.claimedAt),
         // The page gives the owner its privacy switch.
         isOwner,
         hidden: owner.hidePassportPage === true,
@@ -298,7 +303,7 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
             uid: ownerUid,
             displayName: owner.displayName ?? "",
             photoURL: owner.photoURL ?? "",
-            joinedAt: (owner.joinedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
+            joinedAt: isoOrNull(owner.joinedAt),
             group: normalizeGroup(owner.group),
             title: owner.title ?? "",
             titleCn: owner.titleCn ?? "",
@@ -322,26 +327,13 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
-    const input = (request.data as {passportIds?: unknown})?.passportIds;
-    if (!Array.isArray(input) || input.length < 1 || input.length > MAX_DELETE_COUNT) {
-        throw new HttpsError(
-            "invalid-argument",
-            `passportIds must hold between 1 and ${MAX_DELETE_COUNT} passport codes.`,
-        );
-    }
-    // Deduplicated so a code listed twice isn't counted or deleted twice.
-    const passportIds = [...new Set(input.map(normalizePassportId))];
-    if (passportIds.some(id => id === null)) {
-        throw new HttpsError("invalid-argument", "Invalid passportId.");
-    }
-
-    const refs = (passportIds as string[]).map(id => db.collection(PASSPORTS).doc(id));
-    const snaps = await db.getAll(...refs);
+    const passportIds = readPassportIds((request.data as {passportIds?: unknown})?.passportIds, MAX_DELETE_COUNT);
+    const snaps = await db.getAll(...passportIds.map(id => db.collection(PASSPORTS).doc(id)));
 
     const deleted: string[] = [];
     const claimed: string[] = [];
     const missing: string[] = [];
-    const ops: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
+    const ops: BatchOp[] = [];
     let year: number | null = null;
 
     for (const snap of snaps) {
@@ -404,12 +396,8 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
     const uid = await requireAuth(request, "staff");
 
     const input = request.data as {passportId?: unknown; subtractDays?: unknown};
-    const passportId = normalizePassportId(input.passportId);
-    if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
-    if (input.subtractDays !== undefined && typeof input.subtractDays !== "boolean") {
-        throw new HttpsError("invalid-argument", "subtractDays must be a boolean.");
-    }
-    const subtractDays = input.subtractDays === true;
+    const passportId = requirePassportId(input.passportId);
+    const subtractDays = input.subtractDays !== undefined && validateBoolean(input.subtractDays, "subtractDays");
 
     const ref = db.collection(PASSPORTS).doc(passportId);
 
@@ -488,8 +476,7 @@ export const setPassportNote = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
     const input = request.data as {passportId?: unknown; note?: unknown};
-    const passportId = normalizePassportId(input.passportId);
-    if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
+    const passportId = requirePassportId(input.passportId);
     const note = validatePassportNote(input.note);
 
     return adminTransaction(uid, async (txn, callerSnap) => {

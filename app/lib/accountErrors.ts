@@ -1,9 +1,8 @@
-import { FirebaseError } from 'firebase/app';
-import { functionsErrorCode } from '~/lib/firebase';
+import { errorCode } from '~/lib/firebase';
 
 /** What went wrong with an account call, in the visitor's language. */
 export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
-    switch (functionsErrorCode(err) ?? (err instanceof FirebaseError ? err.code : null)) {
+    switch (errorCode(err)) {
         case 'wrong-credentials':
             return isEnglish ? 'Wrong email or password.' : '邮箱或密码不正确。';
         case 'bad-code':

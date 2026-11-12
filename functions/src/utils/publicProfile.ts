@@ -1,5 +1,5 @@
-import type { Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
+import { isoOrNull } from "./helpers";
 
 /** The string ids in a raw Firestore array field, ignoring anything else. */
 export function toStringIds(raw: unknown): string[] {
@@ -19,7 +19,7 @@ export async function pastEventIds(...lists: unknown[]): Promise<Set<string>> {
 }
 
 /** One passport on a public profile: what its shelf card shows, and no more. */
-export interface ShelfPassport {
+interface ShelfPassport {
     id: string;
     designId: string;
     year: number;
@@ -40,7 +40,7 @@ export async function shelfPassports(uid: string): Promise<ShelfPassport[]> {
                 id: doc.id,
                 designId: typeof data.designId === "string" ? data.designId : "",
                 year: typeof data.year === "number" ? data.year : 0,
-                claimedAt: (data.claimedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
+                claimedAt: isoOrNull(data.claimedAt),
             };
         })
         .sort((a, b) => b.year - a.year || (b.claimedAt ?? "").localeCompare(a.claimedAt ?? ""));

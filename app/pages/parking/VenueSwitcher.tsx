@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDismiss } from '~/lib/useDismiss';
 import { walkMinutes } from '~/lib/uwParking';
 import { localizedVenueName, type Venue } from '~/lib/venues';
 import type { ParkingText } from './text';
@@ -36,30 +37,16 @@ export const VenueSwitcher = ({venues, selectedId, eventVenueId, suggestionFor, 
         : venues;
     const showCampus = !q || tx.t('allCampus').toLowerCase().includes(q);
 
-    // While open: close on outside click / Escape and focus the search box.
+    // Escape hands focus back to the trigger.
+    useDismiss(open, containerRef, byEscape => {
+        setOpen(false);
+        if (byEscape) triggerRef.current?.focus();
+    });
+
+    // Open: focus the search box. Closed: clear it.
     useEffect(() => {
-        if (!open) {
-            setQuery('');
-            return;
-        }
-        const onDown = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
-        };
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                setOpen(false);
-                triggerRef.current?.focus();
-            }
-        };
-        document.addEventListener('mousedown', onDown);
-        document.addEventListener('keydown', onKey);
-        inputRef.current?.focus();
-        return () => {
-            document.removeEventListener('mousedown', onDown);
-            document.removeEventListener('keydown', onKey);
-        };
+        if (open) inputRef.current?.focus();
+        else setQuery('');
     }, [open]);
 
     const choose = (id: string) => {

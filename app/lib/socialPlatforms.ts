@@ -36,17 +36,14 @@ const cache = createCollectionCache<SocialPlatform>('socialPlatforms', mapDoc);
 const sortPlatforms = (list: SocialPlatform[]): SocialPlatform[] =>
     [...list].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
 
-function effective(items: SocialPlatform[] | null): SocialPlatform[] {
-    return items && items.length ? sortPlatforms(items) : DEFAULT_SOCIAL_PLATFORMS;
-}
-
 export function useSocialPlatforms(): {
     platforms: SocialPlatform[];
     customized: boolean;
     refresh: () => Promise<void>;
 } {
     const {items, refresh} = cache.useItems();
-    return {platforms: effective(items), customized: items.length > 0, refresh};
+    const customized = items.length > 0;
+    return {platforms: customized ? sortPlatforms(items) : DEFAULT_SOCIAL_PLATFORMS, customized, refresh};
 }
 
 export function socialPlatformName(

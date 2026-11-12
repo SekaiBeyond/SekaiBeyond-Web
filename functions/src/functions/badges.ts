@@ -4,7 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
 import { cancelDeletion, type Deletable, requestDeletion } from "../utils/deletion";
 import { db } from "../utils/firebase";
-import { commitInChunks } from "../utils/helpers";
+import { type BatchOp, commitInChunks, deleteOps } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 import { recordDoc, recordRef } from "../utils/records";
 import {
@@ -38,11 +38,9 @@ export const onBadgeDeleted = onDocumentDeleted(
                 db.collection("badgeActivationCodes").where("badgeId", "==", badgeId).get(),
                 db.collection("users").where("badges", "array-contains", badgeId).get(),
             ]);
-            const cascadeOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
-                ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
-                ...holdersSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
-                    b.update(d.ref, {badges: FieldValue.arrayRemove(badgeId)})
-                ),
+            const cascadeOps: BatchOp[] = [
+                ...deleteOps(codesSnap.docs),
+                ...holdersSnap.docs.map((d): BatchOp => b => b.update(d.ref, {badges: FieldValue.arrayRemove(badgeId)})),
             ];
             if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
         } catch (err) {

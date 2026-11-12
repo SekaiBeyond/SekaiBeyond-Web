@@ -67,7 +67,7 @@ import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, type ResendEnvelope } from "../utils/resendClient";
 import { callerAddressKey } from "../utils/scans";
 import { endSessions, sessionIdOf, signInToken } from "../utils/sessions";
-import { STORAGE_HOST } from "../utils/storage";
+import { isStorageUrl } from "../utils/storage";
 import { sanitizeDisplayText, validateDocId, validateEmail } from "../utils/validation";
 
 /**
@@ -300,10 +300,7 @@ const toBinding = (google: GoogleIdentity): GoogleBinding => ({
     signUpName: google.name,
 });
 
-const hasUploadedAvatar = (user: FirebaseFirestore.DocumentSnapshot): boolean => {
-    const url: unknown = user.get("photoURL");
-    return typeof url === "string" && url.includes(STORAGE_HOST);
-};
+const hasUploadedAvatar = (user: FirebaseFirestore.DocumentSnapshot): boolean => isStorageUrl(user.get("photoURL"));
 
 interface NewAccount {
     email: string;

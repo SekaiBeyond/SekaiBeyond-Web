@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { downloadBlob } from '~/lib/zip';
+import { downloadBlob } from '~/lib/download';
 
 // Shared by every QR the app draws (preview, sticker PNG, passport sticker PNG),
 // so a printed code encodes as the preview showed.

@@ -120,7 +120,7 @@ export function resolveVenueById(venueId: string | undefined, venues: Venue[]): 
 }
 
 /** The fields an event's location is made from, which upcoming and past events share. */
-export interface EventLocationFields {
+interface EventLocationFields {
     location: string;
     locationCn: string;
     venueId: string;

@@ -18,7 +18,7 @@ import {
 import { fileStamp } from '~/lib/csv';
 import { eventDayStatus, formatEventDays } from '~/lib/eventDays';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
-import { downloadBlob } from '~/lib/zip';
+import { downloadBlob } from '~/lib/download';
 import { AttendeeModal } from '../AttendeeModal';
 import { TicketScanner } from '../TicketScanner';
 import type { ShowToast } from '../utils';

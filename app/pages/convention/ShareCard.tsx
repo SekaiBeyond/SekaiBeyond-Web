@@ -1,6 +1,7 @@
 import { type ChangeEvent, type PointerEvent, useEffect, useId, useRef, useState } from 'react';
 import { FiDownload, FiPlus, FiRotateCcw, FiRotateCw, FiUpload, FiX } from 'react-icons/fi';
 import { QRCodeCanvas } from 'qrcode.react';
+import { downloadBlob } from '~/lib/download';
 import { SectionHeader } from '~/pages/convention/SectionHeader';
 import { type Localized, useT } from '~/pages/convention/i18n';
 
@@ -509,12 +510,7 @@ export const ShareCard = () => {
                 setError(t({en: 'The image could not be exported. Please try again.', zh: '导出失败，请重试。'}));
                 return;
             }
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'sekai-beyond-share-card.png';
-            link.click();
-            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            downloadBlob(blob, 'sekai-beyond-share-card.png');
         }, 'image/png');
     };
 

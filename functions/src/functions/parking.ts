@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { setTimeout as sleep } from "node:timers/promises";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
@@ -52,7 +53,6 @@ const measuredFrom = (walking: VenueWalking | undefined, lat: number, lng: numbe
     walking?.lat === lat && walking?.lng === lng && walking.lotsKey === key;
 
 const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
-const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // How many walking-nearest lots a building lookup suggests.
 const NEAREST_LOT_COUNT = 8;
 
@@ -162,7 +162,7 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
                 walking[venue.id] = previousWalking[venue.id];
                 continue;
             }
-            if (calls++ > 0) await pause(ROUTER_PAUSE_MS);
+            if (calls++ > 0) await sleep(ROUTER_PAUSE_MS);
             try {
                 walking[venue.id] = {lat, lng, lotsKey: key, lots: await fetchWalkingTimes({lat, lng}, lots)};
             } catch (err) {

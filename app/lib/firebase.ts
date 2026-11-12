@@ -15,6 +15,7 @@ import {
     getFunctions as _getFunctions,
     httpsCallable,
 } from "firebase/functions";
+import type { Language } from "~/components/LanguageContextProvider";
 import type { SocialLinks, TeamMemberConfig } from "./siteConfig";
 import type { UploadLimits } from "./uploadLimits";
 import type { ConContent } from "./conContent";
@@ -109,8 +110,6 @@ function getFunctions() {
     }
     return functions;
 }
-
-type Language = 'en' | 'zh';
 
 /** Emails a code proving an address. Answers the same whether or not it has an account. */
 export const callSendEmailCode = (data: {
@@ -604,7 +603,7 @@ export interface AppSummary {
     updatedAt: string | null;
 }
 
-export interface AppFields {
+interface AppFields {
     name: string;
     ownerUid: string;
     redirectUris: string[];
@@ -988,15 +987,17 @@ export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
 export const functionsErrorCode = (err: unknown): string | null =>
     functionsErrorDetails<{code?: string}>(err)?.code ?? null;
 
-// The code to show in a message: the server's own when it sent one, else the
-// SDK's, such as "functions/internal" for a call that never reached the function
-// or "unavailable" for a Firestore read.
-const errorCodeToShow = (err: unknown): string | null =>
+/**
+ * An error's code: the server's own when it sent one, else the SDK's, such as
+ * "functions/internal" for a call that never reached the function or
+ * "unavailable" for a Firestore read.
+ */
+export const errorCode = (err: unknown): string | null =>
     functionsErrorCode(err) ?? (err instanceof FirebaseError ? err.code : null);
 
 /** That code as a message's bracketed ending, " (code)" or "（code）", or "" without one. */
 export const errorSuffix = (err: unknown, isEnglish: boolean): string => {
-    const code = errorCodeToShow(err);
+    const code = errorCode(err);
     if (!code) return '';
     return isEnglish ? ` (${code})` : `（${code}）`;
 };

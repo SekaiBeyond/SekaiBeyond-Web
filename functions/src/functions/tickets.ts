@@ -13,7 +13,7 @@ import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE } fro
 import { db } from "../utils/firebase";
 import { syncProviderUsage } from "../utils/emailProvider";
 import { isOnEventDay } from "../utils/eventDays";
-import { commitInChunks } from "../utils/helpers";
+import { type BatchOp, commitInChunks, isoOrNull } from "../utils/helpers";
 import {
     computeEmailQuota,
     computeEmailQuotaInTxn,
@@ -57,6 +57,7 @@ import {
     isScannedTicket,
     type NewTicket,
     ticketClaimUrl,
+    TICKET_TYPES,
 } from "../utils/tickets";
 
 function validateTicketCount(value: unknown): number {
@@ -66,19 +67,8 @@ function validateTicketCount(value: unknown): number {
     return value;
 }
 
-const VALID_TICKET_TYPES = [
-    "normal",
-    "early-bird",
-    "student",
-    "early-bird-student",
-    "vip",
-    "Comp Ticket",
-    "guest",
-    "vendor",
-];
-
 function validateTicketType(value: unknown): string {
-    if (typeof value !== "string" || !VALID_TICKET_TYPES.includes(value)) {
+    if (typeof value !== "string" || !TICKET_TYPES.includes(value)) {
         return "normal";
     }
     return value;
@@ -325,7 +315,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
     let addedCount = 0;
     let replacedCount = 0;
     let skippedCount = 0;
-    const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+    const ops: BatchOp[] = [];
 
     const onDuplicate = input.onDuplicate === "override" ? "override" : "skip";
 
@@ -346,7 +336,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
 
         if (existing) {
             replacedCount++;
-            const dataToUpdate: any = {
+            const dataToUpdate: Record<string, unknown> = {
                 email: row.email,
                 ticketCount: row.ticketCount,
                 tickets,
@@ -711,7 +701,7 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
     // Field writes alone, which can't undo a scan. Updates, unlike the
     // transactions' creates, can't leave a ticket behind under an archived event.
     if (seenOnly.length > 0) {
-        await commitInChunks(seenOnly.map(ref => (b: FirebaseFirestore.WriteBatch) =>
+        await commitInChunks(seenOnly.map((ref): BatchOp => b =>
             b.update(ref, {hometownSeenAt: seenAt, missingFromHometown: FieldValue.delete()})));
     }
 
@@ -727,7 +717,7 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
             if (data.missingFromHometown !== true) toFlag.push(doc.ref);
         }
         if (toFlag.length > 0) {
-            await commitInChunks(toFlag.map(ref => (b: FirebaseFirestore.WriteBatch) =>
+            await commitInChunks(toFlag.map((ref): BatchOp => b =>
                 b.update(ref, {missingFromHometown: true})));
         }
     }
@@ -963,7 +953,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
                     ticketId: ticket.ticketId,
                     type: ticket.type || "normal",
                     redeemed: ticket.redeemed === true,
-                    redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
+                    redeemedAt: isoOrNull(ticket.redeemedAt),
                     voided: ticket.voided === true,
                 });
             }
@@ -980,7 +970,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
             venueId: (eventData.venueId as string) ?? "",
             roomIds: Array.isArray(eventData.roomIds) ? eventData.roomIds : [],
             poster: (eventData.poster as string) ?? "",
-            startAt: eventData.startAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
+            startAt: isoOrNull(eventData.startAt) ?? new Date().toISOString(),
             tickets,
         };
     }));
@@ -1258,7 +1248,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                     ticketType: ticket.type || "normal",
                     notes: ticket.notes ?? "",
                     redeemedBy: ticket.redeemedByName,
-                    redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
+                    redeemedAt: isoOrNull(ticket.redeemedAt),
                 };
             }
 
@@ -1721,7 +1711,7 @@ export const sendTicketEmails = onCall(
 
         // Only the non-email writes (ticketless attendee marks); the send
         // itself is one call below.
-        const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+        const ops: BatchOp[] = [];
 
         // The send/queue split waits for the reservation transaction, so it
         // keys off a fresh sentToday rather than the pre-check's, which a
@@ -2023,7 +2013,7 @@ export const updateWalletPassSettings = onCall({maxInstances: 10}, async (reques
         notes?: unknown;
     };
     const eventId = validateDocId(input.eventId, "eventId");
-    if (typeof input.enabled !== "boolean") throw new HttpsError("invalid-argument", "Invalid enabled.");
+    const enabled = validateBoolean(input.enabled, "enabled");
     const color = input.color;
     if (color !== "auto" && !(WALLET_COLORS as readonly unknown[]).includes(color)) {
         throw new HttpsError("invalid-argument", "Invalid color.");
@@ -2042,7 +2032,7 @@ export const updateWalletPassSettings = onCall({maxInstances: 10}, async (reques
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         // Merged, so passCount, kept beside the settings, stays.
         txn.set(walletPassSettingsRef(eventSnap.ref), {
-            enabled: input.enabled, color, headerText, notes,
+            enabled, color, headerText, notes,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: uid,
         }, {merge: true});

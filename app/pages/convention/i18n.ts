@@ -1,9 +1,8 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { eitherLanguage } from '~/lib/localized';
 
 /** A string that exists in both site languages. */
 export type Localized = {en: string; zh: string};
-
-export type ConLanguage = 'en' | 'zh';
 
 /**
  * Reads the shared language context for the con page's bilingual pairs (see
@@ -11,5 +10,5 @@ export type ConLanguage = 'en' | 'zh';
  */
 export const useT = () => {
     const {isEnglish} = useLanguage();
-    return (value: Localized) => (isEnglish ? (value.en || value.zh) : (value.zh || value.en));
+    return (value: Localized) => eitherLanguage(isEnglish, value.en, value.zh);
 };

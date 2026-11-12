@@ -2,6 +2,12 @@ import * as crypto from "crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { PUBLIC_ORIGIN } from "./config";
 
+/** The types a seller may sell through the API. Comp, guest and vendor tickets are given out by staff, never bought. */
+export const SELLABLE_TICKET_TYPES = ["normal", "early-bird", "student", "early-bird-student", "vip"];
+
+/** Every type a ticket can have. Mirrors TICKET_TYPES in app/pages/admin/tickets/types.ts. */
+export const TICKET_TYPES = [...SELLABLE_TICKET_TYPES, "Comp Ticket", "guest", "vendor"];
+
 export interface NewTicket {
     ticketId: string;
     type: string;

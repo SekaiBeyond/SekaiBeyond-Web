@@ -1,16 +1,16 @@
 import type { MouseEvent } from 'react';
 import { formatSiteTime, labelSiteZone, parseSiteTime, SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { EarlyBird, InPersonSession, TicketFee, TicketTier } from '~/lib/conContent';
-import type { ConLanguage } from '~/pages/convention/i18n';
+import type { Language } from '~/components/LanguageContextProvider';
 
-const locales: Record<ConLanguage, string> = {en: 'en-US', zh: 'zh-CN'};
+const locales: Record<Language, string> = {en: 'en-US', zh: 'zh-CN'};
 
 /* Con times are stored zoneless and mean the Pacific clock: parseSiteTime reads
    them that way and they're shown in SITE_TIME_ZONE, so a visitor abroad sees
    the con's own hours. */
 
 /** "November 14, 2026" / "2026年11月14日" */
-export const formatEventDate = (iso: string, lang: ConLanguage) =>
+export const formatEventDate = (iso: string, lang: Language) =>
     formatSiteTime(parseSiteTime(iso), lang === 'en', {
         year: 'numeric',
         month: 'long',
@@ -18,13 +18,13 @@ export const formatEventDate = (iso: string, lang: ConLanguage) =>
     });
 
 /** "Saturday" / "星期六" */
-export const formatWeekday = (iso: string, lang: ConLanguage) =>
+export const formatWeekday = (iso: string, lang: Language) =>
     formatSiteTime(parseSiteTime(iso), lang === 'en', {weekday: 'long'});
 
 const TIME_OPTIONS: Intl.DateTimeFormatOptions = {hour: 'numeric', minute: '2-digit'};
 
 /** "11:00 AM – 8:00 PM PT" / "11:00 – 20:00（太平洋时间）" */
-export const formatTimeRange = (startIso: string, endIso: string, lang: ConLanguage) => {
+export const formatTimeRange = (startIso: string, endIso: string, lang: Language) => {
     const options = {...TIME_OPTIONS, timeZone: SITE_TIME_ZONE};
     const start = parseSiteTime(startIso).toLocaleTimeString(locales[lang], options);
     const end = parseSiteTime(endIso).toLocaleTimeString(locales[lang], options);
@@ -32,14 +32,14 @@ export const formatTimeRange = (startIso: string, endIso: string, lang: ConLangu
 };
 
 /** "Oct 1, 11:59 PM PT" / "10月1日 23:59（太平洋时间）" */
-export const formatDeadline = (iso: string, lang: ConLanguage) =>
+export const formatDeadline = (iso: string, lang: Language) =>
     formatSiteTime(parseSiteTime(iso), lang === 'en', {month: 'short', day: 'numeric', ...TIME_OPTIONS});
 
 /**
  * 10 → "$10", 12.5 → "$12.50", 0 → "Free" / "免费". `narrowSymbol` keeps zh-CN at
  * "$" rather than "US$".
  */
-export const formatPrice = (price: number, lang: ConLanguage) => {
+export const formatPrice = (price: number, lang: Language) => {
     if (price === 0) return lang === 'en' ? 'Free' : '免费';
     return price.toLocaleString(locales[lang], {
         style: 'currency',
@@ -73,7 +73,7 @@ export const ticketFeeFor = (price: number, fee: TicketFee) => {
 };
 
 /** "Mon, Oct 5" / "10月5日周一" for a bare YYYY-MM-DD. */
-export const formatSessionDay = (date: string, lang: ConLanguage) =>
+export const formatSessionDay = (date: string, lang: Language) =>
     // With a time it parses in the viewer's clock; bare, it would be UTC midnight,
     // the day before west of Greenwich.
     new Date(`${date}T00:00`).toLocaleDateString(locales[lang], {
@@ -100,7 +100,7 @@ export const parseClockTime = (time: string | undefined): number | null => {
  * "13:30" → "1:30 PM" / "13:30". The date is arbitrary; only the time is read
  * back. Anything not HH:MM is shown as stored rather than as "Invalid Date".
  */
-export const formatClockTime = (time: string, lang: ConLanguage) => {
+export const formatClockTime = (time: string, lang: Language) => {
     const minutes = parseClockTime(time);
     if (minutes === null) return time;
 

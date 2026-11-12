@@ -2,7 +2,8 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { FieldValue } from "firebase-admin/firestore";
 import { syncProviderUsage } from "../utils/emailProvider";
 import { db } from "../utils/firebase";
-import { fillActivationKey } from "../utils/passports";
+import { isoOrNull } from "../utils/helpers";
+import { fillActivationKey, SECRETS } from "../utils/passports";
 import { recordDoc, recordRef } from "../utils/records";
 import {
     computeEmailQuota,
@@ -84,7 +85,7 @@ export const scheduledMailDrain = onSchedule({
         if (check.isPassport && targetSnap.exists) {
             // The key is filled in only now (see emailPassports), so the one
             // current at sending goes.
-            const key = (await db.collection("passportSecrets").doc(targetSnap.id).get()).data()?.key;
+            const key = (await db.collection(SECRETS).doc(targetSnap.id).get()).data()?.key;
             if (typeof key === "string" && targetSnap.data()?.status !== "claimed") check.key = key;
             else check.orphan = true;
         }
@@ -235,9 +236,8 @@ export async function getScheduledMailQueueStatus(): Promise<{
         getScheduledMailQueueDepth(),
         db.collection("scheduledMail").orderBy("queuedAt", "asc").limit(1).get(),
     ]);
-    const queuedAt = oldestSnap.docs[0]?.data()?.queuedAt;
     return {
         queuedCount,
-        oldestQueuedAt: queuedAt?.toDate?.()?.toISOString?.() ?? null,
+        oldestQueuedAt: isoOrNull(oldestSnap.docs[0]?.get("queuedAt")),
     };
 }

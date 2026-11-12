@@ -4,7 +4,7 @@ import { fileStamp } from '~/lib/csv';
 import { callGeneratePassports, errorMessage } from '~/lib/firebase';
 import { MAX_PASSPORT_GENERATE, PASSPORT_NOTE_MAX, type PassportDesign, passportName, } from '~/lib/passports';
 import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
-import { downloadBlob } from '~/lib/zip';
+import { downloadBlob } from '~/lib/download';
 import type { ShowToast } from '../utils';
 import { buildPassportCsv, usePassportPngExport } from './passportExport';
 

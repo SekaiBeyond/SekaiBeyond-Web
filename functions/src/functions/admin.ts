@@ -1,4 +1,4 @@
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, normalizeGroup, requireAdmin, requireAuth, requireStaff } from "../utils/auth";
 import { DEFAULT_SENDER_PREFIX, RESEND_QUEUE_CAP, SENDER_DOMAIN } from "../utils/config";
@@ -24,6 +24,7 @@ import {
 import {
     sanitizeDisplayText,
     validateCoordinate,
+    validateDay,
     validateDocId,
     validateEmail,
     validateISODate,
@@ -36,7 +37,8 @@ import { UW_BUILDING_CODE_RE, UW_LOT_CODE_RE } from "../utils/uwParking";
 import { eventLocationText, MAX_ROOMS, type Room, ROOM_ID_RE, venueRooms } from "../utils/events";
 import { dropVenueParking, refreshVenueParking } from "./parking";
 
-export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
+/** An upload from the admin panel, once the caller is confirmed as core staff: where it goes, and the file. */
+async function readAdminUpload(request: CallableRequest): Promise<{path: string; dataBase64: string; contentType: string}> {
     const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
@@ -50,6 +52,11 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("invalid-argument", "Missing path, data, or contentType.");
     }
     validateStoragePath(path);
+    return {path, dataBase64, contentType};
+}
+
+export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
+    const {path, dataBase64, contentType} = await readAdminUpload(request);
 
     const buffer = decodeUpload(dataBase64, contentType, {
         types: ["image/webp"],
@@ -66,19 +73,7 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
  * folding video in would give every image upload the video size ceiling.
  */
 export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async (request) => {
-    const uid = await requireAuth(request, "staff");
-    await requireAdmin(uid);
-
-    const {path, data: dataBase64, contentType} = request.data as {
-        path?: string;
-        data?: string;
-        contentType?: string;
-    };
-
-    if (!path || !dataBase64 || !contentType) {
-        throw new HttpsError("invalid-argument", "Missing path, data, or contentType.");
-    }
-    validateStoragePath(path);
+    const {path, dataBase64, contentType} = await readAdminUpload(request);
     if (!path.startsWith("con/")) {
         throw new HttpsError("invalid-argument", "Con videos must be stored under con/.");
     }
@@ -656,22 +651,11 @@ function buildConTicketFee(raw: unknown) {
     };
 }
 
-/** A real calendar day as YYYY-MM-DD — Date.parse alone lets "2026-02-31" through as March 3. */
-function validateConDay(raw: unknown, name: string): string {
-    const value = validateStr(raw, name, 10, true);
-    const ms = Date.parse(`${value}T00:00:00Z`);
-    // toISOString throws on an invalid date, hence the NaN check first.
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 10) !== value) {
-        throw new HttpsError("invalid-argument", `Invalid ${name}: must be a date.`);
-    }
-    return value;
-}
-
 function buildConInPersonSales(raw: unknown) {
     const s = asRecord(raw);
     const sessions = validateConArray(s.sessions, "in-person sessions", CON_LIMITS.inPersonSessions)
         .map(session => {
-            const date = validateConDay(session.date, "in-person sale date");
+            const date = validateDay(session.date, "in-person sale date");
             const start = validateConTime(session.start, `${date} start`);
             const end = validateConTime(session.end, `${date} end`);
             // HH:MM sorts chronologically, as in buildConSchedule.

@@ -62,7 +62,6 @@ export function useAccountLinks(eventId: string, emails: string[]): {
             stale = true;
         };
         // wantedKey stands in for `wanted`, whose identity changes every render.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [eventId, wantedKey]);
 
     return {links, failed};

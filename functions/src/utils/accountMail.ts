@@ -6,7 +6,7 @@ import { CODE_TTL_MINUTES, type CodePurpose } from "./emailCodes";
 import { EMAIL_UNDO_DAYS } from "./emailUndo";
 import { escapeHtml } from "./emailTemplate";
 import { db } from "./firebase";
-import { computeEmailQuotaDetail, computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation, } from "./quota";
+import { computeEmailQuotaDetail, computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "./quota";
 import { type ResendEnvelope, ResendSendError, sendEmails } from "./resendClient";
 import { SITE_TIME_ZONE } from "./siteTime";
 
@@ -31,7 +31,7 @@ const mailUnavailable = () =>
  * of something that has happened to an account, which only that account's
  * changes send.
  */
-export type AccountMailKind = "code" | "notice";
+type AccountMailKind = "code" | "notice";
 
 const HOUR_MS = 60 * 60_000;
 
@@ -112,7 +112,7 @@ const DAY_MS = 24 * HOUR_MS;
  * minutes, and the next change to anyone's account would go unannounced.
  */
 const NOTICED_CHANGES_PER_DAY = {google: 6, password: 5, deletion: 3} as const;
-export type NoticedChange = keyof typeof NOTICED_CHANGES_PER_DAY;
+type NoticedChange = keyof typeof NOTICED_CHANGES_PER_DAY;
 
 /**
  * Counts a change against its account's day, refusing it once over: refused,
@@ -142,6 +142,12 @@ function page(heading: string, paragraphs: string[]): string {
 <p style="margin:32px 0 0;color:#9a9a9a;font-size:13px;"><a href="${escapeHtml(PUBLIC_ORIGIN)}" style="color:#9a9a9a;">Sekai Beyond</a></p>
 </div>`;
 }
+
+/** A moment as a notice states it: in its language, on the site's clock, escaped. */
+const mailTime = (date: Date, language: MailLanguage): string => escapeHtml(date.toLocaleString(
+    language === "zh" ? "zh-CN" : "en-US",
+    {dateStyle: "long", timeStyle: "short", timeZone: SITE_TIME_ZONE},
+));
 
 const codeBlock = (code: string) =>
     `<span style="display:inline-block;padding:12px 20px;border-radius:8px;background-color:#fff0f6;color:#333333;font-size:28px;font-weight:700;letter-spacing:6px;">${code}</span>`;
@@ -210,11 +216,7 @@ export function addressTakenMail(to: string, language: MailLanguage): ResendEnve
  * back; a new account on the address would leave the link dead.
  */
 export function addressHeldMail(to: string, until: Date, language: MailLanguage): ResendEnvelope {
-    const when = escapeHtml(until.toLocaleString(language === "zh" ? "zh-CN" : "en-US", {
-        dateStyle: "long",
-        timeStyle: "short",
-        timeZone: SITE_TIME_ZONE,
-    }));
+    const when = mailTime(until, language);
     return language === "zh" ? {
         to,
         subject: "此邮箱的 Sekai Beyond 账号刚刚更换了邮箱",
@@ -362,11 +364,7 @@ export async function accountDeletionMail(
 ): Promise<ResendEnvelope> {
     const settings = escapeHtml(`${PUBLIC_ORIGIN}/profile?tab=settings`);
     const contact = await contactLine(language);
-    const when = escapeHtml(deleteAt.toLocaleString(language === "zh" ? "zh-CN" : "en-US", {
-        dateStyle: "long",
-        timeStyle: "short",
-        timeZone: SITE_TIME_ZONE,
-    }));
+    const when = mailTime(deleteAt, language);
     return language === "zh" ? {
         to,
         subject: "您的 Sekai Beyond 账号即将被删除",
@@ -398,11 +396,7 @@ export async function accountDeletionAfterMoveMail(
     language: MailLanguage,
 ): Promise<ResendEnvelope> {
     const contact = await contactLine(language);
-    const when = escapeHtml(deleteAt.toLocaleString(language === "zh" ? "zh-CN" : "en-US", {
-        dateStyle: "long",
-        timeStyle: "short",
-        timeZone: SITE_TIME_ZONE,
-    }));
+    const when = mailTime(deleteAt, language);
     return language === "zh" ? {
         to,
         subject: "您的 Sekai Beyond 账号即将被删除",

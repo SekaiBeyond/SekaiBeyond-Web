@@ -26,7 +26,7 @@ const RATE_LIMIT_BUCKETS = {
     // calls protect has limits of its own (utils/emailCodes.ts).
     account: 60,
 };
-export type RateLimitBucket = keyof typeof RATE_LIMIT_BUCKETS;
+type RateLimitBucket = keyof typeof RATE_LIMIT_BUCKETS;
 
 async function checkRateLimit(uid: string, requested?: RateLimitBucket): Promise<void> {
     // The staff budget is for staff and above only: anyone else trying a staff
@@ -106,7 +106,7 @@ export async function rateLimitHasRoom(
 export const ADMIN_GROUPS = ["core-staff", "president"];
 
 // `group` is a role ladder only; membership lives in membershipExpiresAt.
-export const USER_GROUPS = ["user", "staff", "core-staff", "president"] as const;
+const USER_GROUPS = ["user", "staff", "core-staff", "president"] as const;
 export type UserGroup = typeof USER_GROUPS[number];
 
 // Groups core-staff may act on. President may act on anyone.
@@ -194,8 +194,13 @@ async function requireLiveSession(uid: string, token: DecodedIdToken): Promise<b
     return !!snap?.exists;
 }
 
+/** The caller's user doc, refused unless they're core staff or above. */
 export async function requireAdmin(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {
-    return adminTransaction(uid, async (_txn, callerSnap) => callerSnap);
+    const snap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(snap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    return snap;
 }
 
 /** The caller's user doc, refused unless they're staff or above. */

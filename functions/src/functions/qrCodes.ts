@@ -2,7 +2,7 @@ import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
-import { commitInChunks } from "../utils/helpers";
+import { commitInChunks, deleteOps, isoOrNull } from "../utils/helpers";
 import { recordScan, scanClientKey } from "../utils/scans";
 import { recordDoc, recordRef } from "../utils/records";
 import {
@@ -170,8 +170,7 @@ export const deleteQrCode = onCall({maxInstances: 10}, async (request) => {
     // An unbounded subcollection, purged in chunks outside the transaction
     // first.
     const scansSnap = await ref.collection("scans").get();
-    const ops = scansSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref));
-    if (ops.length > 0) await commitInChunks(ops);
+    if (!scansSnap.empty) await commitInChunks(deleteOps(scansSnap.docs));
 
     await ref.delete();
     await recordRef().set(recordDoc("qrcode-delete", {
@@ -261,7 +260,7 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
         console.log(
             `recordQrScan: inactive qrId=${qrId} reason=${reason} ` +
             `mode=${data.expirationMode ?? "none"} eventId=${data.eventId || "-"} ` +
-            `expiresAt=${data.expiresAt?.toDate?.()?.toISOString?.() ?? "-"} ` +
+            `expiresAt=${isoOrNull(data.expiresAt) ?? "-"} ` +
             `eventEndAt=${eventEndAt !== null ? new Date(eventEndAt).toISOString() : "-"} ` +
             `serverNow=${new Date(now).toISOString()}`,
         );

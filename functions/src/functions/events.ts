@@ -17,7 +17,7 @@ import {
 } from "../utils/events";
 import { signOutOfEventStaffApps } from "../utils/apps";
 import { db } from "../utils/firebase";
-import { commitInChunks } from "../utils/helpers";
+import { type BatchOp, commitInChunks, deleteOps } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 import { recordDoc, recordRef, type RecordType } from "../utils/records";
 import { siteDay } from "../utils/siteTime";
@@ -58,7 +58,7 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, request => cancelD
  */
 async function deleteEventSubcollections(eventRef: FirebaseFirestore.DocumentReference): Promise<void> {
     const snaps = await Promise.all(["attendees", "emailTemplate", "settings"].map(sub => eventRef.collection(sub).get()));
-    const ops = snaps.flatMap(snap => snap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)));
+    const ops = snaps.flatMap(snap => deleteOps(snap.docs));
     if (ops.length > 0) await commitInChunks(ops);
 }
 
@@ -76,15 +76,13 @@ export const onPastEventDeleted = onDocumentDeleted(
                 db.collection("users").where("attendedEvents", "array-contains", eventId).get(),
                 db.collection("users").where("eventStaffEvents", "array-contains", eventId).get(),
             ]);
-            const cascadeOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
-                ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
-                ...staffCodesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
-                ...attendeesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
-                    b.update(d.ref, {attendedEvents: FieldValue.arrayRemove(eventId)})
-                ),
-                ...staffSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
-                    b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)})
-                ),
+            const cascadeOps: BatchOp[] = [
+                ...deleteOps(codesSnap.docs),
+                ...deleteOps(staffCodesSnap.docs),
+                ...attendeesSnap.docs.map((d): BatchOp => b =>
+                    b.update(d.ref, {attendedEvents: FieldValue.arrayRemove(eventId)})),
+                ...staffSnap.docs.map((d): BatchOp => b =>
+                    b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)})),
             ];
             if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
         } catch (err) {
@@ -360,12 +358,7 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
                 db.collection("claimCodes").where("eventId", "==", eventId).get(),
                 db.collection("staffClaimCodes").where("eventId", "==", eventId).get(),
             ]);
-            const cascadeOps = [
-                ...codesSnap.docs.map(d =>
-                    (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
-                ...staffCodesSnap.docs.map(d =>
-                    (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
-            ];
+            const cascadeOps = [...deleteOps(codesSnap.docs), ...deleteOps(staffCodesSnap.docs)];
             if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
         } catch (err) {
             console.error(`onUpcomingEventDeleted: cascade failed for ${eventId}`, err);
@@ -400,10 +393,8 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         try {
             const staffSnap = await db.collection("users")
                 .where("eventStaffEvents", "array-contains", eventId).get();
-            const staffOps = staffSnap.docs.map(d =>
-                (b: FirebaseFirestore.WriteBatch) =>
-                    b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)})
-            );
+            const staffOps = staffSnap.docs.map((d): BatchOp => b =>
+                b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)}));
             if (staffOps.length > 0) await commitInChunks(staffOps);
         } catch (err) {
             console.error(`onUpcomingEventDeleted: eventStaffEvents cascade failed for ${eventId}`, err);
@@ -448,9 +439,9 @@ function reconcileCopy(
     copied: FirebaseFirestore.QuerySnapshot,
     live: FirebaseFirestore.QuerySnapshot,
     dest: FirebaseFirestore.CollectionReference,
-): ((b: FirebaseFirestore.WriteBatch) => void)[] {
+): BatchOp[] {
     const copiedAt = new Map(copied.docs.map(d => [d.id, d.updateTime]));
-    const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+    const ops: BatchOp[] = [];
     for (const doc of live.docs) {
         if (!copiedAt.get(doc.id)?.isEqual(doc.updateTime)) {
             ops.push(b => b.set(dest.doc(doc.id), doc.data()));
@@ -498,7 +489,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     const pastAttendeesCol = newDocRef.collection("attendees");
     const pastEmailTemplateCol = newDocRef.collection("emailTemplate");
 
-    const copyOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+    const copyOps: BatchOp[] = [];
 
     for (const doc of attendeesSnap.docs) {
         copyOps.push(b => b.set(pastAttendeesCol.doc(doc.id), doc.data()));
@@ -575,7 +566,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     const moveOps = [
         ...reconcileCopy(attendeesSnap, liveAttendees, pastAttendeesCol),
         ...reconcileCopy(emailTemplateSnap, liveTemplate, pastEmailTemplateCol),
-        ...liveSettings.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
+        ...deleteOps(liveSettings.docs),
     ];
     if (moveOps.length > 0) await commitInChunks(moveOps);
 

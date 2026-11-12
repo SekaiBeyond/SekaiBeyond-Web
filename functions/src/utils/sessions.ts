@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
@@ -145,12 +146,12 @@ export async function endSessions(
 
     if (markedAt) {
         const wait = (Math.floor(markedAt.toMillis() / 1000) + 1) * 1000 + SECOND_MARGIN_MS - Date.now();
-        if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+        if (wait > 0) await sleep(wait);
     }
     return others.length;
 }
 
-export interface DeviceInfo {
+interface DeviceInfo {
     /** "" when the user agent doesn't say. */
     browser: string;
     os: string;

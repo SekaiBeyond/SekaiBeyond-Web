@@ -3,7 +3,7 @@ import { localized } from '~/lib/localized';
 import { localizedVenueName, resolveVenueById, useVenues, venueLocationName } from '~/lib/venues';
 
 /** Where an event is: a venue, and which of its rooms, if any. */
-export interface VenuePick {
+interface VenuePick {
     venueId: string;
     roomIds: string[];
 }

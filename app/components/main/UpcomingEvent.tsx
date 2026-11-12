@@ -6,7 +6,7 @@ import { shownCountdownSegments, splitDuration, ZERO_DURATION } from "~/lib/coun
 import { formatSiteTime } from "~/lib/siteTime";
 import { isValidHttpUrl } from "~/lib/urls";
 import { eventLocationDisplay, resolveVenueById, useVenues } from "~/lib/venues";
-import { localized } from "~/lib/localized";
+import { eitherLanguage, localized } from "~/lib/localized";
 
 interface EventCardProps {
     event: UpcomingEventType;
@@ -111,9 +111,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                                className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>) : null}
                         {event.customButtonLink && isValidHttpUrl(event.customButtonLink) ? (
                             <a href={event.customButtonLink} target="_blank" rel="noopener noreferrer"
-                               className="btn btn-secondary con-btn">{isEnglish
-                                ? (event.customButtonText || event.customButtonTextCn)
-                                : (event.customButtonTextCn || event.customButtonText)}</a>) : null}
+                               className="btn btn-secondary con-btn">{eitherLanguage(isEnglish, event.customButtonText, event.customButtonTextCn)}</a>) : null}
                         {parkingVenue && (
                             <a href={`/parking/event/${encodeURIComponent(event.id)}`}
                                className="btn btn-parking con-btn">

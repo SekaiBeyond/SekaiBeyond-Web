@@ -8,6 +8,7 @@ export type TicketType =
     | 'guest'
     | 'vendor';
 
+/** Mirrors TICKET_TYPES in functions/src/utils/tickets.ts, which reads any other as normal. */
 export const TICKET_TYPES: {value: TicketType; labelEn: string; labelCn: string}[] = [
     {value: 'normal', labelEn: 'Normal', labelCn: '普通'},
     {value: 'early-bird', labelEn: 'Early Bird', labelCn: '早鸟'},

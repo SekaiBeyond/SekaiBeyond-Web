@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { setTimeout as sleep } from "node:timers/promises";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import {
@@ -9,6 +10,7 @@ import {
 } from "./config";
 import { eventLocationText } from "./events";
 import { db } from "./firebase";
+import { isoOrNull } from "./helpers";
 import { siteDay } from "./siteTime";
 import { formatEventDateForEmail, ticketIdOf, ticketTypeStyle } from "./ticketEmail";
 import { isApiOrder, ticketClaimUrl } from "./tickets";
@@ -88,7 +90,7 @@ async function settlePasses(month: string, exhausted: boolean): Promise<void> {
 }
 
 /** WalletWallet's own count for the account this month (GET /api/auth/usage). */
-export interface WalletUsage {
+interface WalletUsage {
     count: number;
     limit: number;
     remaining: number;
@@ -167,7 +169,6 @@ export async function readWalletQuota() {
     const month = currentMonth();
     const data = (await QUOTA_DOC.get()).data();
     const {used, providerLimit} = parseQuota(data, month);
-    const observedAt: string | null = data?.observedAt?.toDate?.()?.toISOString?.() ?? null;
     return {
         configured: apiKey() !== "",
         month,
@@ -175,7 +176,7 @@ export async function readWalletQuota() {
         cap: WALLET_PASS_MONTHLY_CAP,
         limit: monthlyLimit(providerLimit),
         perTicketDailyCap: WALLET_PASS_DAILY_CAP_PER_TICKET,
-        observedAt,
+        observedAt: isoOrNull(data?.observedAt),
     };
 }
 
@@ -184,20 +185,20 @@ const str = (v: unknown) => typeof v === "string" ? v.trim() : "";
 
 /** WalletWallet's free colour presets. Mirrored in app/pages/admin/tickets/walletPass.ts. */
 export const WALLET_COLORS = ["dark", "blue", "green", "red", "purple", "orange"] as const;
-export type WalletColor = typeof WALLET_COLORS[number];
+type WalletColor = typeof WALLET_COLORS[number];
 // Lines an event can add to the back of its passes: what Google Wallet's cap of
 // 10 header, secondary and back fields leaves after passBody's own 6.
 export const WALLET_PASS_MAX_NOTES = 4;
 // The text top-left of every pass, for now in place of each event's headerText.
 // Mirrored in app/pages/admin/tickets/walletPass.ts.
-export const WALLET_PASS_TOP_TEXT = "Sekai Beyond";
+const WALLET_PASS_TOP_TEXT = "Sekai Beyond";
 
 /**
  * How an event's passes look (upcomingEvents/{id}/settings/walletPass), set in
  * its Emails section. Read when each pass is made: one already made keeps its
  * look, as the free plan can't update a pass.
  */
-export interface WalletPassSettings {
+interface WalletPassSettings {
     /** Off leaves the button out of the event's ticket emails. */
     enabled: boolean;
     /** "auto" colours each pass by its ticket type. */
@@ -212,7 +213,7 @@ export const walletPassSettingsRef = (eventRef: FirebaseFirestore.DocumentRefere
     eventRef.collection("settings").doc("walletPass");
 
 /** The stored settings, defaults for what's missing: on, coloured by ticket type, nothing added. */
-export function parseWalletPassSettings(raw: FirebaseFirestore.DocumentData | undefined): WalletPassSettings {
+function parseWalletPassSettings(raw: FirebaseFirestore.DocumentData | undefined): WalletPassSettings {
     const notes: unknown[] = Array.isArray(raw?.notes) ? raw.notes : [];
     return {
         enabled: raw?.enabled !== false,
@@ -508,7 +509,7 @@ async function awaitClaim(
 ): Promise<{shareUrl: string} | {refusal: WalletPassRefusal}> {
     const deadline = Date.now() + CLAIM_WAIT_MS;
     while (Date.now() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, CLAIM_POLL_MS));
+        await sleep(CLAIM_POLL_MS);
         const entry = (await ref.get().catch(() => null))?.get(new FieldPath("walletPasses", ticketId));
         if (typeof entry?.shareUrl === "string" && entry.shareUrl) return {shareUrl: entry.shareUrl};
         if (!entry?.claimedAt) break;

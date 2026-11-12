@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { useConContent } from "~/lib/conContent";
-import { localized } from "~/lib/localized";
+import { eitherLanguage, localized } from "~/lib/localized";
 import { usePastEvents } from "~/lib/pastEvents";
 import { formatSiteTime, siteDay } from "~/lib/siteTime";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
@@ -147,9 +147,7 @@ export const SekaiBeyondCon = () => {
         : edition.status !== 'past');
 
     // Either language's recap stands in for a missing one, as in Past Events.
-    const recapHref = isEnglish
-        ? (edition.recapLink || edition.recapLinkCn)
-        : (edition.recapLinkCn || edition.recapLink);
+    const recapHref = eitherLanguage(isEnglish, edition.recapLink, edition.recapLinkCn);
     const showRecap = edition.status === 'past' && isValidHttpUrl(recapHref);
     const location = eventLocationDisplay(edition, venues, isEnglish);
     const description = localized(isEnglish, edition.description, edition.descriptionCn);

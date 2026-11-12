@@ -158,7 +158,7 @@ export function eventLocationText(
  * Marks an event, upcoming or past, as that year's Sekai Beyond Con. Mirrors
  * ConInfo in app/lib/conEditions.ts. Archiving carries it across.
  */
-export interface ConInfo {
+interface ConInfo {
     year: number;
 }
 

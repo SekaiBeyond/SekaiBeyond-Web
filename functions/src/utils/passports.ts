@@ -4,7 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { BATCH_LIMIT, PUBLIC_ORIGIN, SEND_CHUNK_SIZE } from "./config";
 import { accountEmails, maskEmail } from "./accountEmail";
 import { db } from "./firebase";
-import { CODE_ALPHABET, generateSecureCode } from "./helpers";
+import { type BatchOp, CODE_ALPHABET, generateSecureCode } from "./helpers";
 import { extendedExpiry, startedAtAfter } from "./membership";
 import { recordDoc, recordRef } from "./records";
 import { sanitizeDisplayText, validateStr } from "./validation";
@@ -17,7 +17,7 @@ import { sanitizeDisplayText, validateStr } from "./validation";
 
 // Printed and in every scan URL, so it only needs to be unguessable: 31^10 ≈
 // 8.2e14.
-export const PASSPORT_ID_LENGTH = 10;
+const PASSPORT_ID_LENGTH = 10;
 // The slip's secret: 31^12 ≈ 7.9e17 (~59 bits), like a badge code, redeemed from
 // the same box under the same rate limit. The length is what makes it safe to
 // accept without the sticker.
@@ -44,7 +44,7 @@ export const MAX_KEY_EXPORT_COUNT = 500;
 export const MAX_EMAIL_COUNT = Math.min(MAX_GENERATE_COUNT, SEND_CHUNK_SIZE, Math.floor(BATCH_LIMIT / 4));
 
 /** One line, like a ticket's note. Mirrored by PASSPORT_NOTE_MAX in app/lib/passports.ts. */
-export const PASSPORT_NOTE_MAX = 500;
+const PASSPORT_NOTE_MAX = 500;
 
 /** A note as sent: one line, tags and control characters gone. Blank for none. */
 export function validatePassportNote(value: unknown): string {
@@ -104,8 +104,9 @@ export function isPassportYear(value: unknown): value is number {
     return typeof value === "number" && Number.isInteger(value) && value >= 2000 && value <= 2100;
 }
 
-const PASSPORTS = "passports";
-const SECRETS = "passportSecrets";
+export const PASSPORTS = "passports";
+/** Each passport's key, under its id. Server only (see firestore.rules). */
+export const SECRETS = "passportSecrets";
 
 /**
  * Staff's note on a passport, such as why it was made. Kept apart from the
@@ -175,8 +176,8 @@ export function mintPassport(
 ): {
     passportId: string;
     key: string;
-    write: (batch: FirebaseFirestore.WriteBatch) => void;
-    noteWrite: ((batch: FirebaseFirestore.WriteBatch) => void) | null;
+    write: BatchOp;
+    noteWrite: BatchOp | null;
 } {
     let passportId = generateSecureCode(PASSPORT_ID_LENGTH);
     while (seen.has(passportId)) passportId = generateSecureCode(PASSPORT_ID_LENGTH);
@@ -240,7 +241,7 @@ export async function findPassportByKey(key: string): Promise<string | null> {
     return snap.empty ? null : snap.docs[0].id;
 }
 
-export interface PassportGrant {
+interface PassportGrant {
     passportId: string;
     designId: string;
     membershipExpiresAt: string;
