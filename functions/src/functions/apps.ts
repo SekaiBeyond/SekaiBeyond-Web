@@ -13,6 +13,7 @@ import {
     hasSignIn,
     isAppScope,
     mintAppToken,
+    newAppId,
     normalizeRedirectUri,
     readApp,
     type RegisteredApp,
@@ -186,15 +187,16 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Registers an app (`create`), or changes one. Its ID is for good: it's in
- * every sign-in the app has. A change applies to the next sign-in at once and
- * to the API within seconds (see registeredApps).
+ * Registers an app (`create`) under an ID made for it (newAppId), or changes
+ * the one `appId` names. Its ID is for good: it's in every sign-in the app
+ * has. A change applies to the next sign-in at once and to the API within
+ * seconds (see registeredApps). Says the app's ID.
  */
 export const saveApp = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const input = (request.data ?? {}) as {appId?: unknown; create?: unknown};
-    const appId = validateAppId(input.appId);
     const create = input.create === true;
+    const appId = create ? newAppId() : validateAppId(input.appId);
     const fields = parseAppInput(request.data);
 
     const before = await adminTransaction(uid, async (txn, callerSnap) => {
@@ -203,9 +205,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             txn.get(ref),
             fields.ownerUid ? txn.get(db.collection("users").doc(fields.ownerUid)) : null,
         ]);
-        if (create && snap.exists) {
-            throw new HttpsError("already-exists", "An app with this ID already exists.", {code: "app-exists"});
-        }
+        // One in 2^64 a new ID is taken: create then fails rather than overwrite it.
         if (!create && !snap.exists) throw new HttpsError("not-found", "App not found.");
         if (owner && !owner.exists) throw new HttpsError("not-found", "Owner not found.", {code: "owner-not-found"});
 
@@ -228,7 +228,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
     // ones from before now carry the wrong ones. Signed out from the project
     // they're in, the one before if the app moved.
     if (before && claimsChange(before, fields)) await signEveryoneOutOf(before);
-    return {saved: true};
+    return {saved: true, appId};
 });
 
 /**

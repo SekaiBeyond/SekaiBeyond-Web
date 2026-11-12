@@ -5,7 +5,6 @@ import {
     API_SCOPES,
     type ApiKeySummary,
     type ApiScope,
-    APP_ID_RE,
     APP_SCOPES,
     type AppScope,
     type AppSummary,
@@ -80,7 +79,6 @@ const lifetimeOption = (k: ApiKeySummary): number => {
 };
 
 interface Draft {
-    appId: string;
     name: string;
     owner: {uid: string; name: string} | null;
     signIn: boolean;
@@ -91,7 +89,6 @@ interface Draft {
 }
 
 const EMPTY_DRAFT: Draft = {
-    appId: '',
     name: '',
     owner: null,
     signIn: true,
@@ -105,9 +102,9 @@ const redirectLines = (text: string) => text.split('\n').map(line => line.trim()
 
 /**
  * Apps (functions/src/utils/apps.ts) and their server API keys
- * (functions/src/utils/apiKeys.ts): registering an app gives it an ID, an
- * optional owner, optional sign-in with accounts here, and server-to-server
- * keys for the ticket API under that app.
+ * (functions/src/utils/apiKeys.ts): registering an app gives it an ID, which
+ * the server makes, an optional owner, optional sign-in with accounts here,
+ * and server-to-server keys for the ticket API under that app.
  */
 export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const {isEnglish} = useLanguage();
@@ -188,7 +185,6 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
 
     const startEdit = (app: AppSummary) => {
         setDraft({
-            appId: app.id,
             name: app.name,
             owner: app.ownerUid ? {uid: app.ownerUid, name: app.ownerName} : null,
             signIn: app.redirectUris.length > 0,
@@ -204,7 +200,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const toggleScope = (scope: AppScope) =>
         set('scopes', draft.scopes.includes(scope) ? draft.scopes.filter(s => s !== scope) : [...draft.scopes, scope]);
 
-    const canSave = APP_ID_RE.test(draft.appId) && !!draft.name.trim() && (
+    const canSave = !!draft.name.trim() && (
         !draft.signIn || (
             redirectLines(draft.redirectUris).length > 0
             && !!draft.firebaseProjectId.trim()
@@ -216,16 +212,15 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
         if (!canSave) return;
         setSaving(true);
         try {
-            await callSaveApp({
-                appId: draft.appId,
-                create: !editing,
+            const fields = {
                 name: draft.name.trim(),
                 ownerUid: draft.owner?.uid ?? '',
                 redirectUris: draft.signIn ? redirectLines(draft.redirectUris) : [],
                 scopes: draft.signIn ? draft.scopes : [],
                 firebaseProjectId: draft.signIn ? draft.firebaseProjectId.trim() : '',
                 serviceAccount: draft.signIn ? draft.serviceAccount.trim() : '',
-            });
+            };
+            await callSaveApp(editing ? {...fields, appId: editing.id, create: false} : {...fields, create: true});
             showToast(editing
                 ? (isEnglish ? 'App saved.' : '应用已保存。')
                 : (isEnglish ? 'App registered.' : '应用已登记。'), 'success');
@@ -236,11 +231,9 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             console.error('[AppsTool] save', err);
             const code = functionsErrorCode(err);
             const message = (err as {message?: string})?.message ?? '';
-            showToast(code === 'app-exists'
-                ? (isEnglish ? 'An app with this ID already exists.' : '已存在使用此 ID 的应用。')
-                : code === 'owner-not-found'
-                    ? (isEnglish ? 'That owner\'s account no longer exists.' : '该负责人的账号已不存在。')
-                    : (isEnglish ? `Failed to save the app. ${message}` : `保存应用失败。${message}`), 'error');
+            showToast(code === 'owner-not-found'
+                ? (isEnglish ? 'That owner\'s account no longer exists.' : '该负责人的账号已不存在。')
+                : (isEnglish ? `Failed to save the app. ${message}` : `保存应用失败。${message}`), 'error');
         } finally {
             setSaving(false);
         }
@@ -328,6 +321,15 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                 : (isEnglish ? 'Failed to create API key.' : '创建 API 密钥失败。'), 'error');
         } finally {
             setCreatingKey(false);
+        }
+    };
+
+    const copyAppId = async (app: AppSummary) => {
+        try {
+            await navigator.clipboard.writeText(app.id);
+            showToast(isEnglish ? 'App ID copied.' : '应用 ID 已复制。', 'success');
+        } catch {
+            showToast(isEnglish ? `Couldn't copy. The app ID is ${app.id}` : `复制失败。应用 ID 为 ${app.id}`, 'error');
         }
     };
 
@@ -490,23 +492,6 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             >
                 <div className="admin-api-key-form">
                     <label className="admin-tickets-template-field">
-                        <span>{isEnglish ? 'App ID' : '应用 ID'}</span>
-                        <input
-                            className="admin-input"
-                            value={draft.appId}
-                            onChange={e => set('appId', e.target.value.trim().toLowerCase())}
-                            placeholder="skby-manager"
-                            maxLength={32}
-                            disabled={saving || !!editing}
-                        />
-                        <span className="admin-helper-text">
-                            {isEnglish
-                                ? 'Used in sign-in links and to keep this app\'s ticket orders separate from other apps\', so it can\'t change. Lowercase letters, digits and -.'
-                                : '用于登录链接，并用于将该应用的门票订单与其他应用区分开，因此无法更改。仅限小写字母、数字和 -。'}
-                        </span>
-                    </label>
-
-                    <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Name' : '名称'}</span>
                         <input
                             className="admin-input"
@@ -518,6 +503,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                         />
                         <span className="admin-helper-text">
                             {isEnglish ? 'Shown on this list and when people sign in to it.' : '在此列表中显示，并在用户登录时向用户显示。'}
+                            {!editing && (isEnglish ? ' Its ID is made when it\'s registered.' : '应用 ID 会在登记时自动生成。')}
                         </span>
                     </label>
 
@@ -661,6 +647,13 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                     <span className="admin-api-key-name">{app.name}</span>
                                     <code className="record-code">{app.id}</code>
                                     <div className="admin-api-key-actions">
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                                            onClick={() => void copyAppId(app)}
+                                            type="button"
+                                        >
+                                            {isEnglish ? 'Copy ID' : '复制 ID'}
+                                        </button>
                                         <button
                                             className="admin-toggle-btn admin-toggle-grant admin-btn-sm"
                                             onClick={() => startNewKey(app)}

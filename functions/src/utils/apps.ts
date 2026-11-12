@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { HttpsError } from "firebase-functions/v2/https";
 import { type App, initializeApp } from "firebase-admin/app";
@@ -39,6 +40,9 @@ export function isAppScope(raw: unknown): raw is AppScope {
 
 /** An app's ID: what it signs people in with (/authorize?app=…), and its doc's name. */
 export const APP_ID_RE = /^[a-z0-9-]{1,32}$/;
+
+/** A new app's ID: 16 random hex digits, made here rather than chosen, as it can never change and an app's name can. */
+export const newAppId = () => randomBytes(8).toString("hex");
 
 /** An app's ID from a request, refused unless it's one an app can have. */
 export function validateAppId(raw: unknown): string {

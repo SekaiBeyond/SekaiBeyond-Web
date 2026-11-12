@@ -617,8 +617,9 @@ export const callListApps = () =>
     httpsCallable<Record<string, never>, {apps: AppSummary[]; signer: string; serverNow: string}>(
         getFunctions(), 'listApps')({});
 
-export const callSaveApp = (data: AppFields & {appId: string; create: boolean}) =>
-    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveApp')(data);
+/** Registers an app (`create`), which the server gives an ID, or changes the one `appId` names. Says the app's ID. */
+export const callSaveApp = (data: AppFields & ({create: true} | {appId: string; create: false})) =>
+    httpsCallable<typeof data, {saved: boolean; appId: string}>(getFunctions(), 'saveApp')(data);
 
 export const callDeleteApp = (data: {appId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteApp')(data);
