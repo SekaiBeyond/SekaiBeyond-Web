@@ -25,7 +25,7 @@ const SCOPE_TEXT: Record<AppScope, {en: string; zh: string}> = {
     },
 };
 
-type Info = {name: string; ownerName: string; scopes: AppScope[]};
+type Info = {name: string; maintainerNames: string[]; scopes: AppScope[]};
 
 /**
  * Sign in with Sekai Beyond: where a registered app (see
@@ -81,6 +81,10 @@ export const AuthorizePage = () => {
     };
 
     const appName = info && typeof info === 'object' ? info.name : '';
+    // "A, B, and C" / "A、B和C".
+    const maintainers = info && typeof info === 'object'
+        ? new Intl.ListFormat(isEnglish ? 'en' : 'zh', {type: 'conjunction'}).format(info.maintainerNames)
+        : '';
 
     return (
         <>
@@ -92,8 +96,8 @@ export const AuthorizePage = () => {
                             <h2>{isEnglish ? 'This Link Doesn’t Work' : '此链接无效'}</h2>
                             <p>
                                 {isEnglish
-                                    ? 'Go back to the app you came from and choose Sign in with Sekai Beyond again. If it keeps happening, let the app’s owner know.'
-                                    : '请返回您来自的应用，重新选择「使用彼世界账号登录」。如果问题持续出现，请联系该应用的负责人。'}
+                                    ? 'Go back to the app you came from and choose Sign in with Sekai Beyond again. If it keeps happening, let the people who look after the app know.'
+                                    : '请返回您来自的应用，重新选择「使用彼世界账号登录」。如果问题持续出现，请联系该应用的维护者。'}
                             </p>
                         </>
                     ) : info === 'error' ? (
@@ -120,11 +124,11 @@ export const AuthorizePage = () => {
                             <h2>{isEnglish ? `Continue to ${appName}` : `继续使用 ${appName}`}</h2>
                             <p>
                                 {isEnglish
-                                    ? <>You’ll be signed in to {appName}{info.ownerName && <> (looked after
-                                        by {info.ownerName})</>} as <strong>{profile.displayName}</strong>. It will
+                                    ? <>You’ll be signed in to {appName}{maintainers && <> (looked after
+                                        by {maintainers})</>} as <strong>{profile.displayName}</strong>. It will
                                         see:</>
                                     : <>您将以 <strong>{profile.displayName}</strong> 的身份登录 {appName}
-                                        {info.ownerName && <>（由 {info.ownerName} 负责）</>}。它可以看到：</>}
+                                        {maintainers && <>（由 {maintainers} 维护）</>}。它可以看到：</>}
                             </p>
                             <ul className="authorize-scopes">
                                 <li>{isEnglish ? 'Your name, photo and role here' : '您在本站的名称、头像和角色'}</li>

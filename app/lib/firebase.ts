@@ -588,31 +588,45 @@ export type AppScope = typeof APP_SCOPES[number];
 /** An app's ID. Mirrors APP_ID_RE in functions/src/utils/apps.ts. */
 export const APP_ID_RE = /^[a-z0-9-]{1,32}$/;
 
+/** The most accounts that may look after an app. Mirrors APP_MAINTAINERS_MAX in functions/src/utils/apps.ts. */
+export const APP_MAINTAINERS_MAX = 5;
+
+/** An app's creator or maintainer, by their name and photo now. */
+export interface AppPerson {
+    uid: string;
+    /** For a deleted creator, the name they had when they registered the app; "" for a deleted maintainer. */
+    name: string;
+    photoURL: string;
+    /** Their account no longer exists. */
+    deleted: boolean;
+}
+
 export interface AppSummary {
     id: string;
     name: string;
-    ownerUid: string;
-    ownerName: string;
+    /** Who registered it; null if that wasn't kept. */
+    creator: AppPerson | null;
+    /** Who looks after it, up to APP_MAINTAINERS_MAX, in the order they were added. */
+    maintainers: AppPerson[];
     redirectUris: string[];
     scopes: AppScope[];
     firebaseProjectId: string;
     serviceAccount: string;
     keys: ApiKeySummary[];
-    createdByName: string;
     createdAt: string | null;
     updatedAt: string | null;
 }
 
 interface AppFields {
     name: string;
-    ownerUid: string;
+    maintainerUids: string[];
     redirectUris: string[];
     scopes: AppScope[];
     firebaseProjectId: string;
     serviceAccount: string;
 }
 
-/** Every app with its API keys, the service account an app's owner grants roles to ("" where it can't be told), and the server time. */
+/** Every app with its API keys, the service account an app's maintainers grant roles to ("" where it can't be told), and the server time. */
 export const callListApps = () =>
     httpsCallable<Record<string, never>, {apps: AppSummary[]; signer: string; serverNow: string}>(
         getFunctions(), 'listApps')({});
@@ -626,7 +640,7 @@ export const callDeleteApp = (data: {appId: string}) =>
 
 /** What the sign-in page shows of an app. Needs no sign-in. */
 export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>
-    httpsCallable<typeof data, {name: string; ownerName: string; scopes: AppScope[]}>(
+    httpsCallable<typeof data, {name: string; maintainerNames: string[]; scopes: AppScope[]}>(
         getFunctions(), 'getAppSignInInfo')(data);
 
 /** A sign-in to an app for the caller, and where to hand it. */

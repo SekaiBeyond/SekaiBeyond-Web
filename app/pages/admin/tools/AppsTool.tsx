@@ -5,7 +5,9 @@ import {
     API_SCOPES,
     type ApiKeySummary,
     type ApiScope,
+    APP_MAINTAINERS_MAX,
     APP_SCOPES,
+    type AppPerson,
     type AppScope,
     type AppSummary,
     callCreateApiKey,
@@ -20,6 +22,7 @@ import { localized } from '~/lib/localized';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { CreateSection } from '../CrudShell';
+import { UserAvatar } from '../UserRow';
 import { UserSearchAdd } from '../UserSearchAdd';
 import type { ShowToast } from '../utils';
 
@@ -80,7 +83,7 @@ const lifetimeOption = (k: ApiKeySummary): number => {
 
 interface Draft {
     name: string;
-    owner: {uid: string; name: string} | null;
+    maintainers: AppPerson[];
     signIn: boolean;
     redirectUris: string;
     scopes: AppScope[];
@@ -90,7 +93,7 @@ interface Draft {
 
 const EMPTY_DRAFT: Draft = {
     name: '',
-    owner: null,
+    maintainers: [],
     signIn: true,
     redirectUris: '',
     scopes: [],
@@ -100,11 +103,44 @@ const EMPTY_DRAFT: Draft = {
 
 const redirectLines = (text: string) => text.split('\n').map(line => line.trim()).filter(Boolean);
 
+/** An app's creator or maintainer: their photo and name, marked when their account is gone. */
+const PersonChip = ({person, isEnglish, onRemove, removeDisabled}: {
+    person: AppPerson;
+    isEnglish: boolean;
+    /** Shows a remove button, in the form. */
+    onRemove?: () => void;
+    removeDisabled?: boolean;
+}) => {
+    const name = person.deleted
+        ? (person.name
+            ? (isEnglish ? `${person.name} (account deleted)` : `${person.name}（账号已注销）`)
+            : (isEnglish ? 'Deleted account' : '已注销的账号'))
+        : person.name || person.uid;
+    return (
+        <span className={`admin-app-person${person.deleted ? ' admin-app-person--deleted' : ''}`} title={person.uid}>
+            <UserAvatar photoURL={person.photoURL} displayName={person.name} className="admin-app-person-avatar"/>
+            <span className="admin-app-person-name">{name}</span>
+            {onRemove && (
+                <button
+                    className="admin-app-person-remove"
+                    onClick={onRemove}
+                    disabled={removeDisabled}
+                    type="button"
+                    aria-label={isEnglish ? `Remove ${name}` : `移除 ${name}`}
+                >
+                    ×
+                </button>
+            )}
+        </span>
+    );
+};
+
 /**
  * Apps (functions/src/utils/apps.ts) and their server API keys
  * (functions/src/utils/apiKeys.ts): registering an app gives it an ID, which
- * the server makes, an optional owner, optional sign-in with accounts here,
- * and server-to-server keys for the ticket API under that app.
+ * the server makes, up to APP_MAINTAINERS_MAX maintainers, optional sign-in
+ * with accounts here, and server-to-server keys for the ticket API under that
+ * app. Each card shows who registered the app and who looks after it.
  */
 export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const {isEnglish} = useLanguage();
@@ -186,7 +222,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const startEdit = (app: AppSummary) => {
         setDraft({
             name: app.name,
-            owner: app.ownerUid ? {uid: app.ownerUid, name: app.ownerName} : null,
+            maintainers: app.maintainers,
             signIn: app.redirectUris.length > 0,
             redirectUris: app.redirectUris.join('\n'),
             scopes: APP_SCOPES.filter(s => app.scopes.includes(s)),
@@ -199,6 +235,20 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
 
     const toggleScope = (scope: AppScope) =>
         set('scopes', draft.scopes.includes(scope) ? draft.scopes.filter(s => s !== scope) : [...draft.scopes, scope]);
+
+    const addMaintainer = (user: {uid: string; displayName: string; photoURL: string}) => setDraft(prev =>
+        prev.maintainers.length >= APP_MAINTAINERS_MAX || prev.maintainers.some(m => m.uid === user.uid) ? prev : {
+            ...prev,
+            maintainers: [...prev.maintainers, {
+                uid: user.uid,
+                name: user.displayName,
+                photoURL: user.photoURL,
+                deleted: false
+            }],
+        });
+
+    const removeMaintainer = (uid: string) =>
+        setDraft(prev => ({...prev, maintainers: prev.maintainers.filter(m => m.uid !== uid)}));
 
     const canSave = !!draft.name.trim() && (
         !draft.signIn || (
@@ -214,7 +264,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
         try {
             const fields = {
                 name: draft.name.trim(),
-                ownerUid: draft.owner?.uid ?? '',
+                maintainerUids: draft.maintainers.map(m => m.uid),
                 redirectUris: draft.signIn ? redirectLines(draft.redirectUris) : [],
                 scopes: draft.signIn ? draft.scopes : [],
                 firebaseProjectId: draft.signIn ? draft.firebaseProjectId.trim() : '',
@@ -231,8 +281,10 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             console.error('[AppsTool] save', err);
             const code = functionsErrorCode(err);
             const message = (err as {message?: string})?.message ?? '';
-            showToast(code === 'owner-not-found'
-                ? (isEnglish ? 'That owner\'s account no longer exists.' : '该负责人的账号已不存在。')
+            showToast(code === 'maintainer-not-found'
+                ? (isEnglish
+                    ? 'A maintainer\'s account no longer exists. Remove it and try again.'
+                    : '有一位维护者的账号已不存在，请将其移除后重试。')
                 : (isEnglish ? `Failed to save the app. ${message}` : `保存应用失败。${message}`), 'error');
         } finally {
             setSaving(false);
@@ -418,7 +470,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
         ...(recreatingKey?.eventIds ?? []).filter(id => !upcomingEvents.some(e => e.id === id)),
     ];
 
-    // What the app's owner runs once, on their project, so its sign-ins can be made here.
+    // What the app's maintainers run once, on its project, so its sign-ins can be made here.
     const grants = (app: AppSummary) => signer ? [
         `gcloud iam service-accounts add-iam-policy-binding ${app.serviceAccount} --member="serviceAccount:${signer}" --role="roles/iam.serviceAccountTokenCreator" --project=${app.firebaseProjectId}`,
         `gcloud projects add-iam-policy-binding ${app.firebaseProjectId} --member="serviceAccount:${signer}" --role="roles/firebaseauth.admin"`,
@@ -443,8 +495,8 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
 
             <p className="admin-helper-text admin-section-mb">
                 {isEnglish
-                    ? 'Apps are our own projects and trusted partners\' systems, like SKBY Manager or a ticket seller. People can sign in to an app with their account here, and its server can hold API keys for the ticket API. Who may do what in the app, and its own data, are up to its owner.'
-                    : '应用是我们自己的项目或可信合作方的系统（例如 SKBY Manager 或售票应用）。用户可以用本站账号登录应用，其服务器也可持有门票 API 的密钥。应用内谁能做什么、以及应用自己的数据，都由应用负责人决定。'}
+                    ? 'Apps are our own projects and trusted partners\' systems, like SKBY Manager or a ticket seller. People can sign in to an app with their account here, and its server can hold API keys for the ticket API. Who may do what in the app, and its own data, are up to its maintainers.'
+                    : '应用是我们自己的项目或可信合作方的系统（例如 SKBY Manager 或售票应用）。用户可以用本站账号登录应用，其服务器也可持有门票 API 的密钥。应用内谁能做什么、以及应用自己的数据，都由应用的维护者决定。'}
             </p>
 
             <div ref={createdRef}/>
@@ -508,30 +560,47 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                     </label>
 
                     <div className="admin-tickets-template-field">
-                        <span>{isEnglish ? 'Owner' : '负责人'}</span>
-                        {draft.owner ? (
-                            <div className="admin-btn-row">
-                                <strong>{draft.owner.name || draft.owner.uid}</strong>
-                                <button className="admin-toggle-btn admin-toggle-cancel admin-btn-sm" type="button"
-                                        onClick={() => set('owner', null)} disabled={saving}>
-                                    {isEnglish ? 'Remove' : '移除'}
-                                </button>
+                        <span>
+                            {isEnglish ? 'Maintainers' : '维护者'}
+                            {' '}
+                            <span className="admin-app-people-count">
+                                {draft.maintainers.length}/{APP_MAINTAINERS_MAX}
+                            </span>
+                        </span>
+                        {draft.maintainers.length > 0 && (
+                            <div className="admin-app-people-chips">
+                                {draft.maintainers.map(m => (
+                                    <PersonChip
+                                        key={m.uid}
+                                        person={m}
+                                        isEnglish={isEnglish}
+                                        onRemove={() => removeMaintainer(m.uid)}
+                                        removeDisabled={saving}
+                                    />
+                                ))}
                             </div>
-                        ) : (
+                        )}
+                        {draft.maintainers.length < APP_MAINTAINERS_MAX ? (
                             <UserSearchAdd
-                                excludeUids={new Set()}
+                                excludeUids={new Set(draft.maintainers.map(m => m.uid))}
                                 busyUid={null}
-                                onAdd={u => set('owner', {uid: u.uid, name: u.displayName})}
-                                addLabel={isEnglish ? 'Choose' : '选择'}
-                                addingLabel={isEnglish ? 'Choosing...' : '选择中...'}
+                                onAdd={addMaintainer}
+                                addLabel={isEnglish ? 'Add' : '添加'}
+                                addingLabel={isEnglish ? 'Adding...' : '添加中...'}
                                 noMatchMessage={isEnglish ? 'No matching users.' : '没有匹配的用户。'}
                                 showToast={showToast}
                             />
+                        ) : (
+                            <span className="admin-helper-text">
+                                {isEnglish
+                                    ? `That's the most an app can have. Remove one to add someone else.`
+                                    : '已达上限。如需添加其他人，请先移除一位。'}
+                            </span>
                         )}
                         <span className="admin-helper-text">
                             {isEnglish
-                                ? 'Who looks after it. Shown when people sign in to it. Optional.'
-                                : '负责维护该应用的人，登录时会显示。可不填。'}
+                                ? `Who looks after it, up to ${APP_MAINTAINERS_MAX}. Shown when people sign in to it. Optional. Whoever registers it shows as its creator separately, so needn't be one.`
+                                : `负责维护该应用的人，最多 ${APP_MAINTAINERS_MAX} 位，登录时会显示。可不填。登记该应用的人会单独显示为创建者，不必同时列为维护者。`}
                         </span>
                     </div>
 
@@ -697,22 +766,47 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                         </span>
                                     ))}
                                 </div>
-                                <div className="admin-api-key-meta">
-                                    {app.ownerUid &&
-                                        <span>{isEnglish ? 'Owner ' : '负责人 '}{app.ownerName || app.ownerUid}</span>}
-                                    {app.firebaseProjectId && (
+                                <dl className="admin-app-people">
+                                    <div className="admin-app-people-row">
+                                        <dt>{isEnglish ? 'Creator' : '创建者'}</dt>
+                                        <dd>
+                                            {app.creator
+                                                ? <PersonChip person={app.creator} isEnglish={isEnglish}/>
+                                                : <span
+                                                    className="admin-app-people-note">{isEnglish ? 'Not recorded' : '未记录'}</span>}
+                                            {app.createdAt && (
+                                                <span className="admin-app-people-note">
+                                                    {isEnglish ? `Registered ${fmtDate(app.createdAt)}` : `登记于 ${fmtDate(app.createdAt)}`}
+                                                </span>
+                                            )}
+                                        </dd>
+                                    </div>
+                                    <div className="admin-app-people-row">
+                                        <dt>
+                                            {isEnglish ? 'Maintainers' : '维护者'}
+                                            {' '}
+                                            <span className="admin-app-people-count">
+                                                {app.maintainers.length}/{APP_MAINTAINERS_MAX}
+                                            </span>
+                                        </dt>
+                                        <dd>
+                                            {app.maintainers.length > 0
+                                                ? app.maintainers.map(m => <PersonChip key={m.uid} person={m}
+                                                                                       isEnglish={isEnglish}/>)
+                                                : <span
+                                                    className="admin-app-people-note">{isEnglish ? 'None yet' : '暂无'}</span>}
+                                        </dd>
+                                    </div>
+                                </dl>
+                                {app.firebaseProjectId && (
+                                    <div className="admin-api-key-meta">
                                         <span>{isEnglish ? 'Project ' : '项目 '}<code
                                             className="record-code">{app.firebaseProjectId}</code></span>
-                                    )}
-                                    <span>
-                                        {isEnglish
-                                            ? `Registered ${fmtDate(app.createdAt)}${app.createdByName ? ` by ${app.createdByName}` : ''}`
-                                            : `${app.createdByName ? `${app.createdByName} ` : ''}登记于 ${fmtDate(app.createdAt)}`}
-                                    </span>
-                                </div>
+                                    </div>
+                                )}
                                 {signInEnabled && (
                                     <details className="admin-helper-text">
-                                        <summary>{isEnglish ? 'Setup for its owner' : '负责人设置说明'}</summary>
+                                        <summary>{isEnglish ? 'Setup for its maintainers' : '维护者设置说明'}</summary>
                                         <p>
                                             {isEnglish ? 'Send people to ' : '将用户引导至 '}
                                             <code

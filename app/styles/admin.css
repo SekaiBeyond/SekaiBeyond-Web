@@ -1924,7 +1924,7 @@
     flex-wrap: wrap;
 }
 
-/* Apps tool: the gcloud commands an app's owner runs, wrapped to the card. */
+/* Apps tool: the gcloud commands an app's maintainers run, wrapped to the card. */
 .admin-app-grant {
     display: block;
     white-space: pre-wrap;
@@ -1958,6 +1958,152 @@
     gap: 4px 16px;
     font-size: 12px;
     color: var(--color-text-muted);
+}
+
+/* Apps tool: who registered an app and who looks after it, a labelled row each. */
+.admin-app-people {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 107, 157, 0.14);
+    border-radius: 10px;
+    background: rgba(255, 107, 157, 0.03);
+    min-width: 0;
+}
+
+/* Each label lines up with the first line of people, however many lines they wrap to. */
+.admin-app-people-row {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    align-items: start;
+    gap: 4px 12px;
+}
+
+.admin-app-people dt {
+    padding-top: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 18px;
+    color: var(--color-text-muted);
+}
+
+.admin-app-people dd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    margin: 0;
+    min-width: 0;
+}
+
+.admin-app-people-count {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+    opacity: 0.8;
+}
+
+.admin-app-people-note {
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+/* The chosen maintainers in the form, above the search. */
+.admin-app-people-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.admin-app-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+    padding: 3px 10px 3px 3px;
+    border: 1px solid rgba(255, 107, 157, 0.2);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.admin-app-person:has(.admin-app-person-remove) {
+    padding-right: 4px;
+}
+
+.admin-app-person-avatar {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.admin-app-person-avatar.admin-user-avatar-initial {
+    font-size: 11px;
+    line-height: 1;
+}
+
+.admin-app-person-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* An account that's gone: still listed, so it can be seen and removed. */
+.admin-app-person--deleted {
+    border-style: dashed;
+    background: transparent;
+    font-weight: 400;
+    color: var(--color-text-muted);
+}
+
+.admin-app-person-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.admin-app-person-remove:hover:not(:disabled) {
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--color-primary);
+}
+
+.admin-app-person-remove:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+@media (max-width: 600px) {
+    .admin-app-people-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-app-people dt {
+        padding-top: 0;
+    }
+
+    .admin-app-people dd {
+        min-height: 0;
+    }
 }
 
 .admin-tools-header {

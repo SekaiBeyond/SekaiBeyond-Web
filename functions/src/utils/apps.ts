@@ -22,7 +22,7 @@ import { db } from "./firebase";
  * A sign-in is a Firebase custom token for the app's own Firebase project,
  * signed through IAM as a service account of that project, as this project's
  * own are signed as the account the functions run as (see signInToken). So the
- * app's owner grants that account Service Account Token Creator on theirs,
+ * app's maintainers grant that account Service Account Token Creator on theirs,
  * and, for signing out here to sign people out there too, Firebase
  * Authentication Admin on their project.
  */
@@ -60,6 +60,9 @@ export const SERVICE_ACCOUNT_RE = /^[a-z0-9-]{1,63}@([a-z0-9-]{1,63}\.iam|appspo
 
 export const APP_REDIRECT_URIS_MAX = 10;
 
+/** The most accounts that may look after an app. */
+export const APP_MAINTAINERS_MAX = 5;
+
 /**
  * `raw` as a place sign-in may hand back to, in the one spelling it's stored
  * and compared in, or null if it can't be one: https, or http on this machine
@@ -81,8 +84,12 @@ export function normalizeRedirectUri(raw: unknown): string | null {
 /** An `apps` doc. Server only (see firestore.rules). */
 interface AppDoc {
     name: string;
-    /** The account that looks after it, "" for none. Shown on its sign-in page. */
-    ownerUid: string;
+    /**
+     * The accounts that look after it, up to APP_MAINTAINERS_MAX, in the order
+     * they were added. Shown on its sign-in page. Who registered it is
+     * `createdBy`, who needn't be one.
+     */
+    maintainerUids: string[];
     /**
      * Where sign-in may hand back to; empty when the app doesn't sign people
      * in. Their origins may call the API from a browser.
@@ -112,12 +119,14 @@ export function hasSignIn(app: Pick<AppDoc, "redirectUris" | "firebaseProjectId"
 export const appsCol = () => db.collection("apps");
 
 export function readApp(snap: FirebaseFirestore.DocumentSnapshot): RegisteredApp | null {
-    const data = snap.data() as Partial<AppDoc> | undefined;
+    // `ownerUid`: the one maintainer an app had before it could have several,
+    // until it's next saved (saveApp deletes it).
+    const data = snap.data() as (Partial<AppDoc> & {ownerUid?: string}) | undefined;
     if (!data) return null;
     return {
         id: snap.id,
         name: data.name ?? snap.id,
-        ownerUid: data.ownerUid ?? "",
+        maintainerUids: data.maintainerUids ?? (data.ownerUid ? [data.ownerUid] : []),
         redirectUris: data.redirectUris ?? [],
         scopes: (data.scopes ?? []).filter(isAppScope),
         firebaseProjectId: data.firebaseProjectId ?? "",
@@ -280,8 +289,8 @@ async function withRetries<T>(call: () => Promise<T>): Promise<T> {
 /**
  * Does `action` to `uid` in the Firebase project of every app with sign-in,
  * or of those `which` picks, once each. Logged, not thrown: it follows a
- * change already made here, which mustn't fail for it, and an app whose owner
- * hasn't granted Firebase Authentication Admin fails every time. The API
+ * change already made here, which mustn't fail for it, and an app whose maintainers
+ * haven't granted Firebase Authentication Admin fails every time. The API
  * refuses such a sign-in from then on regardless.
  */
 async function acrossApps(

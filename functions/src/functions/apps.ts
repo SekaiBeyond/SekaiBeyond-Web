@@ -1,10 +1,11 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { GoogleAuth } from "google-auth-library";
 import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol } from "../utils/apiKeys";
 import {
     APP_ID_RE,
+    APP_MAINTAINERS_MAX,
     APP_REDIRECT_URIS_MAX,
     APP_SCOPES,
     appsCol,
@@ -30,7 +31,7 @@ import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/valida
 /**
  * Registering apps people sign in to with their accounts here (see
  * utils/apps.ts), and signing them in. Registering is core staff's, as API
- * keys are: an app is the club's arrangement with its owner, and only decides
+ * keys are: an app is the club's arrangement with its maintainers, and only decides
  * what the site tells the app and serves it. What the app does with that, and
  * who may do what in it, is its own business.
  */
@@ -39,7 +40,7 @@ const APP_NAME_MAX = 60;
 
 interface AppInput {
     name: string;
-    ownerUid: string;
+    maintainerUids: string[];
     redirectUris: string[];
     scopes: (typeof APP_SCOPES)[number][];
     firebaseProjectId: string;
@@ -51,7 +52,11 @@ function parseAppInput(raw: unknown): AppInput {
     const name = sanitizeDisplayText(validateStr(input.name, "name", APP_NAME_MAX, true));
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
 
-    const ownerUid = input.ownerUid === undefined || input.ownerUid === "" ? "" : validateDocId(input.ownerUid, "ownerUid");
+    const rawMaintainers = input.maintainerUids;
+    if (!Array.isArray(rawMaintainers) || rawMaintainers.length > APP_MAINTAINERS_MAX) {
+        throw new HttpsError("invalid-argument", `maintainerUids must list 0–${APP_MAINTAINERS_MAX} accounts.`);
+    }
+    const maintainerUids = [...new Set(rawMaintainers.map(uid => validateDocId(uid, "maintainerUids")))];
 
     const rawUris = input.redirectUris === undefined ? [] : input.redirectUris;
     const rawScopes = input.scopes === undefined ? [] : input.scopes;
@@ -81,7 +86,7 @@ function parseAppInput(raw: unknown): AppInput {
     // An app that only holds API keys leaves sign-in blank; one that signs
     // people in needs where to hand them back to, its project and its service account.
     if (redirectUris.length === 0 && scopes.length === 0 && rawProject === "" && rawServiceAccount === "") {
-        return {name, ownerUid, redirectUris: [], scopes: [], firebaseProjectId: "", serviceAccount: ""};
+        return {name, maintainerUids, redirectUris: [], scopes: [], firebaseProjectId: "", serviceAccount: ""};
     }
     if (redirectUris.length === 0) {
         throw new HttpsError("invalid-argument",
@@ -95,7 +100,7 @@ function parseAppInput(raw: unknown): AppInput {
     }
     return {
         name,
-        ownerUid,
+        maintainerUids,
         redirectUris,
         scopes,
         firebaseProjectId: rawProject,
@@ -106,8 +111,8 @@ function parseAppInput(raw: unknown): AppInput {
 let signer: Promise<string> | null = null;
 
 /**
- * The service account this project's functions run as, which an app's owner
- * grants roles to, or "" where it can't be told, as in the emulator.
+ * The service account this project's functions run as, which an app's
+ * maintainers grant roles to, or "" where it can't be told, as in the emulator.
  */
 function signerAccount(): Promise<string> {
     signer ??= new GoogleAuth().getCredentials()
@@ -116,10 +121,39 @@ function signerAccount(): Promise<string> {
     return signer;
 }
 
+/** The user docs of `uids`, by uid, read together. */
+async function usersByUid(uids: string[]): Promise<Map<string, FirebaseFirestore.DocumentSnapshot>> {
+    const unique = [...new Set(uids.filter(Boolean))];
+    if (unique.length === 0) return new Map();
+    const snaps = await db.getAll(...unique.map(id => db.collection("users").doc(id)));
+    return new Map(snaps.map(snap => [snap.id, snap]));
+}
+
+/** An app's creator or maintainer as the Apps tool shows them. */
+interface AppPerson {
+    uid: string;
+    name: string;
+    photoURL: string;
+    /** Their account no longer exists. */
+    deleted: boolean;
+}
+
+/** `uid` as it is now among `users`, or, its account gone, by `nameIfDeleted`. */
+function appPerson(uid: string, users: Map<string, FirebaseFirestore.DocumentSnapshot>, nameIfDeleted = ""): AppPerson {
+    const snap = users.get(uid);
+    if (!snap?.exists) return {uid, name: nameIfDeleted, photoURL: "", deleted: true};
+    const text = (field: string) => {
+        const value: unknown = snap.get(field);
+        return typeof value === "string" ? value : "";
+    };
+    return {uid, name: text("displayName"), photoURL: text("photoURL"), deleted: false};
+}
+
 /**
- * Every app, newest first, with its owner's name, its API keys (expired ones
- * too, newest first, never the key itself), and the account owners grant roles
- * to. Core staff only.
+ * Every app, newest first, with who registered it and who looks after it, by
+ * their names and photos now, its API keys (expired ones too, newest first,
+ * never the key itself), and the account maintainers grant roles to. Core
+ * staff only.
  */
 export const listApps = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -130,11 +164,7 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
         apiKeysCol().orderBy("createdAt", "desc").get(),
     ]);
     const apps = appsSnap.docs.map(doc => readApp(doc)!);
-    const ownerUids = [...new Set(apps.map(app => app.ownerUid).filter(Boolean))];
-    const owners = ownerUids.length > 0
-        ? await db.getAll(...ownerUids.map(id => db.collection("users").doc(id)))
-        : [];
-    const ownerNames = new Map(owners.map(snap => [snap.id, snap.get("displayName") as string ?? ""]));
+    const users = await usersByUid(apps.flatMap(app => [app.createdBy, ...app.maintainerUids]));
 
     const keysByApp = new Map<string, {
         id: string;
@@ -170,14 +200,13 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
         apps: apps.map(app => ({
             id: app.id,
             name: app.name,
-            ownerUid: app.ownerUid,
-            ownerName: ownerNames.get(app.ownerUid) ?? "",
+            creator: app.createdBy ? appPerson(app.createdBy, users, app.createdByName) : null,
+            maintainers: app.maintainerUids.map(id => appPerson(id, users)),
             redirectUris: app.redirectUris,
             scopes: app.scopes,
             firebaseProjectId: app.firebaseProjectId,
             serviceAccount: app.serviceAccount,
             keys: keysByApp.get(app.id) ?? [],
-            createdByName: app.createdByName,
             createdAt: isoOrNull(app.createdAt),
             updatedAt: isoOrNull(app.updatedAt),
         })),
@@ -201,20 +230,24 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
 
     const before = await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = appsCol().doc(appId);
-        const [snap, owner] = await Promise.all([
+        const maintainerRefs = fields.maintainerUids.map(id => db.collection("users").doc(id));
+        const [snap, maintainers] = await Promise.all([
             txn.get(ref),
-            fields.ownerUid ? txn.get(db.collection("users").doc(fields.ownerUid)) : null,
+            maintainerRefs.length > 0 ? txn.getAll(...maintainerRefs) : [],
         ]);
         // One in 2^64 a new ID is taken: create then fails rather than overwrite it.
         if (!create && !snap.exists) throw new HttpsError("not-found", "App not found.");
-        if (owner && !owner.exists) throw new HttpsError("not-found", "Owner not found.", {code: "owner-not-found"});
+        if (maintainers.some(m => !m.exists)) {
+            throw new HttpsError("not-found", "A maintainer's account no longer exists.", {code: "maintainer-not-found"});
+        }
 
         const callerName: string = callerSnap.data()?.displayName ?? "";
         const now = Timestamp.now();
         if (create) {
             txn.create(ref, {...fields, createdBy: uid, createdByName: callerName, createdAt: now, updatedAt: now});
         } else {
-            txn.update(ref, {...fields, updatedAt: now});
+            // ownerUid: the one maintainer it had before it could have several (see readApp).
+            txn.update(ref, {...fields, ownerUid: FieldValue.delete(), updatedAt: now});
         }
         txn.set(recordRef(), recordDoc(create ? "app-create" : "app-update", {
             performedBy: uid,
@@ -234,7 +267,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
 /**
  * Removes an app and revokes its API keys. Its keys and sign-in to it stop at
  * once, and the API refuses its sign-ins within seconds. Its users and data in
- * its own project are its owner's.
+ * its own project are its maintainers' to keep.
  */
 export const deleteApp = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -280,16 +313,20 @@ function redirectFor(app: RegisteredApp, raw: unknown): string {
 }
 
 /**
- * What the sign-in page shows of an app before anyone signs in: its name, its
- * owner, and what it will be able to see. Refuses an unknown app, or a place
- * to hand back to that isn't its own, before anyone is asked to sign in.
+ * What the sign-in page shows of an app before anyone signs in: its name, the
+ * names of its maintainers, and what it will be able to see. Refuses an
+ * unknown app, or a place to hand back to that isn't its own, before anyone
+ * is asked to sign in.
  */
 export const getAppSignInInfo = onCall({maxInstances: 20}, async (request) => {
     const input = (request.data ?? {}) as {appId?: unknown; redirectUri?: unknown};
     const app = await findApp(input.appId);
     redirectFor(app, input.redirectUri);
-    const owner = app.ownerUid ? await db.collection("users").doc(app.ownerUid).get() : null;
-    return {name: app.name, ownerName: owner?.get("displayName") as string ?? "", scopes: app.scopes};
+    const users = await usersByUid(app.maintainerUids);
+    const maintainerNames = app.maintainerUids.map(id => appPerson(id, users))
+        .filter(person => !person.deleted && person.name)
+        .map(person => person.name);
+    return {name: app.name, maintainerNames, scopes: app.scopes};
 });
 
 /**
