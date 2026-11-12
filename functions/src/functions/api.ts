@@ -16,7 +16,7 @@ import {
 import { signedInSinceSessionsEnded } from "../utils/sessions";
 import { RESEND_QUEUE_CAP } from "../utils/config";
 import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
-import { eventLocationText, getEventDoc, readConInfo } from "../utils/events";
+import { eventLocationText, getEventDoc, readConInfo, staffEventsIn } from "../utils/events";
 import { db } from "../utils/firebase";
 import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "../utils/quota";
 import { recordDoc, recordRef } from "../utils/records";
@@ -39,7 +39,7 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
  *   token of that sign-in, from the app's server or its pages. They're shown
  *   what they may see here, and no more than the app's scopes allow.
  *
- *   GET  /api/v1/me                                a person, no scope
+ *   GET  /api/v1/me                                a person, no scope (more with event-staff:read)
  *   GET  /api/v1/team                              a person, team:read
  *   GET  /api/v1/events                            events:read
  *   GET  /api/v1/events/{eventId}                  events:read
@@ -261,11 +261,8 @@ function requirePerson(caller: Caller): Person {
     return caller.person;
 }
 
-/** The events a person is event staff for here. */
-function staffEventsOf(person: Person): string[] {
-    const raw: unknown = person.user.get("eventStaffEvents");
-    return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
-}
+/** The events a person is event staff for here, archived ones too. */
+const staffEventsOf = (person: Person): string[] => staffEventsIn(person.user);
 
 /**
  * Whether the caller may see an event: a key every one, a person the ones the
@@ -521,9 +518,17 @@ function byGroupThenName(a: PersonJson, b: PersonJson): number {
     return rank(a) - rank(b) || a.displayName.localeCompare(b.displayName) || (a.uid < b.uid ? -1 : 1);
 }
 
-/** The person calling, as they are now: their group may have changed since they signed in. */
+/**
+ * The person calling, as they are now, which their sign-in's claims may lag
+ * (mintAppToken). With event-staff:read, it adds every event they're event
+ * staff for, archived ones too: kept out of personJson, as /team and an
+ * event's staff must never show that of anyone.
+ */
 function getMe(caller: Caller): ApiReply {
-    return {status: 200, body: personJson(requirePerson(caller).user)};
+    const person = requirePerson(caller);
+    const me = personJson(person.user);
+    if (!person.app.scopes.includes("event-staff:read")) return {status: 200, body: me};
+    return {status: 200, body: {...me, eventStaffEvents: staffEventsOf(person)}};
 }
 
 /** Staff and above, as the admin panel lists them: only to a person who's staff here. */

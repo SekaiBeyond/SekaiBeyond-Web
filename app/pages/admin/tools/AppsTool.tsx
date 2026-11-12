@@ -42,8 +42,8 @@ const APP_SCOPE_LABELS: Record<AppScope, {en: string; zh: string; descEn: string
     },
     'event-staff:read': {
         en: 'Read event staff', zh: '读取活动工作人员',
-        descEn: 'An event\'s staff, if the person signed in is staff, or staff of that event.',
-        descZh: '某个活动的工作人员名单（仅限登录者为工作人员或该活动的工作人员时）。',
+        descEn: 'Which events the person signed in is staff for, on their sign-in and from /v1/me; and an event\'s staff, if the person signed in is staff, or staff of that event.',
+        descZh: '登录者担任工作人员的活动（写在其登录凭证中，也可从 /v1/me 读取）；以及某个活动的工作人员名单（仅限登录者为工作人员或该活动的工作人员时）。',
     },
 };
 

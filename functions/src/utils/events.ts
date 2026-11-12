@@ -2,6 +2,12 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { db } from "./firebase";
 import { validateDocId, validateStr, validateStringArray } from "./validation";
 
+/** The events a user is event staff for, from their user doc, archived ones too. */
+export function staffEventsIn(user: FirebaseFirestore.DocumentSnapshot): string[] {
+    const raw: unknown = user.get("eventStaffEvents");
+    return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
+}
+
 /**
  * An event's doc from whichever collection holds it: upcomingEvents, or
  * pastEvents once archived, which keeps the ID. Archiving refuses an ID a past

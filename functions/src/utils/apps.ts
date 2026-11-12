@@ -1,6 +1,6 @@
 import { type App, initializeApp } from "firebase-admin/app";
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
-import type { Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
 
 /**
@@ -156,14 +156,70 @@ function adminFor(app: Pick<AppDoc, "firebaseProjectId" | "serviceAccount">): Ap
 }
 
 /**
- * A custom token to sign in to the app's Firebase project as `uid`, the
- * account's uid here. Its claims are on every ID token the sign-in renews to:
- * `app`, which app it's for; `group`, the account's group here when it signed
- * in, which /v1/me has as it is now; and `mintedAt`, as on this project's own
- * sign-ins, so signing out everywhere here reaches it (signedInSinceSessionsEnded).
+ * The most a sign-in's claims may take, as JSON. Firebase Auth refuses a
+ * custom token whose claims are over 1,000 bytes, and they ride along on every
+ * call the app makes to its Firestore, so `eventStaff` is cut to fit under.
  */
-export function mintAppToken(app: RegisteredApp, uid: string, group: string): Promise<string> {
-    return getAuth(adminFor(app)).createCustomToken(uid, {app: app.id, group, mintedAt: Date.now()});
+const APP_CLAIMS_MAX_BYTES = 900;
+
+/** Firestore keeps IDs like __x__ for itself and can't read one, so no event has one. */
+const READABLE_ID_RE = /^(?!__.*__$)[^/\0]{1,128}$/;
+
+/**
+ * The unarchived events among `eventIds`, soonest first, as the site lists
+ * them: an archived or deleted event isn't in upcomingEvents, and one missing
+ * its start isn't one.
+ */
+async function unarchivedSoonestFirst(eventIds: string[]): Promise<string[]> {
+    const ids = [...new Set(eventIds.filter(id => READABLE_ID_RE.test(id)))];
+    if (ids.length === 0) return [];
+    const snaps = await db.getAll(...ids.map(id => db.collection("upcomingEvents").doc(id)));
+    const startMs = (snap: FirebaseFirestore.DocumentSnapshot) => (snap.get("startAt") as Timestamp).toMillis();
+    return snaps
+        .filter(snap => snap.get("startAt") instanceof Timestamp)
+        .sort((a, b) => startMs(a) - startMs(b) || (a.id < b.id ? -1 : 1))
+        .map(snap => snap.id);
+}
+
+/** `claims` with `eventStaff`: as many of `eventIds`, in order, as fit in APP_CLAIMS_MAX_BYTES. */
+function withEventStaff<T extends object>(claims: T, eventIds: string[]): T & {eventStaff: string[]} {
+    const eventStaff: string[] = [];
+    let bytes = Buffer.byteLength(JSON.stringify({...claims, eventStaff}));
+    for (const id of eventIds) {
+        const more = Buffer.byteLength(JSON.stringify(id)) + (eventStaff.length > 0 ? 1 : 0);
+        if (bytes + more > APP_CLAIMS_MAX_BYTES) break;
+        eventStaff.push(id);
+        bytes += more;
+    }
+    return {...claims, eventStaff};
+}
+
+/**
+ * A custom token to sign in to the app's Firebase project as `uid`, the
+ * account's uid here. Its claims are on every ID token the sign-in renews to,
+ * so an app's security rules can go by them:
+ *
+ * - `app`, which app it's for;
+ * - `group`, the account's group here;
+ * - `eventStaff`, only for an app with event-staff:read: the unarchived events
+ *   the account is event staff for, soonest first, with the furthest left off
+ *   past what fits (APP_CLAIMS_MAX_BYTES). /v1/me lists every one;
+ * - `mintedAt`, as on this project's own sign-ins, so signing out everywhere
+ *   here reaches it (signedInSinceSessionsEnded).
+ *
+ * They're as of the sign-in, and changing the account's group or which
+ * unarchived events it staffs signs it out of every app (signOutOfApps), so
+ * its next sign-in has them as they are now. /v1/me has them as they are now.
+ */
+export async function mintAppToken(
+    app: RegisteredApp,
+    uid: string,
+    person: {group: string; eventStaffEvents: string[]},
+): Promise<string> {
+    const auth = getAuth(adminFor(app));
+    const claims = {app: app.id, group: person.group, mintedAt: Date.now()};
+    if (!app.scopes.includes("event-staff:read")) return auth.createCustomToken(uid, claims);
+    return auth.createCustomToken(uid, withEventStaff(claims, await unarchivedSoonestFirst(person.eventStaffEvents)));
 }
 
 /** An ID token from the app's Firebase project, checked as Firebase Auth issued it. Throws if it isn't one. */
@@ -201,7 +257,11 @@ async function acrossApps(uid: string, action: "revoke" | "delete"): Promise<voi
     }));
 }
 
-/** Signs `uid` out of every app: its sign-ins can't renew, so each ends within the hour an ID token lasts. */
+/**
+ * Signs `uid` out of every app: its sign-ins can't renew, so each ends within
+ * the hour an ID token lasts, and its next one has its claims as they are now
+ * (mintAppToken). Call it once a change is made, not in its transaction.
+ */
 export const signOutOfApps = (uid: string) => acrossApps(uid, "revoke");
 
 /** Deletes a deleted account's user from every app, which signs it out there too. */

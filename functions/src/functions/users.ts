@@ -28,7 +28,7 @@ import { RESEND_API_KEY } from "../utils/resendClient";
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
-import { deleteFromApps } from "../utils/apps";
+import { deleteFromApps, signOutOfApps } from "../utils/apps";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { pastEventIds, shelfPassports, toStringIds } from "../utils/publicProfile";
@@ -436,6 +436,9 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
         return oldGroup;
     });
 
+    // So their next sign-in to an app has the new group (mintAppToken). A
+    // title isn't on it, so a change of title alone signs no one out.
+    if (oldGroup !== newGroup) await signOutOfApps(targetUid);
     return {oldGroup, newGroup};
 });
 // Membership is time-boxed, not a group: this never writes `group`, which only

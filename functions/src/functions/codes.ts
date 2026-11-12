@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
+import { signOutOfApps } from "../utils/apps";
 import { db } from "../utils/firebase";
 import { type CodeKind, codeKind, issueCode, normalizeCode } from "../utils/codes";
 import { getEventDoc } from "../utils/events";
@@ -513,7 +514,7 @@ async function redeemStaffCode(uid: string, code: string) {
     const codeRef = db.collection("staffClaimCodes").doc(code);
     const userRef = db.collection("users").doc(uid);
 
-    return db.runTransaction(async (txn) => {
+    const {isPastEvent, ...result} = await db.runTransaction(async (txn) => {
         const freshCode = await txn.get(codeRef);
         if (!freshCode.exists) throw invalidCode();
         const data = freshCode.data()!;
@@ -573,8 +574,12 @@ async function redeemStaffCode(uid: string, code: string) {
         if (attendanceChanged) {
             txn.set(recordRef(), recordDoc(isPastEvent ? "event-unattend" : "event-attend", fields));
         }
-        return {eventTitle, eventTitleCn, eventPoster};
+        return {eventTitle, eventTitleCn, eventPoster, isPastEvent};
     });
+
+    // So their next sign-in to an app names it, as assignEventStaff does.
+    if (!isPastEvent) await signOutOfApps(uid);
+    return result;
 }
 
 export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) => {

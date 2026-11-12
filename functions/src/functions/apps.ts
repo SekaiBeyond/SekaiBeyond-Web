@@ -17,6 +17,7 @@ import {
     type RegisteredApp,
     SERVICE_ACCOUNT_RE,
 } from "../utils/apps";
+import { staffEventsIn } from "../utils/events";
 import { db } from "../utils/firebase";
 import { recordDoc, recordRef } from "../utils/records";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
@@ -302,6 +303,10 @@ export const issueAppToken = onCall({maxInstances: 10}, async (request) => {
     const input = (request.data ?? {}) as {appId?: unknown; redirectUri?: unknown};
     const app = await findApp(input.appId);
     const redirectUri = redirectFor(app, input.redirectUri);
-    const group = normalizeGroup((await db.collection("users").doc(uid).get()).get("group"));
-    return {token: await mintAppToken(app, uid, group), redirectUri};
+    const user = await db.collection("users").doc(uid).get();
+    const token = await mintAppToken(app, uid, {
+        group: normalizeGroup(user.get("group")),
+        eventStaffEvents: staffEventsIn(user),
+    });
+    return {token, redirectUri};
 });

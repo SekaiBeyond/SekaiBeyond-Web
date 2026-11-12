@@ -19,7 +19,10 @@ const STATE_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SCOPE_TEXT: Record<AppScope, {en: string; zh: string}> = {
     'events:read': {en: 'The events you can see here', zh: '您在本站可以查看的活动'},
     'team:read': {en: 'The team list, if you’re staff', zh: '团队名单（如果您是工作人员）'},
-    'event-staff:read': {en: 'The staff of events you can see the staff of', zh: '您有权查看的活动工作人员名单'},
+    'event-staff:read': {
+        en: 'Which events you’re staff for, and the staff of events you can see the staff of',
+        zh: '您担任工作人员的活动，以及您有权查看的活动工作人员名单',
+    },
 };
 
 type Info = {name: string; ownerName: string; scopes: AppScope[]};
