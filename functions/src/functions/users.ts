@@ -25,6 +25,7 @@ import {
 } from "../utils/accountMail";
 import { liveEmailUndos } from "../utils/emailUndo";
 import { RESEND_API_KEY } from "../utils/resendClient";
+import { BAN_CLEARED, enableSignIn, hasBan, setAuthDisabled } from "../utils/bans";
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
@@ -37,7 +38,7 @@ import { decodeUpload, detectImageMime, isStorageUrl, MAX_UPLOAD_SIZE_MB, saveUp
 import { sanitizeDisplayText, validateBoolean, validateDocId, validateInstant } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
-import { sessionsRef } from "../utils/sessions";
+import { endSessions, sessionsRef } from "../utils/sessions";
 
 export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     const callerUid = await requireAuth(request);
@@ -579,6 +580,101 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
         return {granted: grant};
     });
 });
+/** Staff's note on why an account is banned: "" when left out, refused when not a string or over 500 characters. */
+function readBanReason(raw: unknown): string {
+    if (raw === undefined || raw === null) return "";
+    if (typeof raw !== "string") throw new HttpsError("invalid-argument", "Invalid reason.");
+    const reason = sanitizeDisplayText(raw);
+    if (reason.length > 500) throw new HttpsError("invalid-argument", "Invalid reason.");
+    return reason;
+}
+
+/**
+ * Bans an account from signing in, to the site or any app, until `until` or,
+ * without one, until lifted (unbanUser), and signs every device on it out at
+ * once (see utils/bans.ts). Banning one already banned sets its new terms.
+ * Core-staff and above, over the target's group, and never themselves.
+ */
+export const banUser = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    const input = request.data as {targetUid?: string; until?: string | null; reason?: unknown};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    if (targetUid === uid) {
+        throw new HttpsError("permission-denied", "Cannot ban yourself.");
+    }
+
+    let until: Timestamp | null = null;
+    if (input.until !== undefined && input.until !== null) {
+        const iso = validateInstant(input.until, "until");
+        if (!iso || Date.parse(iso) <= Date.now()) {
+            throw new HttpsError("invalid-argument", "until must be a time to come, or null.");
+        }
+        until = Timestamp.fromDate(new Date(iso));
+    }
+    const reason = readBanReason(input.reason);
+
+    const ban = await adminTransaction(uid, async (txn, callerSnap) => {
+        const targetRef = db.collection("users").doc(targetUid);
+        const targetSnap = await txn.get(targetRef);
+        if (!targetSnap.exists) throw new HttpsError("not-found", "Target user not found.");
+        const targetData = targetSnap.data()!;
+        requireCanManage(callerSnap.data()!.group, targetData.group);
+
+        const callerName: string = callerSnap.data()!.displayName ?? "";
+        txn.update(targetRef, {
+            bannedAt: FieldValue.serverTimestamp(),
+            bannedUntil: until ?? FieldValue.delete(),
+            banReason: reason,
+            bannedBy: uid,
+            bannedByName: callerName,
+        });
+        txn.set(recordRef(), recordDoc("account-ban", {
+            performedBy: uid,
+            performedByName: callerName,
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            banUntil: isoOrNull(until) ?? "",
+            banReason: reason,
+        }));
+        return {until: isoOrNull(until), reason, byName: callerName};
+    });
+
+    // Signed out whatever happens to the first, which a retry puts right.
+    try {
+        await setAuthDisabled(targetUid, true);
+    } finally {
+        await endSessions(targetUid, null);
+    }
+    return {ban: {...ban, at: new Date().toISOString()}};
+});
+
+/** Lifts an account's ban, by staff who could have made it, and says whether there was one. */
+export const unbanUser = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    const targetUid = validateDocId((request.data as {targetUid?: string})?.targetUid, "targetUid");
+
+    const lifted = await adminTransaction(uid, async (txn, callerSnap) => {
+        const targetRef = db.collection("users").doc(targetUid);
+        const targetSnap = await txn.get(targetRef);
+        if (!targetSnap.exists) throw new HttpsError("not-found", "Target user not found.");
+        const targetData = targetSnap.data()!;
+        requireCanManage(callerSnap.data()!.group, targetData.group);
+        if (!hasBan(targetData)) return false;
+
+        txn.update(targetRef, BAN_CLEARED);
+        txn.set(recordRef(), recordDoc("account-unban", {
+            performedBy: uid,
+            performedByName: callerSnap.data()!.displayName ?? "",
+            targetUid,
+            targetName: targetData.displayName ?? "",
+        }));
+        return true;
+    });
+
+    if (lifted) await enableSignIn(targetUid);
+    return {lifted};
+});
+
 /**
  * Schedules an account's deletion, for `deleteAt`'s TTL policy to carry out.
  * Anyone may ask for their own, from a device on its list, and its address is

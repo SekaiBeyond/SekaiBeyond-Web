@@ -197,6 +197,17 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish ? <>bound a Google account</> : <>绑定了 Google 账号</>;
         case 'account-google-unbind':
             return isEnglish ? <>unbound their Google account</> : <>解绑了 Google 账号</>;
+        case 'account-ban': {
+            const term = r.banUntil
+                ? (isEnglish ? `until ${fmtExpiry(r.banUntil)}` : `至 ${fmtExpiry(r.banUntil)}`)
+                : (isEnglish ? 'until lifted' : '直至解除');
+            const why = r.banReason
+                ? (isEnglish ? ` (reason: "${r.banReason}")` : `（原因：“${r.banReason}”）`)
+                : '';
+            return isEnglish ? <>banned {target} {term}{why}</> : <>封禁了 {target}，{term}{why}</>;
+        }
+        case 'account-unban':
+            return isEnglish ? <>lifted {target}'s ban</> : <>解除了 {target} 的封禁</>;
         case 'code-create':
             if (r.eventId) {
                 return isEnglish

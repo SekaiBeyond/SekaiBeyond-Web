@@ -37,6 +37,7 @@ import type { BadgeDef } from '~/lib/badges';
 import { localized } from '~/lib/localized';
 import type { UserRecord } from './types';
 import { type ShowToast, validateImageFile } from './utils';
+import { BanSection } from './BanSection';
 import { ImageCropModal } from './ImageCropModal';
 import { MembershipSection } from './MembershipSection';
 import { PassportPageTag, PassportRow } from './passports/PassportSearch';
@@ -834,6 +835,13 @@ export const UserDetailView = ({
                     </p>
                 </div>
             )}
+
+            <BanSection
+                user={userRecord}
+                canManage={!readOnly && canManage && userRecord.uid !== currentUser.uid}
+                onUpdated={onUpdateUser}
+                showToast={showToast}
+            />
 
             {!readOnly && (
                 <div className="admin-deletion-section">

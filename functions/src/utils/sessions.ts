@@ -3,6 +3,7 @@ import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
 import { signOutOfApps } from "./apps";
+import { requireNotBanned } from "./bans";
 
 /**
  * Each device signed in to an account is a doc in users/{uid}/sessions, named
@@ -56,9 +57,11 @@ export function sessionRef(uid: string, sessionId: string): FirebaseFirestore.Do
  * goes through. It says when it was made (`mintedAt`, in milliseconds), as a
  * custom token works for an hour and its sign-in's auth_time is only when it's
  * used: one taken before the account's devices were signed out and used after
- * would otherwise count as a sign-in from after.
+ * would otherwise count as a sign-in from after. An account under a ban gets
+ * none (utils/bans.ts).
  */
-export function signInToken(uid: string): Promise<string> {
+export async function signInToken(uid: string): Promise<string> {
+    await requireNotBanned(uid);
     return getAuth().createCustomToken(uid, {mintedAt: Date.now()});
 }
 

@@ -16,7 +16,7 @@ import {
 import { getDocsByIds, toDate } from '~/lib/collectionCache';
 import { getFirebaseDb } from '~/lib/firebase';
 import { isMembershipActive, normalizeGroup, type UserGroup } from '~/components/AuthProvider';
-import type { UserRecord } from './types';
+import type { UserBan, UserRecord } from './types';
 import type { ShowToast } from '~/lib/useToasts';
 
 export const WEBP_QUALITY = 0.95;
@@ -62,6 +62,18 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],
         hidePassportPage: data.hidePassportPage === true,
+        ban: toUserBan(data),
+    };
+};
+
+const toUserBan = (data: DocumentData): UserBan | null => {
+    const at = toDate(data.bannedAt);
+    if (!at) return null;
+    return {
+        at,
+        until: toDate(data.bannedUntil),
+        reason: typeof data.banReason === 'string' ? data.banReason : '',
+        byName: typeof data.bannedByName === 'string' ? data.bannedByName : '',
     };
 };
 

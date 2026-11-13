@@ -20,6 +20,19 @@ export interface BadgeActivationCode {
     usedCount: number;
 }
 
+/** A ban on an account, in force or run out (see functions/src/utils/bans.ts). */
+export interface UserBan {
+    at: Date;
+    /** Null for a ban until lifted. */
+    until: Date | null;
+    reason: string;
+    byName: string;
+}
+
+/** Whether a ban is in force: one that has run out stays on the account until its next sign-in clears it. */
+export const isBanActive = (ban: UserBan | null): boolean =>
+    !!ban && (!ban.until || ban.until.getTime() > Date.now());
+
 export interface UserRecord {
     uid: string;
     displayName: string;
@@ -36,6 +49,7 @@ export interface UserRecord {
     eventStaffEvents: string[];
     /** Their passports' public page is off. One switch for all of them, theirs alone to flip. */
     hidePassportPage: boolean;
+    ban: UserBan | null;
 }
 
 export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'passports' | 'records' | 'tools' | 'config' | 'con';
@@ -113,7 +127,7 @@ export const RECORD_CATEGORIES = {
         types: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
             'name-set', 'avatar-set', 'avatar-remove', 'banner-remove', 'account-email-release',
             'account-password-set', 'account-google-bind', 'account-google-unbind', 'account-email-change',
-            'account-email-undo'],
+            'account-email-undo', 'account-ban', 'account-unban'],
     },
     config: {
         en: 'Config', zh: '配置',
@@ -181,6 +195,9 @@ export interface ActivityRecord {
     newName?: string;
     oldType?: string;
     newType?: string;
+    /** A ban: when it runs out, "" for one until lifted, and staff's note on why. */
+    banUntil?: string;
+    banReason?: string;
     /**
      * Why staff was granted: 'staff-assignment' (by an admin) or 'staff-code' (a
      * redeemed code).

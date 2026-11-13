@@ -41,6 +41,7 @@ import {
     googleIndexRef,
     PASSWORD_PEPPER
 } from "../utils/credentials";
+import { requireNotBanned } from "../utils/bans";
 import { CODE_MAIL_HOURLY_CAP } from "../utils/config";
 import { deletionPending } from "../utils/deletion";
 import {
@@ -369,7 +370,10 @@ export const signUpWithEmail = onCall(ACCOUNT_CALL, async (request) => {
     return {token: await signInToken(uid)};
 });
 
-/** The account `password` opens at `email`, or a refusal that doesn't say which part was wrong. */
+/**
+ * The account `password` opens at `email`, or a refusal that doesn't say which
+ * part was wrong. Only the right password learns that the account is banned.
+ */
 async function checkPassword(request: CallableRequest, email: string, password: string): Promise<string> {
     await limitNetwork(request, "signin", SIGN_INS_PER_MINUTE_PER_NETWORK, MINUTE_MS);
     const address = emailIndexRef(email).id;
@@ -379,6 +383,7 @@ async function checkPassword(request: CallableRequest, email: string, password: 
     const uid: string | undefined = (await emailIndexRef(email).get()).get("uid");
     const stored: string | null | undefined = uid ? (await credentialsRef(uid).get()).get("passwordHash") : null;
     if (!await verifyPassword(password, stored) || !uid) throw wrongCredentials();
+    await requireNotBanned(uid);
     return uid;
 }
 
@@ -428,6 +433,8 @@ export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
     await requireEmailCode(request, "password", email, code);
     const uid: string | undefined = (await emailIndexRef(email).get()).get("uid");
     if (!uid) throw badCode();
+    // Before the password changes, as a banned account couldn't sign in with it.
+    await requireNotBanned(uid);
     await limitNoticedChange(uid, "password");
 
     await setPassword(uid, email, password, null, readMailLanguage(input.language));

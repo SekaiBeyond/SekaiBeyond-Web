@@ -1039,6 +1039,40 @@
     color: #1976d2;
 }
 
+.admin-ban-status {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.admin-ban-status--active {
+    color: #b31c37;
+}
+
+.admin-ban-detail {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+}
+
+.admin-ban-actions {
+    margin-top: 10px;
+}
+
+.admin-ban-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+/* No flex-grow in the column, so it stays a date field's width. */
+.admin-ban-date {
+    flex: 0 0 auto;
+    align-self: flex-start;
+}
+
 .admin-group-actions {
     display: flex;
     flex-wrap: wrap;

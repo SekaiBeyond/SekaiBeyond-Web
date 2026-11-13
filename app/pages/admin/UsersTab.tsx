@@ -22,7 +22,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { BadgeDef } from '~/lib/badges';
-import type { UserRecord } from './types';
+import { isBanActive, type UserRecord } from './types';
 import { UserRow } from './UserRow';
 import { buildUserListQuery, docToUserRecord, searchUsers, type ShowToast } from './utils';
 import { PhotoSourceTag, UserDetailView } from './UserDetailView';
@@ -50,6 +50,11 @@ const UserTags = ({user, pendingDeletion}: {user: UserRecord; pendingDeletion: b
     const {isEnglish} = useLanguage();
     return (
         <>
+            {isBanActive(user.ban) && (
+                <span className="admin-user-deletion-flag">
+                    {isEnglish ? 'Banned' : '已封禁'}
+                </span>
+            )}
             {pendingDeletion && (
                 <span className="admin-user-deletion-flag">
                     {isEnglish ? 'Pending deletion' : '待删除'}

@@ -1,8 +1,30 @@
-import { errorCode } from '~/lib/firebase';
+import { errorCode, functionsErrorDetails } from '~/lib/firebase';
+import { formatSiteTime } from '~/lib/siteTime';
+
+/** A banned account's refusal, saying until when if the ban runs out. */
+function bannedMessage(err: unknown, isEnglish: boolean): string {
+    const raw = functionsErrorDetails<{until?: unknown}>(err)?.until;
+    const until = typeof raw === 'string' ? new Date(raw) : null;
+    if (until && !Number.isNaN(until.getTime())) {
+        const when = formatSiteTime(until, isEnglish, {
+            year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        });
+        return isEnglish
+            ? `This account is banned until ${when}. If you think this is a mistake, please contact us.`
+            : `此账号已被封禁，至 ${when} 解除。如您认为有误，请联系我们。`;
+    }
+    return isEnglish
+        ? 'This account has been banned. If you think this is a mistake, please contact us.'
+        : '此账号已被封禁。如您认为有误，请联系我们。';
+}
 
 /** What went wrong with an account call, in the visitor's language. */
 export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
     switch (errorCode(err)) {
+        case 'account-banned':
+        // Firebase's own refusal of a disabled account, should a sign-in get that far.
+        case 'auth/user-disabled':
+            return bannedMessage(err, isEnglish);
         case 'wrong-credentials':
             return isEnglish ? 'Wrong email or password.' : '邮箱或密码不正确。';
         case 'bad-code':

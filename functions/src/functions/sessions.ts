@@ -1,6 +1,7 @@
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { requireAuth, requireRegisteredSession } from "../utils/auth";
+import { activeBan } from "../utils/bans";
 import { db } from "../utils/firebase";
 import {
     describeUserAgent,
@@ -40,8 +41,10 @@ export const touchSession = onCall({maxInstances: 20}, async (request) => {
         if (!userSnap.exists) return false;
         // Signed out between requireAuth and here: endedAt must not be undone,
         // nor a sign-in the sign-out missed be listed after it. Reading the
-        // user doc here is what keeps endSessions from missing it.
-        if (snap.data()?.endedAt || (!snap.exists && !signedInSinceSessionsEnded(request.auth!.token, userSnap.data()))) {
+        // user doc here is what keeps endSessions from missing it. Nor is one
+        // listed for an account under a ban.
+        if (snap.data()?.endedAt || activeBan(userSnap.data())
+            || (!snap.exists && !signedInSinceSessionsEnded(request.auth!.token, userSnap.data()))) {
             throw new HttpsError("unauthenticated", "This device has been signed out.", {code: "session-ended"});
         }
         txn.set(ref, {

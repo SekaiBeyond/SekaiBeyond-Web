@@ -278,6 +278,15 @@ export const callChangeUserGroup = (data: {targetUid: string; newGroup: string; 
 export const callSetMembership = (data: {targetUid: string; expiresAt?: string | null; extendDays?: number}) =>
     httpsCallable<typeof data, {membershipExpiresAt: string | null}>(getFunctions(), 'setMembership')(data);
 
+/** No `until` (or null) bans until lifted. Banning someone already banned sets new terms. */
+export const callBanUser = (data: {targetUid: string; until?: string | null; reason?: string}) =>
+    httpsCallable<typeof data, {ban: {at: string; until: string | null; reason: string; byName: string}}>(
+        getFunctions(), 'banUser',
+    )(data);
+
+export const callUnbanUser = (data: {targetUid: string}) =>
+    httpsCallable<typeof data, {lifted: boolean}>(getFunctions(), 'unbanUser')(data);
+
 export const callSetUserTitle = (data: {targetUid: string; title?: string; titleCn?: string}) =>
     httpsCallable<typeof data, {success: boolean}>(getFunctions(), 'setUserTitle')(data);
 

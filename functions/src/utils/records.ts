@@ -111,6 +111,8 @@ export type RecordType =
     | "account-google-unbind"
     | "account-email-change"
     | "account-email-undo"
+    | "account-ban"
+    | "account-unban"
     | "policy-update"
     | "config-update"
     | "con-content-update"
@@ -203,6 +205,9 @@ export interface RecordFields {
     /** The app an app record is about (see utils/apps.ts), and its name then. */
     appId?: string;
     appName?: string;
+    /** A ban: when it runs out, "" for one until lifted, and staff's note on why. */
+    banUntil?: string;
+    banReason?: string;
 }
 
 /** Where a new record goes. A fixed `id` makes a retried write land on the same record. */
