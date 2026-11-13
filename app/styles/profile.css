@@ -92,6 +92,26 @@
     cursor: pointer;
 }
 
+/* Continue while it waits on the server: lit, with a spinner, and no longer lifting to a pointer. */
+.profile-sign-in-btn[aria-disabled="true"],
+.profile-sign-in-btn[aria-disabled="true"]:hover {
+    transform: none;
+    box-shadow: none;
+    cursor: progress;
+}
+
+.authorize-switch:disabled {
+    opacity: 0.45;
+    cursor: progress;
+}
+
+.profile-login-card .authorize-still-waiting {
+    margin: 12px 0 0;
+    color: #666;
+    font-size: 13px;
+    animation: fadeIn 0.3s ease;
+}
+
 .claim-card {
     text-align: center;
     background: rgba(255, 255, 255, 0.9);

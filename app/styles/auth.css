@@ -51,11 +51,6 @@
     text-decoration: underline;
 }
 
-.auth-link:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
-
 .auth-divider {
     display: flex;
     align-items: center;
@@ -87,6 +82,110 @@
     font-size: 13px;
     line-height: 1.5;
     text-align: center;
+}
+
+/*
+ * The modal while it waits on the server. Whatever was pressed stays lit, with
+ * a spinner and what it's doing (.auth-waiting). The rest dims and can't be
+ * used, so it's plain that it's working and that nothing needs pressing again.
+ */
+.auth-modal.auth-modal--busy,
+.auth-modal.auth-modal--busy * {
+    cursor: progress;
+}
+
+/* After a beat, so an answer that comes at once doesn't flash the whole form. */
+.auth-modal--busy :is(
+    .auth-input,
+    .auth-divider,
+    .auth-google-button,
+    .auth-link:not(.auth-waiting),
+    .auth-submit:not(.auth-waiting),
+    .modal-close
+) {
+    animation: auth-dim 0.25s ease 0.1s forwards;
+}
+
+@keyframes auth-dim {
+    to {
+        opacity: 0.45;
+    }
+}
+
+/* Nothing answers a pointer while waiting, so nothing looks as if it would. */
+.auth-modal.auth-modal--busy .auth-submit:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.auth-modal.auth-modal--busy .auth-link:hover {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.auth-modal.auth-modal--busy .modal-close:hover {
+    color: var(--color-primary);
+}
+
+/* A sheen crossing the button that's waiting, so it reads as working, not stuck. */
+.auth-submit.auth-waiting {
+    position: relative;
+    overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .auth-submit.auth-waiting::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.35) 50%, transparent 65%);
+        animation: auth-sheen 1.6s ease-in-out infinite;
+    }
+}
+
+@keyframes auth-sheen {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100%);
+    }
+}
+
+/* Google's button, which can't be restyled, so what it's doing is laid over it. */
+.auth-google-slot {
+    position: relative;
+}
+
+.auth-google-slot--waiting .auth-google-button {
+    visibility: hidden;
+}
+
+/* In the place and shape of Google's button: 40px tall, at the top of the 44px slot (GSI shifts its iframe -2px). */
+.auth-google-waiting {
+    box-sizing: border-box;
+    position: absolute;
+    top: 0;
+    inset-inline: 0;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dadce0;
+    border-radius: 20px;
+    background: #fff;
+    color: #3c4043;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* Said under whatever is waiting, once it has been a while. */
+.auth-still-waiting {
+    animation: fadeIn 0.3s ease;
+}
+
+.auth-google-slot + .auth-still-waiting {
+    margin-top: 10px;
 }
 
 /* A form opened from a row in the account section of Settings. */

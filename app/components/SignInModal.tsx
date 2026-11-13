@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '~/components/AuthProvider';
 import { GoogleButton } from '~/components/GoogleButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
@@ -12,10 +12,10 @@ import {
     callSignInWithPassword,
     callSignUpWithEmail,
     type GoogleSignIn,
-    signInWithToken,
 } from '~/lib/firebase';
 import { onOpenSignInModal } from '~/lib/signInModal';
 import { useModalEffects } from '~/lib/useModalEffects';
+import { stillWaitingText, useStillWaiting } from '~/lib/useStillWaiting';
 
 type View =
     | 'sign-in'
@@ -29,9 +29,22 @@ type View =
 /** A Google sign-in with no account behind it yet, held for the prompt that makes or binds one. */
 type PendingGoogle = Extract<GoogleSignIn, {status: 'needs-account'}> & {idToken: string};
 
-/** Every way into an account. Opened by the auth context's signIn, from any page. */
+/**
+ * What the server is being waited on for: which control set it going, a form's
+ * button, Google's or the link for a new code, and what that control says
+ * meanwhile.
+ */
+type Waiting = {on: 'form' | 'google' | 'code'; label: string};
+
+/**
+ * Every way into an account. Opened by the auth context's signIn, from any page.
+ *
+ * While the server is being waited on, whatever was pressed stays lit, with a
+ * spinner and what it's doing, and everything else dims and can't be used, so
+ * it's plain that it's working and that nothing needs pressing again.
+ */
 export const SignInModal = () => {
-    const {user} = useAuth();
+    const {user, signInWithToken} = useAuth();
     const {isEnglish} = useLanguage();
     const language = isEnglish ? 'en' : 'zh';
 
@@ -45,7 +58,9 @@ export const SignInModal = () => {
     // Whether a code has gone to the address typed into the prompt.
     const [googleCodeSent, setGoogleCodeSent] = useState(false);
     const [error, setError] = useState('');
-    const [busy, setBusy] = useState(false);
+    const [waiting, setWaiting] = useState<Waiting | null>(null);
+    const busy = waiting !== null;
+    const stillWaiting = useStillWaiting(busy);
     const overlayRef = useRef<HTMLDivElement>(null);
     const busyRef = useRef(false);
 
@@ -63,9 +78,13 @@ export const SignInModal = () => {
         setShow(true);
     }), []);
 
-    useEffect(() => {
-        if (user) setShow(false);
-    }, [user]);
+    // Closes once someone is signed in and nothing here is still waiting. A
+    // sign-in made here keeps waiting until the profile is in, so the page
+    // behind already shows them signed in; one made in another tab closes it as
+    // it arrives. Before the paint, so the form isn't seen coming back to life.
+    useLayoutEffect(() => {
+        if (user && !waiting) setShow(false);
+    }, [user, waiting]);
 
     const goTo = (next: View) => {
         setView(next);
@@ -74,10 +93,10 @@ export const SignInModal = () => {
         setError('');
     };
 
-    const run = async (action: () => Promise<void>) => {
+    const run = async (on: Waiting['on'], label: string, action: () => Promise<void>) => {
         if (busyRef.current) return;
         busyRef.current = true;
-        setBusy(true);
+        setWaiting({on, label});
         setError('');
         try {
             await action();
@@ -85,21 +104,26 @@ export const SignInModal = () => {
             setError(accountErrorMessage(err, isEnglish));
         } finally {
             busyRef.current = false;
-            setBusy(false);
+            setWaiting(null);
         }
     };
 
-    const submit = (action: () => Promise<void>) => (e: FormEvent) => {
+    /** A form's submit handler. `label` is what its button says while `action` runs. */
+    const submit = (label: string, action: () => Promise<void>) => (e: FormEvent) => {
         e.preventDefault();
-        void run(action);
+        void run('form', label, action);
     };
 
-    const signIn = submit(async () => {
+    const signingIn = isEnglish ? 'Signing in…' : '登录中…';
+    const sendingCode = isEnglish ? 'Sending code…' : '发送中…';
+    const creatingAccount = isEnglish ? 'Creating account…' : '创建中…';
+
+    const signIn = submit(signingIn, async () => {
         const {data} = await callSignInWithPassword({email, password});
         await signInWithToken(data.token);
     });
 
-    const continueWithGoogle = (idToken: string) => run(async () => {
+    const continueWithGoogle = (idToken: string) => run('google', isEnglish ? 'Signing in with Google…' : '正在通过 Google 登录…', async () => {
         const {data} = await callSignInWithGoogle({idToken});
         if (data.status === 'signed-in') {
             await signInWithToken(data.token);
@@ -117,9 +141,12 @@ export const SignInModal = () => {
     const googleNeedsCode = !!pendingGoogle
         && (email.trim().toLowerCase() !== pendingGoogle.email || !pendingGoogle.emailVerified);
 
-    const createWithGoogle = submit(async () => {
+    // The same button first sends the code, then makes the account.
+    const googleSendsCode = googleNeedsCode && !googleCodeSent;
+
+    const createWithGoogle = submit(googleSendsCode ? sendingCode : creatingAccount, async () => {
         if (!pendingGoogle) return;
-        if (googleNeedsCode && !googleCodeSent) {
+        if (googleSendsCode) {
             await callSendEmailCode({purpose: 'signup', email, language});
             setCode('');
             setGoogleCodeSent(true);
@@ -135,34 +162,38 @@ export const SignInModal = () => {
         await signInWithToken(data.token);
     });
 
-    const bindGoogle = submit(async () => {
+    const bindGoogle = submit(signingIn, async () => {
         if (!pendingGoogle) return;
         const {data} = await callBindGoogleWithPassword({idToken: pendingGoogle.idToken, email, password, language});
         await signInWithToken(data.token);
     });
 
-    const sendCode = (purpose: 'signup' | 'password') => run(async () => {
+    const sendCode = (purpose: 'signup' | 'password') => run('code', isEnglish ? 'Sending a new code…' : '正在重新发送…', async () => {
         await callSendEmailCode({purpose, email, language});
         setCode('');
     });
 
-    const signUp = submit(async () => {
+    const signUp = submit(creatingAccount, async () => {
         const {data} = await callSignUpWithEmail({email, code, displayName, password});
         await signInWithToken(data.token);
     });
 
-    const resetPassword = submit(async () => {
+    const resetPassword = submit(isEnglish ? 'Setting password…' : '设置中…', async () => {
         const {data} = await callResetPassword({email, code, password, language});
         await signInWithToken(data.token);
     });
 
     if (!show) return null;
 
+    // Read-only rather than disabled while waiting, here and on the buttons
+    // that start a wait: disabling what has the focus drops the focus, and
+    // someone whose password was wrong should still be in the field to fix it.
     const emailField = (
         <input
             type="email"
             autoComplete="email"
             required
+            readOnly={busy}
             value={email}
             onChange={e => setEmail(e.target.value)}
             placeholder={isEnglish ? 'Email' : '邮箱'}
@@ -175,6 +206,7 @@ export const SignInModal = () => {
             type="password"
             autoComplete={autoComplete}
             required
+            readOnly={busy}
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder={placeholder}
@@ -189,6 +221,7 @@ export const SignInModal = () => {
             autoComplete="one-time-code"
             maxLength={6}
             required
+            readOnly={busy}
             value={code}
             onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
             placeholder={isEnglish ? '6-digit code' : '6 位验证码'}
@@ -199,25 +232,54 @@ export const SignInModal = () => {
     const newPasswordLabel = isEnglish ? 'New password (at least 8 characters)' : '新密码（至少 8 个字符）';
     const errorLine = error && <p className="redeem-error-text">{error}</p>;
 
+    // What's being waited on says what it's doing, with a spinner before it.
+    const waitingLabel = waiting && <><span className="spinner-inline" aria-hidden="true"/>{waiting.label}</>;
+    // Goes under it once it's been a while.
+    const stillWaitingNote = stillWaiting &&
+        <p className="auth-note auth-still-waiting">{stillWaitingText(isEnglish)}</p>;
+
     const backToSignIn = (
-        <button type="button" className="auth-link" onClick={() => goTo('sign-in')}>
+        <button type="button" className="auth-link" disabled={busy} onClick={() => goTo('sign-in')}>
             {isEnglish ? 'Back to sign in' : '返回登录'}
         </button>
     );
 
-    const resendLink = (purpose: 'signup' | 'password') => (
-        <button type="button" className="auth-link" disabled={busy} onClick={() => void sendCode(purpose)}>
-            {isEnglish ? 'Send a new code' : '重新发送验证码'}
-        </button>
-    );
+    const resendLink = (purpose: 'signup' | 'password') => {
+        const own = waiting?.on === 'code';
+        return (
+            <>
+                <button
+                    type="button"
+                    className={`auth-link${own ? ' auth-waiting' : ''}`}
+                    aria-disabled={busy}
+                    onClick={() => void sendCode(purpose)}
+                >
+                    {own ? waitingLabel : (isEnglish ? 'Send a new code' : '重新发送验证码')}
+                </button>
+                {own && stillWaitingNote}
+            </>
+        );
+    };
 
-    const submitButton = (label: string) => (
-        <button type="submit" className="admin-btn admin-btn--cta auth-submit" disabled={busy}>{label}</button>
-    );
+    const submitButton = (label: string) => {
+        const own = waiting?.on === 'form';
+        return (
+            <>
+                <button
+                    type="submit"
+                    className={`admin-btn admin-btn--cta auth-submit${own ? ' auth-waiting' : ''}`}
+                    aria-disabled={busy}
+                >
+                    {own ? waitingLabel : label}
+                </button>
+                {own && stillWaitingNote}
+            </>
+        );
+    };
 
     return (
         <div ref={overlayRef} className="modal-overlay" onClick={e => e.target === e.currentTarget && close()}>
-            <div className="modal-content auth-modal">
+            <div className={`modal-content auth-modal${busy ? ' auth-modal--busy' : ''}`}>
                 {view === 'sign-in' && (
                     <>
                         <h2 className="redeem-heading">{isEnglish ? 'Sign In' : '登录'}</h2>
@@ -228,12 +290,20 @@ export const SignInModal = () => {
                             {submitButton(isEnglish ? 'Sign In' : '登录')}
                         </form>
                         <div className="auth-divider">{isEnglish ? 'or' : '或'}</div>
-                        <GoogleButton onToken={idToken => void continueWithGoogle(idToken)}/>
+                        {/* Google's button can't be restyled, so what it's doing is laid over it. */}
+                        <div
+                            className={`auth-google-slot${waiting?.on === 'google' ? ' auth-google-slot--waiting' : ''}`}>
+                            <div className="auth-google-button" inert={busy}>
+                                <GoogleButton onToken={idToken => void continueWithGoogle(idToken)}/>
+                            </div>
+                            {waiting?.on === 'google' && <div className="auth-google-waiting">{waitingLabel}</div>}
+                        </div>
+                        {waiting?.on === 'google' && stillWaitingNote}
                         <div className="auth-links">
-                            <button type="button" className="auth-link" onClick={() => goTo('sign-up')}>
+                            <button type="button" className="auth-link" disabled={busy} onClick={() => goTo('sign-up')}>
                                 {isEnglish ? 'New here? Create an account' : '还没有账号？立即注册'}
                             </button>
-                            <button type="button" className="auth-link" onClick={() => goTo('forgot')}>
+                            <button type="button" className="auth-link" disabled={busy} onClick={() => goTo('forgot')}>
                                 {isEnglish ? 'Forgot password?' : '忘记密码？'}
                             </button>
                         </div>
@@ -246,7 +316,7 @@ export const SignInModal = () => {
                         <p className="redeem-subtitle">
                             {isEnglish ? 'We’ll email you a code to check your address.' : '我们会向您的邮箱发送验证码。'}
                         </p>
-                        <form className="auth-form" onSubmit={submit(async () => {
+                        <form className="auth-form" onSubmit={submit(sendingCode, async () => {
                             await callSendEmailCode({purpose: 'signup', email, language});
                             goTo('sign-up-details');
                         })}>
@@ -274,6 +344,7 @@ export const SignInModal = () => {
                                 autoComplete="name"
                                 required
                                 maxLength={50}
+                                readOnly={busy}
                                 value={displayName}
                                 onChange={e => setDisplayName(e.target.value)}
                                 placeholder={isEnglish ? 'Your name' : '您的名称'}
@@ -298,7 +369,7 @@ export const SignInModal = () => {
                                 ? 'Enter your account’s email and we’ll send you a code. This also adds a password to an account that has only used Google.'
                                 : '输入账号邮箱，我们会发送验证码。仅使用过 Google 登录的账号也可借此添加密码。'}
                         </p>
-                        <form className="auth-form" onSubmit={submit(async () => {
+                        <form className="auth-form" onSubmit={submit(sendingCode, async () => {
                             await callSendEmailCode({purpose: 'password', email, language});
                             goTo('forgot-code');
                         })}>
@@ -345,6 +416,7 @@ export const SignInModal = () => {
                                 autoComplete="name"
                                 required
                                 maxLength={50}
+                                readOnly={busy}
                                 value={displayName}
                                 onChange={e => setDisplayName(e.target.value)}
                                 placeholder={isEnglish ? 'Your name' : '您的名称'}
@@ -354,6 +426,7 @@ export const SignInModal = () => {
                                 type="email"
                                 autoComplete="email"
                                 required
+                                readOnly={busy}
                                 value={email}
                                 onChange={e => {
                                     setEmail(e.target.value);
@@ -377,6 +450,7 @@ export const SignInModal = () => {
                             <input
                                 type="password"
                                 autoComplete="new-password"
+                                readOnly={busy}
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 placeholder={isEnglish ? 'Password (optional, at least 8 characters)' : '密码（选填，至少 8 个字符）'}
@@ -388,7 +462,7 @@ export const SignInModal = () => {
                                     : '不设置密码也可使用 Google 登录，之后可在设置中添加。'}
                             </p>
                             {errorLine}
-                            {submitButton(googleNeedsCode && !googleCodeSent
+                            {submitButton(googleSendsCode
                                 ? (isEnglish ? 'Send Code' : '发送验证码')
                                 : (isEnglish ? 'Create Account' : '创建账号'))}
                         </form>
@@ -397,6 +471,7 @@ export const SignInModal = () => {
                             <button
                                 type="button"
                                 className="auth-link"
+                                disabled={busy}
                                 onClick={() => {
                                     setEmail('');
                                     goTo('google-bind');
@@ -434,6 +509,7 @@ export const SignInModal = () => {
                                 <button
                                     type="button"
                                     className="auth-link"
+                                    disabled={busy}
                                     onClick={() => {
                                         setEmail(pendingGoogle.email);
                                         setGoogleCodeSent(false);
@@ -443,7 +519,7 @@ export const SignInModal = () => {
                                     {isEnglish ? 'Create a new account instead' : '改为创建新账号'}
                                 </button>
                             )}
-                            <button type="button" className="auth-link" onClick={() => goTo('forgot')}>
+                            <button type="button" className="auth-link" disabled={busy} onClick={() => goTo('forgot')}>
                                 {isEnglish ? 'Forgot password?' : '忘记密码？'}
                             </button>
                             {backToSignIn}
@@ -451,8 +527,13 @@ export const SignInModal = () => {
                     </>
                 )}
 
+                {/* For screen readers, which a spinner and a dimmed form tell nothing. */}
+                <p className="admin-sr-only" role="status">
+                    {waiting && (stillWaiting ? `${waiting.label} ${stillWaitingText(isEnglish)}` : waiting.label)}
+                </p>
+
                 {/* Last, so a form's first field takes the focus when the modal opens. */}
-                <button className="modal-close" onClick={close} type="button"
+                <button className="modal-close" onClick={close} type="button" disabled={busy}
                         aria-label={isEnglish ? 'Close' : '关闭'}>×
                 </button>
             </div>

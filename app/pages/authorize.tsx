@@ -4,6 +4,7 @@ import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { PageNav } from '~/components/PageNav';
 import { APP_ID_RE, callGetAppSignInInfo, callIssueAppCode, errorSuffix, functionsErrorCode, } from '~/lib/firebase';
+import { stillWaitingText, useStillWaiting } from '~/lib/useStillWaiting';
 
 /** The random value an app sends, to tell the sign-in it gets back is the one it asked for. */
 const STATE_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -37,7 +38,9 @@ export const AuthorizePage = () => {
 
     // Null while loading; 'bad-link' when the app or the place to hand back to isn't registered.
     const [info, setInfo] = useState<Info | 'bad-link' | 'error' | null>(null);
+    // From Continue until the app's own page takes over, the wait for its page included.
     const [busy, setBusy] = useState(false);
+    const stillWaiting = useStillWaiting(busy);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -58,6 +61,7 @@ export const AuthorizePage = () => {
     }, [linkOk, appId, redirectUri]);
 
     const proceed = async () => {
+        if (busy) return;
         setBusy(true);
         setError('');
         try {
@@ -130,9 +134,17 @@ export const AuthorizePage = () => {
                                     : `它看不到您的邮箱或密码。您在 ${appName} 中能做什么由 ${appName} 决定。`}
                             </p>
                             {error && <p className="redeem-error-text">{error}</p>}
-                            <button onClick={() => void proceed()} className="profile-sign-in-btn" disabled={busy}>
-                                {isEnglish ? 'Continue' : '继续'}
+                            {/* Not disabled while it waits, which would drop the focus from it; proceed lets one through. */}
+                            <button onClick={() => void proceed()} className="profile-sign-in-btn" aria-disabled={busy}>
+                                {busy
+                                    ? <><span className="spinner-inline"
+                                              aria-hidden="true"/>{isEnglish ? 'Signing in…' : '登录中…'}</>
+                                    : (isEnglish ? 'Continue' : '继续')}
                             </button>
+                            {stillWaiting && <p className="authorize-still-waiting">{stillWaitingText(isEnglish)}</p>}
+                            <p className="admin-sr-only" role="status">
+                                {busy && ((isEnglish ? 'Signing in…' : '登录中…') + (stillWaiting ? ` ${stillWaitingText(isEnglish)}` : ''))}
+                            </p>
                             <button onClick={() => void signOut()} className="authorize-switch" disabled={busy}
                                     type="button">
                                 {isEnglish ? 'Use another account' : '使用其他账号'}

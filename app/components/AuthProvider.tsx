@@ -13,7 +13,7 @@ import {
     callUploadBanner,
     getFirebaseAuth,
     getFirebaseDb,
-    signInWithToken,
+    signInWithToken as firebaseSignInWithToken,
     signOut as firebaseSignOut
 } from '~/lib/firebase';
 import { toDate } from '~/lib/collectionCache';
@@ -158,6 +158,12 @@ interface AuthContextType {
     sessionId: string | null;
     /** Opens the sign-in modal. */
     signIn: () => void;
+    /**
+     * Signs in with the token an account call answered with. Done once the
+     * account's profile is in too, so whoever waits on it hands over to a page
+     * that already shows them signed in. Throws if the sign-in didn't hold.
+     */
+    signInWithToken: (token: string) => Promise<void>;
     signOut: () => Promise<void>;
     /** Signs out every device on the account, this one too. Throws, still signed in, if that fails. */
     signOutEverywhere: () => Promise<void>;
@@ -221,9 +227,11 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
     const [cachedPhotoURL, setCachedPhotoURL] = useState('');
     const [sessionId, setSessionId] = useState<string | null>(null);
     const stopWatchingSession = useRef<(() => void) | null>(null);
+    // The profile load the latest auth state change set off, for a sign-in to wait on.
+    const profileLoad = useRef<Promise<void>>(Promise.resolve());
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(getFirebaseAuth(), async (firebaseUser) => {
+        const loadProfile = async (firebaseUser: User | null) => {
             setUser(firebaseUser);
             setCachedPhotoURL(firebaseUser ? readCachedPhoto(firebaseUser.uid) : '');
             setAuthReady(true);
@@ -261,6 +269,9 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
             } finally {
                 setLoading(false);
             }
+        };
+        const unsubscribe = onAuthStateChanged(getFirebaseAuth(), firebaseUser => {
+            profileLoad.current = loadProfile(firebaseUser);
         });
 
         return () => unsubscribe();
@@ -302,6 +313,18 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
 
     const signIn = () => openSignInModal();
 
+    // Firebase tells its listeners about the new user before the sign-in
+    // settles, so by then the load to wait on is this account's. A profile that
+    // can't be read still leaves them signed in, so that isn't a failure here.
+    const signInWithToken = async (token: string) => {
+        await firebaseSignInWithToken(token);
+        await profileLoad.current.catch(() => {
+        });
+        // Signed straight back out: an account that has gone, or a sign-in the
+        // server has already ended.
+        if (!getFirebaseAuth().currentUser) throw new Error('The sign-in didn’t hold.');
+    };
+
     const signOut = async () => {
         // Stops watching first, or the removed row would be put back. Signing
         // out goes ahead if the call fails, leaving the row to sign out from
@@ -329,7 +352,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         const oldSessionId = sessionId;
         stopWatchingSession.current?.();
         stopWatchingSession.current = null;
-        const credential = await signInWithToken(token);
+        const credential = await firebaseSignInWithToken(token);
         setUser(credential.user);
         if (oldSessionId) {
             await callEndSession({sessionId: oldSessionId}).catch(() => {
@@ -390,6 +413,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         cachedPhotoURL,
         sessionId,
         signIn,
+        signInWithToken,
         signOut,
         signOutEverywhere,
         replaceSession,

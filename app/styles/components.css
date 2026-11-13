@@ -477,3 +477,26 @@
 .spinner-centered {
     margin: 20px auto;
 }
+
+/**
+ * A spinner in a line of text, in the text's own colour: before what a button
+ * says while it waits on the server.
+ */
+.spinner-inline {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: 0.55em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -0.15em;
+    animation: rotation 0.7s linear infinite;
+}
+
+/* Still turning, as it's the sign that something is happening, only gently. */
+@media (prefers-reduced-motion: reduce) {
+    .spinner-inline {
+        animation-duration: 1.8s;
+    }
+}
