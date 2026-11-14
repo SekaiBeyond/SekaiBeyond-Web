@@ -7,6 +7,8 @@ export default [
     route("admin", "routes/admin.tsx"),
     route("claim", "routes/claim.tsx"),
     route("policy", "routes/policy.tsx"),
+    // Where to get help after sexual assault or harassment: UW's services, then the club's officers.
+    route("support", "routes/support.tsx"),
     // Where the "This wasn't me" link in an email-changed notice lands.
     route("undo-email", "routes/undoEmail.tsx"),
     // Where a registered app, such as SKBY Manager, sends people to sign in with their account here.

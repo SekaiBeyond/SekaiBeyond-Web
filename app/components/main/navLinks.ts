@@ -70,6 +70,12 @@ export const FOOTER_LINKS: NavLink[] = [
         labelEn: 'Policy',
         labelCn: '政策',
     },
+    {
+        id: 'support',
+        href: '/support',
+        labelEn: 'Safety & Support',
+        labelCn: '安全与求助',
+    },
 ];
 
 export const NAVIGATION_LINKS: NavLink[] = [

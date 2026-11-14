@@ -55,6 +55,9 @@ export const Footer = () => {
                     <Link className="sbc-footer-link" to="/policy">
                         {t({en: 'Policy', zh: '政策'})}
                     </Link>
+                    <Link className="sbc-footer-link" to="/support">
+                        {t({en: 'Safety & Support', zh: '安全与求助'})}
+                    </Link>
                     {config.contactEmail && (
                         <a className="sbc-footer-link" href={`mailto:${config.contactEmail}`}>
                             {t({en: 'Contact', zh: '联系我们'})}
