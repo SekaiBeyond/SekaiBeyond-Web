@@ -111,7 +111,7 @@ const DAY_MS = 24 * HOUR_MS;
  * unbinding Google, asking for deletion and cancelling) could spend the lot in
  * minutes, and the next change to anyone's account would go unannounced.
  */
-const NOTICED_CHANGES_PER_DAY = {google: 6, password: 5, deletion: 3} as const;
+const NOTICED_CHANGES_PER_DAY = {google: 6, appLink: 6, password: 5, deletion: 3} as const;
 type NoticedChange = keyof typeof NOTICED_CHANGES_PER_DAY;
 
 /**
@@ -347,6 +347,49 @@ export async function googleChangedMail(
             bound
                 ? `The Google account ${masked} can now sign in to your account. You can unbind it in Settings.`
                 : `The Google account ${masked} can no longer sign in to your account.`,
+            contact,
+        ]),
+    };
+}
+
+/**
+ * To an account's address when an app's account is linked to it or unlinked
+ * (utils/appLinks.ts), by either side: a link shows the app what the account
+ * is here, so someone who got in briefly could otherwise keep watching.
+ */
+export async function appLinkChangedMail(
+    to: string,
+    appName: string,
+    appUserName: string,
+    linked: boolean,
+    language: MailLanguage,
+): Promise<ResendEnvelope> {
+    const app = escapeHtml(appName);
+    const who = appUserName ? escapeHtml(appUserName) : "";
+    const contact = await contactLine(language);
+    if (language === "zh") {
+        const account = who ? `${app}账号“${who}”` : `一个${app}账号`;
+        return {
+            to,
+            subject: linked ? `您的 Sekai Beyond 账号绑定了${appName}` : `您的 Sekai Beyond 账号解绑了${appName}`,
+            html: page(linked ? `已绑定${app}` : `已解绑${app}`, [
+                linked
+                    ? `${account}已绑定到您的账号，${app}现在可以读取您的名称、头像、组别、会员状态和活动工作人员身份。可在“设置”中解绑。`
+                    : `${account}已从您的账号解绑，${app}不再能读取您账号的信息。`,
+                contact,
+            ]),
+        };
+    }
+    const account = who ? `The ${app} account "${who}"` : `A ${app} account`;
+    return {
+        to,
+        subject: linked
+            ? `${appName} was linked to your Sekai Beyond account`
+            : `${appName} was unlinked from your Sekai Beyond account`,
+        html: page(linked ? `${app} linked` : `${app} unlinked`, [
+            linked
+                ? `${account} is now linked to your account, so ${app} can see your name, photo, group, membership and event staff roles. You can unlink it in Settings.`
+                : `${account} is no longer linked to your account, so ${app} can't see anything of it any more.`,
             contact,
         ]),
     };

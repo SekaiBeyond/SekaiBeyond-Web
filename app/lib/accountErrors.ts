@@ -18,6 +18,23 @@ function bannedMessage(err: unknown, isEnglish: boolean): string {
         : '此账号已被封禁。如您认为有误，请联系我们。';
 }
 
+/** A link refused while one side waits out the 30 days after an earlier one was undone. */
+function linkHoldMessage(err: unknown, isEnglish: boolean): string {
+    const details = functionsErrorDetails<{side?: unknown; until?: unknown}>(err);
+    const until = typeof details?.until === 'string' ? new Date(details.until) : null;
+    const when = until && !Number.isNaN(until.getTime())
+        ? formatSiteTime(until, isEnglish, {year: 'numeric', month: 'long', day: 'numeric'})
+        : null;
+    if (details?.side === 'account') {
+        return isEnglish
+            ? `Your account was linked to someone else in this app recently, so it can only link another${when ? ` from ${when}` : ' later'}.`
+            : `您的账号最近在此应用中绑定过其他账号，${when ? `需等到 ${when} 后` : '稍后'}才能绑定新的账号。`;
+    }
+    return isEnglish
+        ? `That app account was linked to another account recently, so it can only link this one${when ? ` from ${when}` : ' later'}.`
+        : `该应用账号最近绑定过其他账号，${when ? `需等到 ${when} 后` : '稍后'}才能绑定此账号。`;
+}
+
 /** What went wrong with an account call, in the visitor's language. */
 export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
     switch (errorCode(err)) {
@@ -73,6 +90,20 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
             return isEnglish ? 'Too many attempts. Please wait a while and try again.' : '尝试次数过多，请稍后再试。';
         case 'mail-unavailable':
             return isEnglish ? 'We couldn’t send the email just now. Please try again later.' : '暂时无法发送邮件，请稍后再试。';
+        case 'linking-off':
+            return isEnglish ? 'This app doesn’t link accounts right now.' : '此应用目前不支持绑定账号。';
+        case 'account-linked':
+            return isEnglish ? 'Your account is already linked in this app. Unlink it first.' : '您的账号已在此应用中绑定，请先解绑。';
+        case 'app-user-linked':
+            return isEnglish
+                ? 'That app account is already linked to another account here.'
+                : '该应用账号已绑定本站的其他账号。';
+        case 'link-on-hold':
+            return linkHoldMessage(err, isEnglish);
+        case 'link-request-gone':
+            return isEnglish ? 'This code has run out. Start again for a new one.' : '此二维码已过期，请重新开始。';
+        case 'link-not-claimed':
+            return isEnglish ? 'Nobody has scanned the code yet.' : '还没有人扫描此二维码。';
         case 'functions/invalid-argument':
             return isEnglish ? 'Please check what you entered.' : '请检查您输入的内容。';
         default:

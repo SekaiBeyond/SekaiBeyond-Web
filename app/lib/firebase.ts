@@ -558,7 +558,9 @@ export const callGetWalletPassStatus = () =>
     httpsCallable<Record<string, never>, WalletPassStatus>(getFunctions(), 'getWalletPassStatus')({});
 
 /** What an API key may do. Mirrors API_SCOPES in functions/src/utils/apiKeys.ts. */
-export const API_SCOPES = ['events:read', 'team:read', 'event-staff:read', 'tickets:read', 'tickets:write'] as const;
+export const API_SCOPES = [
+    'events:read', 'team:read', 'event-staff:read', 'tickets:read', 'tickets:write', 'account-links',
+] as const;
 export type ApiScope = typeof API_SCOPES[number];
 
 export interface ApiKeySummary {
@@ -616,6 +618,8 @@ export interface AppSummary {
     redirectUris: string[];
     firebaseProjectId: string;
     serviceAccount: string;
+    /** Whether accounts here may link their accounts in it. */
+    accountLinking: boolean;
     keys: ApiKeySummary[];
     createdAt: string | null;
     updatedAt: string | null;
@@ -627,6 +631,7 @@ interface AppFields {
     redirectUris: string[];
     firebaseProjectId: string;
     serviceAccount: string;
+    accountLinking: boolean;
 }
 
 /** Every app with its API keys, the service account an app's maintainers grant roles to ("" where it can't be told), and the server time. */
@@ -640,6 +645,32 @@ export const callSaveApp = (data: AppFields & ({create: true} | {appId: string; 
 
 export const callDeleteApp = (data: {appId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteApp')(data);
+
+/** An app the caller may link their account in, and their link there if they have one. */
+export interface LinkableApp {
+    appId: string;
+    name: string;
+    /** Off for an app that has stopped linking accounts, whose link may only be undone. */
+    accountLinking: boolean;
+    link: {appUserName: string; linkedAt: string | null} | null;
+}
+
+export const callGetAppLinks = () =>
+    httpsCallable<Record<string, never>, {apps: LinkableApp[]}>(getFunctions(), 'getAppLinks')({});
+
+/** A request to link the caller's account in an app: what to show for scanning or typing in there. */
+export const callStartAppLink = (data: {appId: string}) =>
+    httpsCallable<typeof data, {requestId: string; code: string; qr: string; expiresAt: string}>(
+        getFunctions(), 'startAppLink')(data);
+
+export const callConfirmAppLink = (data: {requestId: string; language: Language}) =>
+    httpsCallable<typeof data, {linked: boolean}>(getFunctions(), 'confirmAppLink')(data);
+
+export const callCancelAppLink = (data: {requestId: string}) =>
+    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelAppLink')(data);
+
+export const callUnlinkApp = (data: {appId: string; language: Language}) =>
+    httpsCallable<typeof data, {unlinked: boolean}>(getFunctions(), 'unlinkApp')(data);
 
 /** What the sign-in page shows of an app. Needs no sign-in. */
 export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>

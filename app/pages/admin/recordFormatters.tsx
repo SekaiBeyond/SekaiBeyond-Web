@@ -197,6 +197,20 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish ? <>bound a Google account</> : <>绑定了 Google 账号</>;
         case 'account-google-unbind':
             return isEnglish ? <>unbound their Google account</> : <>解绑了 Google 账号</>;
+        case 'account-app-link': {
+            const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
+            return isEnglish
+                ? <>linked their {r.appName || r.appId} account{who}</>
+                : <>绑定了{r.appName || r.appId}账号{who}</>;
+        }
+        case 'account-app-unlink': {
+            const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
+            // From the app, through its key, rather than from Settings.
+            const inApp = r.apiKeyName ? (isEnglish ? ' in the app' : '（在应用内）') : '';
+            return isEnglish
+                ? <>unlinked their {r.appName || r.appId} account{who}{inApp}</>
+                : <>解绑了{r.appName || r.appId}账号{who}{inApp}</>;
+        }
         case 'account-ban': {
             const term = r.banUntil
                 ? (isEnglish ? `until ${fmtExpiry(r.banUntil)}` : `至 ${fmtExpiry(r.banUntil)}`)

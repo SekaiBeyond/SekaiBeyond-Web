@@ -55,7 +55,16 @@ const KEY_SCOPE_LABELS: Record<ApiScope, {en: string; zh: string; descEn: string
         descEn: 'Look up an order\'s tickets and whether each has been used.',
         descZh: '查询订单中的门票及每张是否已使用。',
     },
+    'account-links': {
+        en: 'Link accounts', zh: '绑定账号',
+        descEn: 'Link the app\'s users to accounts here once both sides confirm, and read a linked account\'s name, photo, masked email, group, membership, event staff roles and ban. Only for an app that links accounts.',
+        descZh: '经双方确认后，把应用的用户绑定到本站账号，并读取已绑定账号的名称、头像、打码的邮箱、组别、会员、活动工作人员身份和封禁状态。仅限开启了账号绑定的应用。',
+    },
 };
+
+/** What a new key may do unless unticked: everything, but linking accounts only for an app that does. */
+const defaultKeyScopes = (app: AppSummary | null): ApiScope[] =>
+    API_SCOPES.filter(scope => scope !== 'account-links' || !!app?.accountLinking);
 
 const EXPIRY_OPTIONS = [30, 90, 365, 730];
 const DEFAULT_EXPIRY_DAYS = 365;
@@ -78,6 +87,7 @@ interface Draft {
     redirectUris: string;
     firebaseProjectId: string;
     serviceAccount: string;
+    accountLinking: boolean;
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -87,6 +97,7 @@ const EMPTY_DRAFT: Draft = {
     redirectUris: '',
     firebaseProjectId: '',
     serviceAccount: '',
+    accountLinking: false,
 };
 
 const redirectLines = (text: string) => text.split('\n').map(line => line.trim()).filter(Boolean);
@@ -153,7 +164,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     // Per-app API key creation / re-creation.
     const [keyAppId, setKeyAppId] = useState<string | null>(null);
     const [keyName, setKeyName] = useState('');
-    const [keyScopes, setKeyScopes] = useState<ApiScope[]>([...API_SCOPES]);
+    const [keyScopes, setKeyScopes] = useState<ApiScope[]>(defaultKeyScopes(null));
     const [allEvents, setAllEvents] = useState(true);
     const [eventIds, setEventIds] = useState<string[]>([]);
     const [expiresInDays, setExpiresInDays] = useState(DEFAULT_EXPIRY_DAYS);
@@ -215,6 +226,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             redirectUris: app.redirectUris.join('\n'),
             firebaseProjectId: app.firebaseProjectId,
             serviceAccount: app.serviceAccount,
+            accountLinking: app.accountLinking,
         });
         setEditing(app);
         setShowForm(true);
@@ -252,6 +264,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                 redirectUris: draft.signIn ? redirectLines(draft.redirectUris) : [],
                 firebaseProjectId: draft.signIn ? draft.firebaseProjectId.trim() : '',
                 serviceAccount: draft.signIn ? draft.serviceAccount.trim() : '',
+                accountLinking: draft.accountLinking,
             };
             await callSaveApp(editing ? {...fields, appId: editing.id, create: false} : {...fields, create: true});
             showToast(editing
@@ -295,7 +308,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const resetKeyForm = () => {
         setKeyAppId(null);
         setKeyName('');
-        setKeyScopes([...API_SCOPES]);
+        setKeyScopes(defaultKeyScopes(null));
         setAllEvents(true);
         setEventIds([]);
         setExpiresInDays(DEFAULT_EXPIRY_DAYS);
@@ -305,7 +318,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const startNewKey = (app: AppSummary) => {
         setKeyAppId(app.id);
         setKeyName('');
-        setKeyScopes([...API_SCOPES]);
+        setKeyScopes(defaultKeyScopes(app));
         setAllEvents(true);
         setEventIds([]);
         setExpiresInDays(DEFAULT_EXPIRY_DAYS);
@@ -660,6 +673,23 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                             </label>
                         </div>
                     )}
+
+                    <label className="admin-checkbox-label admin-api-key-option">
+                        <input
+                            type="checkbox"
+                            checked={draft.accountLinking}
+                            onChange={e => set('accountLinking', e.target.checked)}
+                            disabled={saving}
+                        />
+                        <span>
+                            <strong>{isEnglish ? 'People link their account here to theirs in it' : '用户可把本站账号与其在此应用的账号绑定'}</strong>
+                            <span className="admin-helper-text admin-api-key-option-desc">
+                                {isEnglish
+                                    ? 'For an app with accounts of its own, like the mini program. People link from Settings here and confirm in the app; then a key with Link accounts reads what their account is here. Unticking stops every link working within seconds, and keeps them for when it\'s ticked again.'
+                                    : '适用于有自己账号体系的应用，例如小程序。用户在本站“设置”中发起绑定并在应用内确认，之后持有“绑定账号”权限的密钥即可读取其本站账号的信息。取消勾选后所有绑定会在几秒内停止生效，重新勾选后恢复。'}
+                            </span>
+                        </span>
+                    </label>
                 </div>
             </CreateSection>
 
@@ -729,6 +759,11 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                     ) : (
                                         <span className="admin-tickets-tag admin-tickets-tag-unlinked">
                                             {isEnglish ? 'No user sign-in' : '未开启用户登录'}
+                                        </span>
+                                    )}
+                                    {app.accountLinking && (
+                                        <span className="admin-tickets-tag admin-tickets-tag-used">
+                                            {isEnglish ? 'Account linking' : '已开启账号绑定'}
                                         </span>
                                     )}
                                 </div>

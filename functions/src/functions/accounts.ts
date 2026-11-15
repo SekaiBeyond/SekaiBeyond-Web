@@ -42,6 +42,7 @@ import {
     PASSWORD_PEPPER
 } from "../utils/credentials";
 import { requireNotBanned } from "../utils/bans";
+import { accountLinksQuery, type AppLinkDoc, unlinkInTxn } from "../utils/appLinks";
 import { CODE_MAIL_HOURLY_CAP } from "../utils/config";
 import { deletionPending } from "../utils/deletion";
 import {
@@ -831,12 +832,13 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         // Followed before, and the address put back, but not everything after.
         const finishing = !!undo.get("restoredAt");
 
-        const [user, credentials, oldHeld, newHeld, formerHolders] = await Promise.all([
+        const [user, credentials, oldHeld, newHeld, formerHolders, appLinks] = await Promise.all([
             txn.get(db.collection("users").doc(uid)),
             txn.get(credentialsRef(uid)),
             txn.get(emailIndexRef(oldEmail)),
             txn.get(emailIndexRef(newEmail)),
             txn.get(db.collection("users").where("formerEmails", "array-contains", oldEmail)),
+            txn.get(accountLinksQuery(uid)),
         ]);
         if (!emailUndoLive(undo, user.data())) throw badUndoLink();
 
@@ -867,6 +869,10 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
 
         const google = googleBindingOf(credentials);
         if (google) txn.delete(googleIndexRef(google.sub));
+        // Whoever moved it may have linked their own account in an app, which
+        // would go on reading this one. Without a hold, so its owner can link
+        // theirs back at once.
+        for (const link of appLinks.docs) unlinkInTxn(txn, link.data() as AppLinkDoc, false);
         txn.set(credentials.ref, {
             passwordHash,
             passwordChangedAt: FieldValue.serverTimestamp(),

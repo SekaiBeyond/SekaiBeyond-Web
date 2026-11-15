@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { GoogleAuth } from "google-auth-library";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol } from "../utils/apiKeys";
+import { appLinksCol } from "../utils/appLinks";
 import {
     APP_ID_RE,
     APP_MAINTAINERS_MAX,
@@ -19,10 +20,11 @@ import {
     SERVICE_ACCOUNT_RE,
     validateAppId,
 } from "../utils/apps";
+import { BATCH_LIMIT } from "../utils/config";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
 import { recordDoc, recordRef } from "../utils/records";
-import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
+import { sanitizeDisplayText, validateBoolean, validateDocId, validateStr } from "../utils/validation";
 
 /**
  * Registering apps people sign in to with their accounts here (see
@@ -41,12 +43,14 @@ interface AppInput {
     redirectUris: string[];
     firebaseProjectId: string;
     serviceAccount: string;
+    accountLinking: boolean;
 }
 
 function parseAppInput(raw: unknown): AppInput {
     const input = (raw ?? {}) as Record<string, unknown>;
     const name = sanitizeDisplayText(validateStr(input.name, "name", APP_NAME_MAX, true));
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
+    const accountLinking = input.accountLinking !== undefined && validateBoolean(input.accountLinking, "accountLinking");
 
     const rawMaintainers = input.maintainerUids;
     if (!Array.isArray(rawMaintainers) || rawMaintainers.length > APP_MAINTAINERS_MAX) {
@@ -74,7 +78,7 @@ function parseAppInput(raw: unknown): AppInput {
     // An app that only holds API keys leaves sign-in blank; one that signs
     // people in needs where to hand them back to, its project and its service account.
     if (redirectUris.length === 0 && rawProject === "" && rawServiceAccount === "") {
-        return {name, maintainerUids, redirectUris: [], firebaseProjectId: "", serviceAccount: ""};
+        return {name, maintainerUids, redirectUris: [], firebaseProjectId: "", serviceAccount: "", accountLinking};
     }
     if (redirectUris.length === 0) {
         throw new HttpsError("invalid-argument",
@@ -92,6 +96,7 @@ function parseAppInput(raw: unknown): AppInput {
         redirectUris,
         firebaseProjectId: rawProject,
         serviceAccount: rawServiceAccount,
+        accountLinking,
     };
 }
 
@@ -192,6 +197,7 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
             redirectUris: app.redirectUris,
             firebaseProjectId: app.firebaseProjectId,
             serviceAccount: app.serviceAccount,
+            accountLinking: app.accountLinking,
             keys: keysByApp.get(app.id) ?? [],
             createdAt: isoOrNull(app.createdAt),
             updatedAt: isoOrNull(app.updatedAt),
@@ -250,7 +256,9 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
 /**
  * Removes an app and revokes its API keys. Its keys and sign-in to it stop at
  * once, and the API refuses its sign-ins within seconds. Its users and data in
- * its own project are its maintainers' to keep.
+ * its own project are its maintainers' to keep. Its account links go after,
+ * as there may be more than a transaction holds: nothing reads them meanwhile,
+ * since every reader looks the app up first.
  */
 export const deleteApp = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -273,6 +281,17 @@ export const deleteApp = onCall({maxInstances: 10}, async (request) => {
             appName: app.name,
         }));
     });
+
+    try {
+        const links = await appLinksCol().where("appId", "==", appId).get();
+        for (let i = 0; i < links.docs.length; i += BATCH_LIMIT) {
+            const batch = db.batch();
+            for (const link of links.docs.slice(i, i + BATCH_LIMIT)) batch.delete(link.ref);
+            await batch.commit();
+        }
+    } catch (err) {
+        console.error(`[apps] couldn't delete ${appId}'s account links`, err);
+    }
     return {deleted: true};
 });
 

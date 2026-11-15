@@ -109,6 +109,8 @@ export type RecordType =
     | "account-password-set"
     | "account-google-bind"
     | "account-google-unbind"
+    | "account-app-link"
+    | "account-app-unlink"
     | "account-email-change"
     | "account-email-undo"
     | "account-ban"
@@ -205,6 +207,8 @@ export interface RecordFields {
     /** The app an app record is about (see utils/apps.ts), and its name then. */
     appId?: string;
     appName?: string;
+    /** An account link (see utils/appLinks.ts): the app's user's name, as the app gave it. */
+    appUserName?: string;
     /** A ban: when it runs out, "" for one until lifted, and staff's note on why. */
     banUntil?: string;
     banReason?: string;

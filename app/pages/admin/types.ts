@@ -126,8 +126,8 @@ export const RECORD_CATEGORIES = {
         en: 'Account', zh: '账号',
         types: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
             'name-set', 'avatar-set', 'avatar-remove', 'banner-remove', 'account-email-release',
-            'account-password-set', 'account-google-bind', 'account-google-unbind', 'account-email-change',
-            'account-email-undo', 'account-ban', 'account-unban'],
+            'account-password-set', 'account-google-bind', 'account-google-unbind', 'account-app-link',
+            'account-app-unlink', 'account-email-change', 'account-email-undo', 'account-ban', 'account-unban'],
     },
     config: {
         en: 'Config', zh: '配置',
@@ -233,5 +233,7 @@ export interface ActivityRecord {
     /** The app an app record is about, and its name then. */
     appId?: string;
     appName?: string;
+    /** An account link: the app's user's name, as the app gave it. */
+    appUserName?: string;
     timestamp: Date;
 }

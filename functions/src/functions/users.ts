@@ -30,6 +30,7 @@ import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
 import { deleteFromApps, signOutOfApps } from "../utils/apps";
+import { accountLinksQuery } from "../utils/appLinks";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
@@ -843,6 +844,17 @@ export const onUserDeleted = onDocumentDeleted(
             await db.recursiveDelete(sessionsRef(uid));
         } catch (err) {
             console.error(`onUserDeleted: sessions delete failed for ${uid}`, err);
+        }
+
+        // Its links to apps' accounts (utils/appLinks.ts), which leaves those
+        // free to link another account at once: there's nothing left to pass on.
+        // Thrown, so a retry finishes it: a link left behind would still have
+        // the app reading an account that's gone, if only its absence.
+        const links = await accountLinksQuery(uid).get();
+        if (!links.empty) {
+            const unlink = db.batch();
+            for (const link of links.docs) unlink.delete(link.ref);
+            await unlink.commit();
         }
 
         try {

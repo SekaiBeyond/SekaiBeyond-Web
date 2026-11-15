@@ -165,6 +165,24 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
+        // Accounts here linked to apps' accounts, and each side of an undone
+        // link waiting out its hold (functions/src/utils/appLinks.ts).
+        // Server-only: the account reads its own through getAppLinks, the app
+        // through the API.
+        match /appLinks/{linkId} {
+            allow read, write: if false;
+        }
+        match /appLinkHolds/{holdId} {
+            allow read, write: if false;
+        }
+
+        // Requests to link an account to an app's account. Only the account a
+        // request is for reads it, so Settings can watch for the app's claim;
+        // writes via startAppLink, confirmAppLink, cancelAppLink and the API.
+        match /appLinkRequests/{requestId} {
+            allow read: if signedIn() && resource.data.uid == request.auth.uid;
+        }
+
         // How accounts sign in: password hashes and bound Google accounts, kept
         // off users/{uid} because all staff can read that. Server-only, no
         // exceptions, and the two indexes below are what make an address and a
