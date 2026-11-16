@@ -121,7 +121,9 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
     };
 
     if (!watched || linkedElsewhere) {
-        return <div className="settings-link-panel"><div className="spinner spinner-centered"/></div>;
+        return <div className="settings-link-panel">
+            <div className="spinner spinner-centered"/>
+        </div>;
     }
 
     if (expired || watched.status === 'cancelled' || watched.status === 'failed') {

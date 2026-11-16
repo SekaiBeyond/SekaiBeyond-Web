@@ -581,6 +581,7 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
         return {granted: grant};
     });
 });
+
 /** Staff's note on why an account is banned: "" when left out, refused when not a string or over 500 characters. */
 function readBanReason(raw: unknown): string {
     if (raw === undefined || raw === null) return "";

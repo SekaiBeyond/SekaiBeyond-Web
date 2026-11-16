@@ -111,6 +111,7 @@ export type RecordType =
     | "account-google-unbind"
     | "account-app-link"
     | "account-app-unlink"
+    | "account-app-link-undo"
     | "account-email-change"
     | "account-email-undo"
     | "account-ban"

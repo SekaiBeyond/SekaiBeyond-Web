@@ -672,6 +672,10 @@ export const callCancelAppLink = (data: {requestId: string}) =>
 export const callUnlinkApp = (data: {appId: string; language: Language}) =>
     httpsCallable<typeof data, {unlinked: boolean}>(getFunctions(), 'unlinkApp')(data);
 
+/** The "This wasn't me" link in a link's notice. Signs nobody in: the new password does that, once it's set. */
+export const callUndoAppLink = (data: {token: string; password: string}) =>
+    httpsCallable<typeof data, {appName: string}>(getFunctions(), 'undoAppLink')(data);
+
 /** What the sign-in page shows of an app. Needs no sign-in. */
 export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>
     httpsCallable<typeof data, {name: string; maintainerNames: string[]}>(

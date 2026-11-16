@@ -1,6 +1,7 @@
-import { randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { HttpsError } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
+import { PUBLIC_ORIGIN } from "./config";
 import { db } from "./firebase";
 
 /**
@@ -87,8 +88,10 @@ export type LinkSide = "account" | "app-user";
 
 /**
  * An `appLinkHolds` doc: one side of an undone link waiting out LINK_HOLD_DAYS
- * before linking anyone but `partner`, the one it was linked to. Server only;
- * a TTL policy (firestore.indexes.json) deletes it once it's run out.
+ * before linking anyone but `partner`, the one it was linked to, or anyone at
+ * all when that's "": an app's account whose link the account disowned
+ * (disownLinkInTxn). Server only; a TTL policy (firestore.indexes.json)
+ * deletes it once it's run out.
  */
 interface AppLinkHoldDoc {
     appId: string;
@@ -137,6 +140,76 @@ export function unlinkInTxn(txn: FirebaseFirestore.Transaction, link: AppLinkDoc
     const holdDoc = (partner: string): AppLinkHoldDoc => ({appId: link.appId, partner, expiresAt});
     txn.set(appLinkHoldRef(link.appId, "account", link.uid), holdDoc(link.appUserId));
     txn.set(appLinkHoldRef(link.appId, "app-user", link.appUserId), holdDoc(link.uid));
+}
+
+/** How long the "This wasn't me" link in a link's notice works (undoAppLink). */
+export const LINK_UNDO_DAYS = 7;
+
+const LINK_UNDO_TOKEN_RE = /^[0-9a-f]{64}$/;
+
+/**
+ * An `appLinkUndos` doc, named by a hash of its token, so a copy of the
+ * database can't be used to follow one: the "This wasn't me" link in the
+ * notice an account gets when it's linked (appLinkChangedMail). It's for an
+ * owner whose sign-in someone else used to link their own account in an app,
+ * which would go on reading this one. Unlinking in Settings would hold the
+ * owner's account to that app's account for LINK_HOLD_DAYS, and this doesn't
+ * (disownLinkInTxn).
+ *
+ * It's the mailbox that counts, so it works only while the account is still on
+ * `email`, the address the notice went to. Server only; a TTL policy deletes
+ * it once it's run out.
+ */
+export interface AppLinkUndoDoc {
+    uid: string;
+    appId: string;
+    appUserId: string;
+    /** The app's user's name, as on the link, for the record. */
+    appUserName: string;
+    email: string;
+    expiresAt: Timestamp;
+    /** Set once it has undone the link, while signing every device out is left. */
+    usedAt?: Timestamp;
+}
+
+export const newLinkUndoToken = (): string => randomBytes(32).toString("hex");
+
+export const isLinkUndoToken = (value: unknown): value is string =>
+    typeof value === "string" && LINK_UNDO_TOKEN_RE.test(value);
+
+export const linkUndoRef = (token: string) =>
+    db.collection("appLinkUndos").doc(createHash("sha256").update(token).digest("hex"));
+
+// After the #, so it never reaches a server's logs or anyone's Referer header.
+export const linkUndoUrl = (token: string): string => `${PUBLIC_ORIGIN}/undo-app-link#token=${token}`;
+
+/**
+ * Undoes, in `txn`, a link its account says it never made: the link, if it's
+ * still there, and the hold undoing it put on the account, if it's been undone
+ * since, so the account may link its own app account at once. The app's
+ * account waits out LINK_HOLD_DAYS before linking anyone, this account too.
+ * Reads before it writes, so call it before any other write in `txn`. Says
+ * whether there was a link to undo.
+ */
+export async function disownLinkInTxn(
+    txn: FirebaseFirestore.Transaction,
+    appId: string,
+    uid: string,
+    appUserId: string,
+): Promise<boolean> {
+    const linkRef = appLinkRef(appId, appUserId);
+    const accountHoldRef = appLinkHoldRef(appId, "account", uid);
+    const [link, accountHold] = await Promise.all([txn.get(linkRef), txn.get(accountHoldRef)]);
+    const linked = link.get("uid") === uid;
+    if (linked) txn.delete(linkRef);
+    if (accountHold.get("partner") === appUserId) txn.delete(accountHoldRef);
+    const hold: AppLinkHoldDoc = {
+        appId,
+        partner: "",
+        expiresAt: Timestamp.fromMillis(Date.now() + LINK_HOLD_DAYS * DAY_MS),
+    };
+    txn.set(appLinkHoldRef(appId, "app-user", appUserId), hold);
+    return linked;
 }
 
 /** Where a request stands. `expired` is never stored: it's a live one past `expiresAt`. */

@@ -211,6 +211,13 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>unlinked their {r.appName || r.appId} account{who}{inApp}</>
                 : <>解绑了{r.appName || r.appId}账号{who}{inApp}</>;
         }
+        case 'account-app-link-undo': {
+            const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
+            // The "This wasn't me" link in the link's notice, which also replaced the password.
+            return isEnglish
+                ? <>undid a link to the {r.appName || r.appId} account{who} they didn’t make</>
+                : <>撤销了一个并非本人操作的{r.appName || r.appId}账号{who}绑定</>;
+        }
         case 'account-ban': {
             const term = r.banUntil
                 ? (isEnglish ? `until ${fmtExpiry(r.banUntil)}` : `至 ${fmtExpiry(r.banUntil)}`)

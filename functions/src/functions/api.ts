@@ -24,19 +24,19 @@ import { maskEmail } from "../utils/accountEmail";
 import { appLinkChangedMail, readMailLanguage, sendNotice } from "../utils/accountMail";
 import {
     accountLinkQuery,
+    APP_USER_ID_RE,
     type AppLinkDoc,
     appLinkRef,
     type AppLinkRequestDoc,
     appLinkRequestsCol,
     appLinksCol,
     appLinkUserName,
-    APP_USER_ID_RE,
     LINK_CODE_RE,
     LINK_REQUEST_ID_RE,
     LINK_REQUEST_TTL_MS,
     linkHeldUntil,
-    type LinkSide,
     linkRequestStatus,
+    type LinkSide,
     unlinkInTxn,
 } from "../utils/appLinks";
 import { activeBan } from "../utils/bans";
@@ -1296,18 +1296,30 @@ async function answer(
     if (route.kind === "me") return getMe(caller);
     const key = requireKey(caller);
     switch (route.kind) {
-        case "team": return listTeam(key);
-        case "events": return listEvents(key);
-        case "event": return getEvent(key, route.eventId);
-        case "event-staff": return listEventStaff(key, route.eventId);
-        case "orders": return createOrder(key, route.eventId, req.body);
-        case "order": return getOrder(key, route.eventId, route.orderId);
-        case "link-request": return getLinkRequest(key, route.ref);
-        case "link-request-claim": return claimLinkRequest(key, route.requestId, req.body);
-        case "links": return listLinks(key, req.query);
-        case "link": return getLink(key, route.appUserId);
-        case "unlink": return deleteLink(key, route.appUserId, req.query);
-        case "link-photo": return getLinkPhoto(key, route.appUserId);
+        case "team":
+            return listTeam(key);
+        case "events":
+            return listEvents(key);
+        case "event":
+            return getEvent(key, route.eventId);
+        case "event-staff":
+            return listEventStaff(key, route.eventId);
+        case "orders":
+            return createOrder(key, route.eventId, req.body);
+        case "order":
+            return getOrder(key, route.eventId, route.orderId);
+        case "link-request":
+            return getLinkRequest(key, route.ref);
+        case "link-request-claim":
+            return claimLinkRequest(key, route.requestId, req.body);
+        case "links":
+            return listLinks(key, req.query);
+        case "link":
+            return getLink(key, route.appUserId);
+        case "unlink":
+            return deleteLink(key, route.appUserId, req.query);
+        case "link-photo":
+            return getLinkPhoto(key, route.appUserId);
     }
 }
 

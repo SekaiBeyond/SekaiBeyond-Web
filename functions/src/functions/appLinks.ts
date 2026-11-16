@@ -1,11 +1,6 @@
-import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { Timestamp } from "firebase-admin/firestore";
-import {
-    appLinkChangedMail,
-    limitNoticedChange,
-    readMailLanguage,
-    sendNotice,
-} from "../utils/accountMail";
+import { type CallableOptions, HttpsError, onCall } from "firebase-functions/v2/https";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { appLinkChangedMail, limitNoticedChange, readMailLanguage, sendNotice, } from "../utils/accountMail";
 import {
     accountLinkQuery,
     accountLinksQuery,
@@ -13,24 +8,35 @@ import {
     appLinkRef,
     type AppLinkRequestDoc,
     appLinkRequestsCol,
+    type AppLinkUndoDoc,
     appLinkUserName,
+    disownLinkInTxn,
     freeLinkCode,
+    isLinkUndoToken,
     LINK_QR_PREFIX,
     LINK_REQUEST_ID_RE,
     LINK_REQUEST_TTL_MS,
+    LINK_UNDO_DAYS,
     linkHeldUntil,
     linkOnHold,
     linkRequestStatus,
+    linkUndoRef,
+    linkUndoUrl,
     newLinkRequestId,
+    newLinkUndoToken,
     unlinkInTxn,
 } from "../utils/appLinks";
 import { appsCol, readApp, type RegisteredApp, validateAppId } from "../utils/apps";
 import { consumeRateLimit, requireAuth, requireRegisteredSession } from "../utils/auth";
+import { credentialsRef, PASSWORD_PEPPER } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
+import { checkNewPassword, hashPassword } from "../utils/passwords";
 import { RESEND_API_KEY } from "../utils/resendClient";
 import { recordDoc, recordRef } from "../utils/records";
+import { callerAddressKey } from "../utils/scans";
+import { endSessions } from "../utils/sessions";
 
 /**
  * The account's side of linking it to an app's account (see utils/appLinks.ts):
@@ -40,7 +46,8 @@ import { recordDoc, recordRef } from "../utils/records";
  *
  * Starting, confirming and undoing need a device on the account's list
  * (requireRegisteredSession), as changing how it signs in does, and each tells
- * the account's address.
+ * the account's address. The notice of a link carries a "This wasn't me" link
+ * (undoAppLink), for an owner whose sign-in someone else used to link theirs.
  */
 
 const LINK_CALL = {maxInstances: 10, secrets: [RESEND_API_KEY]};
@@ -48,6 +55,14 @@ const LINK_CALL = {maxInstances: 10, secrets: [RESEND_API_KEY]};
 /** Requests one account may start an hour: enough for a few codes that ran out before anyone scanned them. */
 const LINK_REQUESTS_PER_HOUR = 10;
 const HOUR_MS = 60 * 60 * 1000;
+
+/** Hashing the new password takes the memory account calls have. */
+const LINK_UNDO_CALL: CallableOptions = {maxInstances: 20, memory: "512MiB", secrets: [PASSWORD_PEPPER]};
+
+/** "This wasn't me" links one network may follow an hour, as for an email change's. */
+const LINK_UNDOS_PER_HOUR_PER_NETWORK = 30;
+
+const badUndoLink = () => new HttpsError("not-found", "This link doesn't work.", {code: "bad-undo-link"});
 
 const linkingOff = () =>
     new HttpsError("failed-precondition", "This app doesn't link accounts.", {code: "linking-off"});
@@ -89,7 +104,10 @@ export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
                 appId: app.id,
                 name: app.name,
                 accountLinking: app.accountLinking,
-                link: link ? {appUserName: appLinkUserName(link.appUserName), linkedAt: isoOrNull(link.linkedAt)} : null,
+                link: link ? {
+                    appUserName: appLinkUserName(link.appUserName),
+                    linkedAt: isoOrNull(link.linkedAt)
+                } : null,
             };
         }),
     };
@@ -159,6 +177,7 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
     const input = (request.data ?? {}) as {requestId?: unknown; language?: unknown};
     const ref = appLinkRequestsCol().doc(readRequestId(input.requestId));
     await limitNoticedChange(uid, "appLink");
+    const undoToken = newLinkUndoToken();
 
     const linked = await db.runTransaction(async (txn) => {
         const snap = await txn.get(ref);
@@ -205,12 +224,25 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
             appName: app.name,
             appUserName,
         }));
-        return {email: (user.get("email") as string | undefined) ?? "", appName: app.name, appUserName};
+        const email = (user.get("email") as string | undefined) ?? "";
+        if (email) {
+            const undo: AppLinkUndoDoc = {
+                uid,
+                appId: app.id,
+                appUserId: req.appUserId,
+                appUserName,
+                email,
+                expiresAt: Timestamp.fromMillis(Date.now() + LINK_UNDO_DAYS * 24 * HOUR_MS),
+            };
+            txn.set(linkUndoRef(undoToken), undo);
+        }
+        return {email, appName: app.name, appUserName};
     });
 
     if (linked.email) {
         await sendNotice(await appLinkChangedMail(
-            linked.email, linked.appName, linked.appUserName, true, readMailLanguage(input.language)));
+            linked.email, linked.appName, linked.appUserName, true, readMailLanguage(input.language),
+            linkUndoUrl(undoToken)));
     }
     return {linked: true};
 });
@@ -268,4 +300,61 @@ export const unlinkApp = onCall(LINK_CALL, async (request) => {
             readMailLanguage(input.language)));
     }
     return {unlinked: !!unlinked};
+});
+
+/**
+ * The "This wasn't me" link in a link's notice (AppLinkUndoDoc), for an owner
+ * whose sign-in someone else used to link their own account in an app. Undoes
+ * the link without holding the account to that app's account, and lifts the
+ * hold if it's been unlinked since, so the owner can link their own at once;
+ * the app's account waits out the hold before linking anyone (disownLinkInTxn).
+ *
+ * Whoever linked it could sign in, so, as undoing an email change does, it
+ * replaces the password and signs every device out, and the new password is
+ * the way back in. The link is used up only once every device is signed out:
+ * until then whoever linked it is still in, so following it again finishes.
+ * Signs nobody in.
+ */
+export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
+    const input = (request.data ?? {}) as {token?: unknown; password?: unknown};
+    await consumeRateLimit(
+        `linkUndo_${callerAddressKey(request.rawRequest)}`, LINK_UNDOS_PER_HOUR_PER_NETWORK, HOUR_MS);
+    if (!isLinkUndoToken(input.token)) throw badUndoLink();
+    const undoRef = linkUndoRef(input.token);
+    const passwordHash = await hashPassword(await checkNewPassword(input.password));
+
+    const {uid, appName} = await db.runTransaction(async (txn) => {
+        const undo = (await txn.get(undoRef)).data() as AppLinkUndoDoc | undefined;
+        if (!undo || undo.expiresAt.toMillis() <= Date.now()) throw badUndoLink();
+        const [user, appSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(undo.uid)),
+            txn.get(appsCol().doc(undo.appId)),
+        ]);
+        if (!user.exists || user.get("email") !== undo.email) throw badUndoLink();
+        const appName = readApp(appSnap)?.name ?? undo.appId;
+
+        await disownLinkInTxn(txn, undo.appId, undo.uid, undo.appUserId);
+        txn.set(credentialsRef(undo.uid), {
+            passwordHash,
+            passwordChangedAt: FieldValue.serverTimestamp()
+        }, {merge: true});
+        if (!undo.usedAt) {
+            txn.update(undoRef, {usedAt: FieldValue.serverTimestamp()});
+            const displayName: string = user.get("displayName") ?? "";
+            txn.set(recordRef(), recordDoc("account-app-link-undo", {
+                performedBy: undo.uid,
+                performedByName: displayName,
+                targetUid: undo.uid,
+                targetName: displayName,
+                appId: undo.appId,
+                appName,
+                appUserName: appLinkUserName(undo.appUserName),
+            }));
+        }
+        return {uid: undo.uid, appName};
+    });
+
+    await endSessions(uid, null);
+    await undoRef.delete();
+    return {appName};
 });

@@ -127,7 +127,7 @@ export const RECORD_CATEGORIES = {
         types: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
             'name-set', 'avatar-set', 'avatar-remove', 'banner-remove', 'account-email-release',
             'account-password-set', 'account-google-bind', 'account-google-unbind', 'account-app-link',
-            'account-app-unlink', 'account-email-change', 'account-email-undo', 'account-ban', 'account-unban'],
+            'account-app-unlink', 'account-app-link-undo', 'account-email-change', 'account-email-undo', 'account-ban', 'account-unban'],
     },
     config: {
         en: 'Config', zh: '配置',

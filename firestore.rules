@@ -175,6 +175,11 @@ service cloud.firestore {
         match /appLinkHolds/{holdId} {
             allow read, write: if false;
         }
+        // The "This wasn't me" links in link notices, named by a hash of their
+        // token. Server-only: followed through undoAppLink.
+        match /appLinkUndos/{undoId} {
+            allow read, write: if false;
+        }
 
         // Requests to link an account to an app's account. Only the account a
         // request is for reads it, so Settings can watch for the app's claim;
