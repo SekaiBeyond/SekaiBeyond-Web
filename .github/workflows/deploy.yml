@@ -22,6 +22,15 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # No key is stored anywhere. The job asks GitHub for a signed token, and
+    # Google trades it for the deploy service account only when the token says
+    # this repo, main and the production environment (the sekaibeyond-web
+    # provider of the github pool in Google Cloud). The environment runs only
+    # on main, and only an admin can update main (the "Protect main" ruleset).
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -71,7 +80,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          workload_identity_provider: projects/511276783748/locations/global/workloadIdentityPools/github/providers/sekaibeyond-web
+          service_account: firebase-adminsdk-fbsvc@sekaibeyond-fc616.iam.gserviceaccount.com
 
       # Functions first, on their own, as npm run deploy does. In one command the
       # CLI releases rules before functions, so a functions deploy that stops (a
