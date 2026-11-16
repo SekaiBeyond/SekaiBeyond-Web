@@ -1,7 +1,7 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 
-const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "badges/", "team/", "config/", "passports/", "con/"];
+const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "badges/", "team/", "config/", "passports/", "con/", "apps/"];
 export const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
 
 /**

@@ -14,6 +14,7 @@ import {
     callRenameApiKey,
     callRevokeApiKey,
     callSaveApp,
+    callUploadAdminImage,
     functionsErrorCode,
 } from '~/lib/firebase';
 import { APP_PLATFORM_NAMES, APP_PLATFORMS, appNameIn, type AppPlatform, LINK_SHARED_FIELDS } from '~/lib/appLinks';
@@ -23,6 +24,7 @@ import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { appBrand, ConnectionIcon } from '~/pages/ProfileConnectionRow';
 import { BilingualFormField } from '../BilingualFormField';
 import { CreateSection } from '../CrudShell';
+import { ImageUploadField } from '../ImageUploadField';
 import { UserAvatar } from '../UserRow';
 import { UserSearchAdd } from '../UserSearchAdd';
 import type { ShowToast } from '../utils';
@@ -93,6 +95,10 @@ interface Draft {
     serviceAccount: string;
     accountLinking: boolean;
     platform: AppPlatform;
+    /** The icon it's saved with unless one is chosen: its own, or "" once removed. */
+    iconUrl: string;
+    /** An icon chosen, uploaded when it's saved, and its preview until then. */
+    icon: {file: File; preview: string} | null;
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -105,7 +111,12 @@ const EMPTY_DRAFT: Draft = {
     serviceAccount: '',
     accountLinking: false,
     platform: '',
+    iconUrl: '',
+    icon: null,
 };
+
+/** An app icon's size in pixels: twice the 44px Settings shows it at, and more than the sign-in page's 64. */
+const ICON_SIZE = 256;
 
 const redirectLines = (text: string) => text.split('\n').map(line => line.trim()).filter(Boolean);
 
@@ -220,12 +231,18 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
 
     const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(prev => ({...prev, [key]: value}));
 
+    const dropIconPreview = () => {
+        if (draft.icon) URL.revokeObjectURL(draft.icon.preview);
+    };
+
     const resetForm = () => {
+        dropIconPreview();
         setDraft(EMPTY_DRAFT);
         setEditing(null);
     };
 
     const startEdit = (app: AppSummary) => {
+        dropIconPreview();
         setDraft({
             nameEn: app.nameEn ?? '',
             nameCn: app.nameCn ?? '',
@@ -236,6 +253,8 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             serviceAccount: app.serviceAccount,
             accountLinking: app.accountLinking,
             platform: app.platform ?? '',
+            iconUrl: app.iconUrl ?? '',
+            icon: null,
         });
         setEditing(app);
         setShowForm(true);
@@ -255,6 +274,11 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const removeMaintainer = (uid: string) =>
         setDraft(prev => ({...prev, maintainers: prev.maintainers.filter(m => m.uid !== uid)}));
 
+    const removeIcon = () => {
+        dropIconPreview();
+        setDraft(prev => ({...prev, iconUrl: '', icon: null}));
+    };
+
     const canSave = (
         !draft.signIn || (
             redirectLines(draft.redirectUris).length > 0
@@ -267,6 +291,13 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
         if (!canSave) return;
         setSaving(true);
         try {
+            let iconUrl = draft.iconUrl;
+            if (draft.icon) {
+                iconUrl = await callUploadAdminImage(draft.icon.file, `apps/${crypto.randomUUID()}.webp`);
+                // Kept as uploaded, so trying again after a failed save doesn't upload it again.
+                URL.revokeObjectURL(draft.icon.preview);
+                setDraft(prev => ({...prev, iconUrl, icon: null}));
+            }
             const fields = {
                 nameEn: draft.nameEn.trim(),
                 nameCn: draft.nameCn.trim(),
@@ -276,6 +307,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                 serviceAccount: draft.signIn ? draft.serviceAccount.trim() : '',
                 accountLinking: draft.accountLinking,
                 platform: draft.platform,
+                iconUrl,
             };
             await callSaveApp(editing ? {...fields, appId: editing.id, create: false} : {...fields, create: true});
             showToast(editing
@@ -575,6 +607,32 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                     </div>
 
                     <div className="admin-tickets-template-field">
+                        <span>{isEnglish ? 'Icon' : '图标'}</span>
+                        <ImageUploadField
+                            variant="icon"
+                            preview={draft.icon?.preview ?? (draft.iconUrl || null)}
+                            iconPreview={(
+                                <ConnectionIcon
+                                    brand={appBrand(draft.platform)}
+                                    imageUrl={draft.icon?.preview ?? draft.iconUrl}
+                                />
+                            )}
+                            onFileChange={(file, preview) => setDraft(prev => ({...prev, icon: {file, preview}}))}
+                            onCleanupPreview={url => URL.revokeObjectURL(url)}
+                            onRemove={removeIcon}
+                            cropAspect={1}
+                            cropWidth={ICON_SIZE}
+                            disabled={saving}
+                            showToast={showToast}
+                        />
+                        <span className="admin-helper-text">
+                            {isEnglish
+                                ? 'Optional. Shown by its name on this list, in Settings and in Users Management, and when people sign in to it. Without one, it\'s shown with its platform\'s mark, or a plain one.'
+                                : '可不填。显示在此列表、“设置”和“用户管理”中的应用名称旁，以及用户登录该应用时。不上传则显示其平台的图标或默认图标。'}
+                        </span>
+                    </div>
+
+                    <div className="admin-tickets-template-field">
                         <span>
                             {isEnglish ? 'Maintainers' : '维护者'}
                             {' '}
@@ -756,7 +814,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                         return (
                             <div key={app.id} className="admin-api-key-card">
                                 <div className="admin-api-key-head">
-                                    <ConnectionIcon brand={appBrand(app.platform ?? '')} small/>
+                                    <ConnectionIcon brand={appBrand(app.platform ?? '')} imageUrl={app.iconUrl} small/>
                                     {(app.nameEn || app.nameCn) && (
                                         <span className="admin-api-key-name">{appName}</span>
                                     )}

@@ -13,7 +13,7 @@ const STATE_RE = /^[A-Za-z0-9_-]{16,128}$/;
 /** The base64url SHA-256 of the code verifier the app keeps (PKCE's S256, the one method taken). */
 const CODE_CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
 
-type Info = {nameEn: string; nameCn: string; maintainerNames: string[]};
+type Info = {nameEn: string; nameCn: string; iconUrl: string; maintainerNames: string[]};
 
 /**
  * Sign in with Sekai Beyond: where a registered app (see
@@ -77,6 +77,7 @@ export const AuthorizePage = () => {
     };
 
     const appName = info && typeof info === 'object' ? appNameIn(info, appId, isEnglish) : '';
+    const iconUrl = info && typeof info === 'object' ? info.iconUrl : '';
     // "A, B, and C" / "A、B和C".
     const maintainers = info && typeof info === 'object'
         ? new Intl.ListFormat(isEnglish ? 'en' : 'zh', {type: 'conjunction'}).format(info.maintainerNames)
@@ -87,6 +88,7 @@ export const AuthorizePage = () => {
             <PageNav/>
             <div className="profile-login-prompt">
                 <div className="profile-login-card">
+                    {linkOk && iconUrl && !loading && <img className="authorize-app-icon" src={iconUrl} alt=""/>}
                     {!linkOk || info === 'bad-link' ? (
                         <>
                             <h2>{isEnglish ? 'This Link Doesn’t Work' : '此链接无效'}</h2>

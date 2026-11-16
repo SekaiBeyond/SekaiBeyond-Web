@@ -5,6 +5,7 @@ import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol } from "../utils/apiKeys";
 import { type AppLinkDoc, appLinksCol, appLinkUserName } from "../utils/appLinks";
 import {
+    APP_ICON_PREFIX,
     APP_ID_RE,
     APP_MAINTAINERS_MAX,
     APP_PLATFORMS,
@@ -29,7 +30,14 @@ import { BATCH_LIMIT } from "../utils/config";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
 import { recordDoc, recordRef } from "../utils/records";
-import { sanitizeDisplayText, validateBoolean, validateDocId, validateStr } from "../utils/validation";
+import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
+import {
+    sanitizeDisplayText,
+    validateBoolean,
+    validateDocId,
+    validateStorageImageUrl,
+    validateStr,
+} from "../utils/validation";
 
 /**
  * Registering apps people sign in to with their accounts here (see
@@ -57,6 +65,8 @@ interface AppInput {
     accountLinking?: boolean;
     /** As accountLinking: undefined leaves a saved app's as it was, and a new one's "". */
     platform?: AppPlatform;
+    /** As platform. "" for none. */
+    iconUrl?: string;
 }
 
 function parseAppInput(raw: unknown): AppInput {
@@ -74,6 +84,8 @@ function parseAppInput(raw: unknown): AppInput {
         throw new HttpsError("invalid-argument", `platform must be "" or one of: ${APP_PLATFORMS.join(", ")}.`);
     }
     const platform = input.platform as AppPlatform | undefined;
+    const iconUrl = input.iconUrl === undefined ? undefined : validateStr(input.iconUrl, "iconUrl", 500);
+    if (iconUrl) validateStorageImageUrl(iconUrl, "iconUrl");
 
     const rawMaintainers = input.maintainerUids;
     if (!Array.isArray(rawMaintainers) || rawMaintainers.length > APP_MAINTAINERS_MAX) {
@@ -109,6 +121,7 @@ function parseAppInput(raw: unknown): AppInput {
             serviceAccount: "",
             accountLinking,
             platform,
+            iconUrl,
         };
     }
     if (redirectUris.length === 0) {
@@ -129,6 +142,7 @@ function parseAppInput(raw: unknown): AppInput {
         serviceAccount: rawServiceAccount,
         accountLinking,
         platform,
+        iconUrl,
     };
 }
 
@@ -232,6 +246,7 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
             serviceAccount: app.serviceAccount,
             accountLinking: app.accountLinking,
             platform: app.platform,
+            iconUrl: app.iconUrl,
             keys: keysByApp.get(app.id) ?? [],
             createdAt: isoOrNull(app.createdAt),
             updatedAt: isoOrNull(app.updatedAt),
@@ -245,7 +260,8 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
  * Registers an app (`create`) under an ID made for it (newAppId), or changes
  * the one `appId` names. Its ID is for good: it's in every sign-in the app
  * has. A change applies to the next sign-in at once and to the API within
- * seconds (see registeredApps). Says the app's ID.
+ * seconds (see registeredApps). An icon it no longer has is deleted once it's
+ * saved. Says the app's ID.
  */
 export const saveApp = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -254,7 +270,8 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
     const appId = create ? newAppId() : validateAppId(input.appId);
     const fields = parseAppInput(request.data);
 
-    await adminTransaction(uid, async (txn, callerSnap) => {
+    // The icon it had, which the save stops linking if it sets another.
+    const oldIconUrl = await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = appsCol().doc(appId);
         const maintainerRefs = fields.maintainerUids.map(id => db.collection("users").doc(id));
         const [snap, maintainers] = await Promise.all([
@@ -266,15 +283,18 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
         if (maintainers.some(m => !m.exists)) {
             throw new HttpsError("not-found", "A maintainer's account no longer exists.", {code: "maintainer-not-found"});
         }
+        const prevIconUrl = readApp(snap)?.iconUrl ?? "";
+        if (fields.iconUrl) await requireNewlyLinkedFilesExist([fields.iconUrl], [prevIconUrl]);
 
         const callerName: string = callerSnap.data()?.displayName ?? "";
         const now = Timestamp.now();
-        const {accountLinking, platform, ...rest} = fields;
+        const {accountLinking, platform, iconUrl, ...rest} = fields;
         if (create) {
             txn.create(ref, {
                 ...rest,
                 accountLinking: accountLinking ?? false,
                 platform: platform ?? "",
+                iconUrl: iconUrl ?? "",
                 createdBy: uid,
                 createdByName: callerName,
                 createdAt: now,
@@ -289,6 +309,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
                 ...rest,
                 ...(accountLinking === undefined ? {} : {accountLinking}),
                 ...(platform === undefined ? {} : {platform}),
+                ...(iconUrl === undefined ? {} : {iconUrl}),
                 ownerUid: FieldValue.delete(),
                 name: FieldValue.delete(),
                 scopes: FieldValue.delete(),
@@ -301,16 +322,23 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             appId,
             appName: appRecordName(fields, appId),
         }));
+        return prevIconUrl;
     });
+
+    if (fields.iconUrl !== undefined && oldIconUrl && oldIconUrl !== fields.iconUrl) {
+        await deleteStorageFile(oldIconUrl, [APP_ICON_PREFIX])
+            .catch(logStorageCleanupError(`saveApp ${appId}`));
+    }
     return {saved: true, appId};
 });
 
 /**
  * Removes an app and revokes its API keys. Its keys and sign-in to it stop at
  * once, and the API refuses its sign-ins within seconds. Its users and data in
- * its own project are its maintainers' to keep. Its account links go after,
- * each on its account's record, as there may be more than a transaction holds:
- * nothing reads them meanwhile, since every reader looks the app up first.
+ * its own project are its maintainers' to keep. Its icon goes after, and its
+ * account links, each on its account's record, as there may be more than a
+ * transaction holds: nothing reads them meanwhile, since every reader looks the
+ * app up first.
  */
 export const deleteApp = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -333,8 +361,13 @@ export const deleteApp = onCall({maxInstances: 10}, async (request) => {
             appId,
             appName: appRecordName(app, appId),
         }));
-        return {appName: appRecordName(app, appId), callerName};
+        return {appName: appRecordName(app, appId), callerName, iconUrl: app.iconUrl};
     });
+
+    if (removed.iconUrl) {
+        await deleteStorageFile(removed.iconUrl, [APP_ICON_PREFIX])
+            .catch(logStorageCleanupError(`deleteApp ${appId}`));
+    }
 
     // Each link goes on its account's record, under a fixed ID: a link and its
     // record make two writes, so a batch holds half as many links.
@@ -388,7 +421,7 @@ function redirectFor(app: RegisteredApp, raw: unknown): string {
 
 /**
  * What the sign-in page shows of an app before anyone signs in: its names
- * (see appNameIn) and the names of its maintainers. Refuses an
+ * (see appNameIn), its icon and the names of its maintainers. Refuses an
  * unknown app, or a place to hand back to that isn't its own, before anyone
  * is asked to sign in.
  */
@@ -400,7 +433,7 @@ export const getAppSignInInfo = onCall({maxInstances: 20}, async (request) => {
     const maintainerNames = app.maintainerUids.map(id => appPerson(id, users))
         .filter(person => !person.deleted && person.name)
         .map(person => person.name);
-    return {nameEn: app.nameEn, nameCn: app.nameCn, maintainerNames};
+    return {nameEn: app.nameEn, nameCn: app.nameCn, iconUrl: app.iconUrl, maintainerNames};
 });
 
 /**

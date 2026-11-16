@@ -192,6 +192,15 @@
     color: var(--color-primary);
 }
 
+/* An app's own icon, filling the tile, outlined as Google's is so a white one
+   still reads as a tile. */
+.settings-connection-icon--image {
+    box-sizing: border-box;
+    object-fit: cover;
+    background: #fff;
+    border: 1px solid rgba(74, 81, 96, 0.12);
+}
+
 /* Beside a name, as on an app's card in the Apps tool. */
 .settings-connection-icon--small {
     flex-shrink: 0;

@@ -625,6 +625,8 @@ export interface AppSummary {
     accountLinking: boolean;
     /** What it runs on, for Settings to show it by. */
     platform: AppPlatform;
+    /** Its uploaded icon, shown in its platform's mark's place; "" for none. */
+    iconUrl: string;
     keys: ApiKeySummary[];
     createdAt: string | null;
     updatedAt: string | null;
@@ -639,6 +641,8 @@ interface AppFields {
     serviceAccount: string;
     accountLinking: boolean;
     platform: AppPlatform;
+    /** A file uploaded under apps/, or "" for none. */
+    iconUrl: string;
 }
 
 /** Every app with its API keys, the service account an app's maintainers grant roles to ("" where it can't be told), and the server time. */
@@ -659,8 +663,10 @@ export interface LinkableApp {
     /** What it's called in English and in Chinese, either or both "". See appNameIn. */
     nameEn: string;
     nameCn: string;
-    /** What it runs on: its icon in Settings, and how Settings says to open it. */
+    /** What it runs on: its icon in Settings when it has none of its own, and how Settings says to open it. */
     platform: AppPlatform;
+    /** Its uploaded icon, or "" for none. */
+    iconUrl: string;
     /** Off for an app that has stopped linking accounts, whose link may only be undone. */
     accountLinking: boolean;
     link: {appUserName: string; linkedAt: string | null} | null;
@@ -703,6 +709,8 @@ export interface UserAppLink {
     nameEn: string;
     nameCn: string;
     platform: AppPlatform;
+    /** Its uploaded icon, or "" for none. */
+    iconUrl: string;
     /** Off for an app that has stopped linking accounts, whose links don't work for now. */
     accountLinking: boolean;
     link: {appUserId: string; appUserName: string; linkedAt: string | null} | null;
@@ -718,7 +726,7 @@ export const callClearAppLinkHold = (data: {targetUid: string; appId: string}) =
 
 /** What the sign-in page shows of an app. Needs no sign-in. */
 export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>
-    httpsCallable<typeof data, {nameEn: string; nameCn: string; maintainerNames: string[]}>(
+    httpsCallable<typeof data, {nameEn: string; nameCn: string; iconUrl: string; maintainerNames: string[]}>(
         getFunctions(), 'getAppSignInInfo')(data);
 
 /**

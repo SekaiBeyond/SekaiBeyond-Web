@@ -428,6 +428,7 @@ export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
             <ConnectionRow
                 key={app.appId}
                 brand={appBrand(app.platform)}
+                iconUrl={app.iconUrl}
                 title={appName}
                 kind={platform ? (isEnglish ? platform.en : platform.zh) : (isEnglish ? 'App' : '应用')}
                 status={{

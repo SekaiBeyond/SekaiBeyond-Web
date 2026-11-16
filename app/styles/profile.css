@@ -67,6 +67,19 @@
 }
 
 /* Sign in with Sekai Beyond (/authorize): what the app will see, and switching account. */
+/* The app's own icon, over its name on the sign-in page, as its tile is in Settings. */
+.authorize-app-icon {
+    display: block;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    box-sizing: border-box;
+    border-radius: 18px;
+    object-fit: cover;
+    background: #fff;
+    border: 1px solid rgba(74, 81, 96, 0.12);
+}
+
 .profile-login-card .authorize-scopes {
     text-align: left;
     max-width: 300px;

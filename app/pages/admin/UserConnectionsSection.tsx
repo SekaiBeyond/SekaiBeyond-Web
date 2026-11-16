@@ -109,6 +109,7 @@ export const UserConnectionsSection = ({user, signIn, canManage, showToast}: {
                         <ConnectionRow
                             key={app.appId}
                             brand={appBrand(app.platform)}
+                            iconUrl={app.iconUrl}
                             title={appNameIn(app, app.appId, isEnglish)}
                             kind={platform ? (isEnglish ? platform.en : platform.zh) : (isEnglish ? 'App' : '应用')}
                             status={{

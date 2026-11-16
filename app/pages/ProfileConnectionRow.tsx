@@ -12,8 +12,24 @@ export const appBrand = (platform: AppPlatform): ConnectionBrand =>
 
 const BRAND_ICONS = {google: FcGoogle, wechat: SiWechat, app: FiGrid} as const;
 
-/** A brand's mark on its tile: a row's, or, `small`, beside a name, as in the Apps tool. */
-export const ConnectionIcon = ({brand, small = false}: {brand: ConnectionBrand; small?: boolean}) => {
+/**
+ * A brand's mark on its tile: a row's, or, `small`, beside a name, as in the
+ * Apps tool. An app's own icon, `imageUrl`, takes the mark's place.
+ */
+export const ConnectionIcon = ({brand, imageUrl, small = false}: {
+    brand: ConnectionBrand;
+    imageUrl?: string;
+    small?: boolean;
+}) => {
+    if (imageUrl) {
+        return (
+            <img
+                className={`settings-connection-icon settings-connection-icon--image${small ? ' settings-connection-icon--small' : ''}`}
+                src={imageUrl}
+                alt=""
+            />
+        );
+    }
     const Icon = BRAND_ICONS[brand];
     return (
         <span
@@ -34,8 +50,10 @@ export type ConnectionStatus = 'on' | 'off' | 'paused';
  * name with what it is under it, a badge saying whether it's connected, then
  * the details, the button, and under them anything the button opens.
  */
-export const ConnectionRow = ({brand, title, kind, status, help, state, details, action, children}: {
+export const ConnectionRow = ({brand, iconUrl, title, kind, status, help, state, details, action, children}: {
     brand: ConnectionBrand;
+    /** An app's own icon, shown in place of `brand`'s mark. */
+    iconUrl?: string;
     title: string;
     /** What it is, as "Sign-in method" or "WeChat mini program". */
     kind?: string;
@@ -48,7 +66,7 @@ export const ConnectionRow = ({brand, title, kind, status, help, state, details,
     children?: ReactNode;
 }) => (
     <div className="settings-row settings-row--connection">
-        <ConnectionIcon brand={brand}/>
+        <ConnectionIcon brand={brand} imageUrl={iconUrl}/>
         <div className="settings-row-text">
             <span className="settings-connection-head">
                 <span className="settings-row-title">{title}</span>

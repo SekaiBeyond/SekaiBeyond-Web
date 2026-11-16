@@ -84,6 +84,9 @@ export type AppPlatform = typeof APP_PLATFORMS[number] | "";
 export const isAppPlatform = (raw: unknown): raw is AppPlatform =>
     raw === "" || (APP_PLATFORMS as readonly unknown[]).includes(raw);
 
+/** Where apps' icons are uploaded to in Storage: saveApp and deleteApp delete only files under it. */
+export const APP_ICON_PREFIX = "apps/";
+
 /** An `apps` doc. Server only (see firestore.rules). */
 interface AppDoc {
     /**
@@ -95,6 +98,13 @@ interface AppDoc {
     nameCn: string;
     /** Missing on an app saved before there was one: see readApp. */
     platform: AppPlatform;
+    /**
+     * Its icon, uploaded in the Apps tool under APP_ICON_PREFIX, shown in its
+     * platform's mark's place wherever the site shows its mark, and on its
+     * sign-in page; "" when it has none. Missing on an app saved before there
+     * was one.
+     */
+    iconUrl: string;
     /**
      * The accounts that look after it, up to APP_MAINTAINERS_MAX, in the order
      * they were added. Shown on its sign-in page. Who registered it is
@@ -170,6 +180,7 @@ export function readApp(snap: FirebaseFirestore.DocumentSnapshot): RegisteredApp
         platform: isAppPlatform(data.platform)
             ? data.platform
             : data.accountLinking === true ? "wechat-mini-program" : "",
+        iconUrl: typeof data.iconUrl === "string" ? data.iconUrl : "",
         maintainerUids: data.maintainerUids ?? (data.ownerUid ? [data.ownerUid] : []),
         redirectUris: data.redirectUris ?? [],
         firebaseProjectId: data.firebaseProjectId ?? "",

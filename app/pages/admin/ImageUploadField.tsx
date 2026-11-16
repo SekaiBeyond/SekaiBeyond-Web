@@ -5,7 +5,7 @@ import { convertImageToWebp, type ShowToast, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 
 interface ImageUploadFieldProps {
-    // Omitted by the 'avatar' variant, whose caller renders the label itself.
+    // Omitted by every variant but 'field', whose callers render the label themselves.
     label?: string;
     labelCn?: string;
     preview: string | null;
@@ -21,10 +21,16 @@ interface ImageUploadFieldProps {
     showToast: ShowToast;
     // 'avatar' shows a round preview beside a button, the crop the site renders; the
     // caller owns the label. 'cover' does the same in the site's frame for a cover or
-    // poster (`cropAspect`, or 3:4).
-    variant?: 'field' | 'avatar' | 'cover';
+    // poster (`cropAspect`, or 3:4). 'icon' does it with `iconPreview`, which the
+    // caller draws as the image will be shown.
+    variant?: 'field' | 'avatar' | 'cover' | 'icon';
     // The avatar preview with no image: the public page's own default.
     placeholderSrc?: string;
+    // The 'icon' variant's preview, with or without an image.
+    iconPreview?: React.ReactNode;
+    // Offered beside the button while there's an image, to go back to none.
+    onRemove?: () => void;
+    disabled?: boolean;
 }
 
 export const ImageUploadField = ({
@@ -39,6 +45,9 @@ export const ImageUploadField = ({
                                      showToast,
                                      variant = 'field',
                                      placeholderSrc,
+                                     iconPreview,
+                                     onRemove,
+                                     disabled = false,
                                  }: ImageUploadFieldProps) => {
     const {isEnglish} = useLanguage();
     const {imageMb} = useUploadLimits();
@@ -103,8 +112,11 @@ export const ImageUploadField = ({
         />
     ) : null;
 
-    if (variant === 'avatar' || variant === 'cover') {
+    if (variant !== 'field') {
         const cover = variant === 'cover';
+        // A picture of something rather than a photo of someone.
+        const image = cover || variant === 'icon';
+        const busy = converting || disabled;
         const frame = cover && cropAspect ? {aspectRatio: String(cropAspect)} : undefined;
         // A cover is cropped to its display shape; anything else is only
         // trimmed at display time, which needs saying differently.
@@ -119,7 +131,7 @@ export const ImageUploadField = ({
         return (
             <>
                 <div className={`admin-avatar-field${cover ? ' admin-avatar-field--cover' : ''}`}>
-                    {cover ? (
+                    {variant === 'icon' ? iconPreview : cover ? (
                         preview ? (
                             <img className="admin-cover-preview" src={preview} alt="" style={frame}/>
                         ) : (
@@ -136,21 +148,29 @@ export const ImageUploadField = ({
                         />
                     )}
                     <div className="admin-avatar-actions">
-                        {/* The input is hidden but focusable, so this label is the button and
-                            :focus-within draws its ring. */}
-                        <label className={`admin-btn admin-btn--chip admin-avatar-choose${
-                            converting ? ' admin-avatar-choose-busy' : ''}`}>
-                            <input type="file" accept={accept} onChange={handleChange} disabled={converting}/>
-                            {converting
-                                ? (isEnglish ? 'Converting…' : '转换中…')
-                                : cover
-                                    ? preview
-                                        ? (isEnglish ? 'Replace image' : '更换图片')
-                                        : (isEnglish ? 'Choose image' : '选择图片')
-                                    : preview
-                                        ? (isEnglish ? 'Replace photo' : '更换照片')
-                                        : (isEnglish ? 'Choose photo' : '选择照片')}
-                        </label>
+                        <div className="admin-btn-row">
+                            {/* The input is hidden but focusable, so this label is the button and
+                                :focus-within draws its ring. */}
+                            <label className={`admin-btn admin-btn--chip admin-avatar-choose${
+                                busy ? ' admin-avatar-choose-busy' : ''}`}>
+                                <input type="file" accept={accept} onChange={handleChange} disabled={busy}/>
+                                {converting
+                                    ? (isEnglish ? 'Converting…' : '转换中…')
+                                    : image
+                                        ? preview
+                                            ? (isEnglish ? 'Replace image' : '更换图片')
+                                            : (isEnglish ? 'Choose image' : '选择图片')
+                                        : preview
+                                            ? (isEnglish ? 'Replace photo' : '更换照片')
+                                            : (isEnglish ? 'Choose photo' : '选择照片')}
+                            </label>
+                            {preview && onRemove && (
+                                <button className="admin-btn admin-btn--chip" onClick={onRemove} disabled={busy}
+                                        type="button">
+                                    {isEnglish ? 'Remove' : '移除'}
+                                </button>
+                            )}
+                        </div>
                         <p className="admin-helper-text admin-avatar-helper">
                             {isEnglish ? hint.en : hint.zh}
                         </p>
@@ -169,7 +189,7 @@ export const ImageUploadField = ({
                     type="file"
                     accept={accept}
                     onChange={handleChange}
-                    disabled={converting}
+                    disabled={converting || disabled}
                 />
                 {converting && (
                     <span className="admin-helper-text">
