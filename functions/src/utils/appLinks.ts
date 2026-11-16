@@ -213,13 +213,13 @@ const linkOnHold = (side: LinkSide, until: Date) =>
     });
 
 /**
- * Undoes a link in `txn`. With `hold`, each side then waits out LINK_HOLD_DAYS
- * before linking anyone else; without, as when the account is being deleted
- * or put back by its owner after a takeover, it's free at once.
+ * Undoes a link in `txn`, as either side asked. Each then waits out
+ * LINK_HOLD_DAYS before linking anyone else. A link its account says it never
+ * made is disownLinkInTxn's; one that goes with its account or its app
+ * (onUserDeleted, deleteApp) is deleted there, with no hold to keep.
  */
-export function unlinkInTxn(txn: FirebaseFirestore.Transaction, link: AppLinkDoc, {hold}: {hold: boolean}): void {
+export function unlinkInTxn(txn: FirebaseFirestore.Transaction, link: AppLinkDoc): void {
     txn.delete(appLinkRef(link.appId, link.appUserId));
-    if (!hold) return;
     const expiresAt = Timestamp.fromMillis(Date.now() + LINK_HOLD_DAYS * DAY_MS);
     const holdDoc = (partner: string): AppLinkHoldDoc => ({appId: link.appId, partner, expiresAt});
     txn.set(appLinkHoldRef(link.appId, "account", link.uid), holdDoc(link.appUserId));
@@ -268,10 +268,56 @@ export const linkUndoRef = (token: string) =>
 export const linkUndoUrl = (token: string): string => `${PUBLIC_ORIGIN}/undo-app-link#token=${token}`;
 
 /**
+ * A link its account is about to disown, as it stands: what disownLinkInTxn
+ * writes from, read by readLinkDisown.
+ */
+export interface LinkDisown {
+    appId: string;
+    uid: string;
+    appUserId: string;
+    /** Whether the link is still there. */
+    linked: boolean;
+    /** The hold on the account's side in the app, run out or not, or null without one. */
+    accountHold: {partner: string; expiresAt: Timestamp} | null;
+    /** Whether the account has disowned no other link in the app within LINK_HOLD_DAYS. */
+    firstInAWhile: boolean;
+}
+
+/**
+ * Reads, in `txn`, what disowning a link takes. Apart from disownLinkInTxn
+ * because a transaction reads before it writes: one that disowns several
+ * links, as undoing an email change may, reads them all first.
+ */
+export async function readLinkDisown(
+    txn: FirebaseFirestore.Transaction,
+    appId: string,
+    uid: string,
+    appUserId: string,
+): Promise<LinkDisown> {
+    const [link, accountHold, disowned] = await Promise.all([
+        txn.get(appLinkRef(appId, appUserId)),
+        txn.get(appLinkHoldRef(appId, "account", uid)),
+        txn.get(recentDisownRef(appId, uid)),
+    ]);
+    const lastDisownHolds = (disowned.get("expiresAt") as Timestamp | undefined)?.toMillis() ?? 0;
+    return {
+        appId,
+        uid,
+        appUserId,
+        linked: link.get("uid") === uid,
+        accountHold: (accountHold.data() as AppLinkHoldDoc | undefined) ?? null,
+        firstInAWhile: lastDisownHolds <= Date.now(),
+    };
+}
+
+/**
  * Undoes, in `txn`, a link its account says it never made: the link, if it's
  * still there, and the hold undoing it put on the account, if it's been undone
  * since, so the account may link its own app account at once. The app's
  * account waits out LINK_HOLD_DAYS before linking anyone, this account too.
+ * Both "This wasn't me" links come here: the one in a link's notice
+ * (undoAppLink), and an email change's, for the links made since the change
+ * (undoEmailChange).
  *
  * Only once in LINK_HOLD_DAYS per app, though. Its owner could otherwise use
  * it to skip the hold on their own links, and pass a membership round a group
@@ -279,30 +325,18 @@ export const linkUndoUrl = (token: string): string => `${PUBLIC_ORIGIN}/undo-app
  * the account as unlinking in Settings would, and staff can lift that
  * (clearAppLinkHold) for someone who really was taken over twice.
  *
- * Reads before it writes, so call it before any other write in `txn`. Says
- * when the account's hold ends, or null when it isn't held.
+ * Writes only, from what readLinkDisown read earlier in `txn`. Says when the
+ * account's hold ends, or null when it isn't held.
  */
-export async function disownLinkInTxn(
+export function disownLinkInTxn(
     txn: FirebaseFirestore.Transaction,
-    appId: string,
-    uid: string,
-    appUserId: string,
-): Promise<Date | null> {
-    const linkRef = appLinkRef(appId, appUserId);
+    {appId, uid, appUserId, linked, accountHold, firstInAWhile}: LinkDisown,
+): Date | null {
     const accountHoldRef = appLinkHoldRef(appId, "account", uid);
-    const disownRef = recentDisownRef(appId, uid);
-    const [link, accountHold, disowned] = await Promise.all([
-        txn.get(linkRef),
-        txn.get(accountHoldRef),
-        txn.get(disownRef),
-    ]);
     const now = Date.now();
     const holdUntil = Timestamp.fromMillis(now + LINK_HOLD_DAYS * DAY_MS);
-    const lastDisownHolds = (disowned.get("expiresAt") as Timestamp | undefined)?.toMillis() ?? 0;
-    const firstInAWhile = lastDisownHolds <= now;
 
-    const linked = link.get("uid") === uid;
-    if (linked) txn.delete(linkRef);
+    if (linked) txn.delete(appLinkRef(appId, appUserId));
     txn.set(appLinkHoldRef(appId, "app-user", appUserId), {
         appId,
         partner: "",
@@ -310,16 +344,15 @@ export async function disownLinkInTxn(
     } satisfies AppLinkHoldDoc);
 
     if (firstInAWhile) {
-        if (accountHold.get("partner") === appUserId) txn.delete(accountHoldRef);
-        txn.set(disownRef, {appId, partner: "", expiresAt: holdUntil} satisfies AppLinkHoldDoc);
+        if (accountHold?.partner === appUserId) txn.delete(accountHoldRef);
+        txn.set(recentDisownRef(appId, uid), {appId, partner: "", expiresAt: holdUntil} satisfies AppLinkHoldDoc);
         return null;
     }
     if (linked) {
         txn.set(accountHoldRef, {appId, partner: appUserId, expiresAt: holdUntil} satisfies AppLinkHoldDoc);
         return holdUntil.toDate();
     }
-    const held = accountHold.data() as AppLinkHoldDoc | undefined;
-    return held && held.expiresAt.toMillis() > now ? held.expiresAt.toDate() : null;
+    return accountHold && accountHold.expiresAt.toMillis() > now ? accountHold.expiresAt.toDate() : null;
 }
 
 /**

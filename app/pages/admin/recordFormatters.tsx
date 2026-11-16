@@ -206,9 +206,10 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         case 'account-app-unlink': {
             const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
             const app = r.appName || r.appId;
-            // Ended with no hold by something else: the owner undoing an email
-            // change (only links made since), the account's deletion, or the
-            // app's removal, which the record's performer did.
+            // Ended by something else: the owner undoing an email change (only
+            // links made since, each disowned as "This wasn't me" disowns one),
+            // or, with no hold, the account's deletion or the app's removal,
+            // which the record's performer did.
             if (r.linkEndedBy === 'email-undo') {
                 return isEnglish
                     ? <>unlinked their {app} account{who}, linked after the email change they undid</>
@@ -232,7 +233,8 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         }
         case 'account-app-link-undo': {
             const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
-            // The "This wasn't me" link in the link's notice, which also replaced the password.
+            // The "This wasn't me" link in the link's notice, which also replaced
+            // the password and took off any Google account bound.
             return isEnglish
                 ? <>undid a link to the {r.appName || r.appId} account{who} they didn’t make</>
                 : <>撤销了一个并非本人操作的{r.appName || r.appId}账号{who}绑定</>;

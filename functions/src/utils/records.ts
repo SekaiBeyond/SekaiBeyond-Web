@@ -212,9 +212,10 @@ export interface RecordFields {
     /** An account link (see utils/appLinks.ts): the app's user's name, as the app gave it. */
     appUserName?: string;
     /**
-     * An account-app-unlink nobody asked for, by what ended the link with no
-     * hold: undoing an email change (only links made since), deleting the
-     * account, or removing the app. Absent for an unlink from Settings or the app.
+     * An account-app-unlink nobody asked for, by what ended the link: undoing
+     * an email change (only links made since, each disowned as undoAppLink
+     * disowns one), or, with no hold, deleting the account or removing the
+     * app. Absent for an unlink from Settings or the app.
      */
     linkEndedBy?: "email-undo" | "account-deleted" | "app-removed";
     /** A ban: when it runs out, "" for one until lifted, and staff's note on why. */

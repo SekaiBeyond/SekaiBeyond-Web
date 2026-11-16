@@ -1,3 +1,4 @@
+import { getAuth } from "firebase-admin/auth";
 import { defineSecret } from "firebase-functions/params";
 import { db } from "./firebase";
 
@@ -33,6 +34,16 @@ export function googleIndexRef(sub: string): FirebaseFirestore.DocumentReference
 export function googleBindingOf(snap: FirebaseFirestore.DocumentSnapshot): GoogleBinding | null {
     const google: unknown = snap.get("google");
     return google && typeof google === "object" ? google as GoogleBinding : null;
+}
+
+/**
+ * Takes Google off the Firebase Auth record an older account has, since Firebase's
+ * own Google sign-in would otherwise work until it's turned off.
+ */
+export async function unlinkFirebaseGoogle(uid: string): Promise<void> {
+    await getAuth().updateUser(uid, {providersToUnlink: ["google.com"]}).catch((err: unknown) => {
+        if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
+    });
 }
 
 // Mixed into every password hash and email code, and kept out of the database:

@@ -28,6 +28,7 @@ import {
     newLinkRequestId,
     newLinkUndoToken,
     readAccountHold,
+    readLinkDisown,
     unlinkInTxn,
 } from "../utils/appLinks";
 import { appsCol, readApp, type RegisteredApp, validateAppId } from "../utils/apps";
@@ -39,7 +40,13 @@ import {
     requireRegisteredSession,
     requireStaff,
 } from "../utils/auth";
-import { credentialsRef, PASSWORD_PEPPER } from "../utils/credentials";
+import {
+    credentialsRef,
+    googleBindingOf,
+    googleIndexRef,
+    PASSWORD_PEPPER,
+    unlinkFirebaseGoogle,
+} from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
@@ -48,6 +55,7 @@ import { RESEND_API_KEY } from "../utils/resendClient";
 import { recordDoc, recordRef } from "../utils/records";
 import { callerAddressKey } from "../utils/scans";
 import { endSessions } from "../utils/sessions";
+import { isStorageUrl } from "../utils/storage";
 import { validateDocId } from "../utils/validation";
 
 /**
@@ -323,7 +331,7 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
         if (linked.empty) return null;
         const link = linked.docs[0].data() as AppLinkDoc;
         const appName = readApp(appSnap)?.name ?? appId;
-        unlinkInTxn(txn, link, {hold: true});
+        unlinkInTxn(txn, link);
         const displayName: string = user.get("displayName") ?? "";
         txn.set(recordRef(), recordDoc("account-app-unlink", {
             performedBy: uid,
@@ -354,11 +362,12 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
  * LINK_HOLD_DAYS per app: after that, the account is held as unlinking in
  * Settings would hold it (disownLinkInTxn), which `heldUntil` says.
  *
- * Whoever linked it could sign in, so, as undoing an email change does, it
- * replaces the password and signs every device out, and the new password is
- * the way back in. The link is used up only once every device is signed out:
- * until then whoever linked it is still in, so following it again finishes.
- * Signs nobody in.
+ * Whoever linked it could sign in, and anyone signed in can bind a Google
+ * account of their own from Settings, so, as undoing an email change does, it
+ * replaces the password, takes off any Google account bound and signs every
+ * device out, and the new password is the only way back in. The link is used
+ * up only once every device is signed out: until then whoever linked it is
+ * still in, so following it again finishes. Signs nobody in.
  */
 export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
     const input = (request.data ?? {}) as {token?: unknown; password?: unknown};
@@ -371,18 +380,26 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
     const {uid, appName, heldUntil} = await db.runTransaction(async (txn) => {
         const undo = (await txn.get(undoRef)).data() as AppLinkUndoDoc | undefined;
         if (!undo || undo.expiresAt.toMillis() <= Date.now()) throw badUndoLink();
-        const [user, appSnap] = await Promise.all([
+        const [user, credentials, appSnap, disown] = await Promise.all([
             txn.get(db.collection("users").doc(undo.uid)),
+            txn.get(credentialsRef(undo.uid)),
             txn.get(appsCol().doc(undo.appId)),
+            readLinkDisown(txn, undo.appId, undo.uid, undo.appUserId),
         ]);
         if (!user.exists || user.get("email") !== undo.email) throw badUndoLink();
         const appName = readApp(appSnap)?.name ?? undo.appId;
 
-        const heldUntil = await disownLinkInTxn(txn, undo.appId, undo.uid, undo.appUserId);
-        txn.set(credentialsRef(undo.uid), {
+        const heldUntil = disownLinkInTxn(txn, disown);
+        const google = googleBindingOf(credentials);
+        if (google) txn.delete(googleIndexRef(google.sub));
+        txn.set(credentials.ref, {
             passwordHash,
             passwordChangedAt: FieldValue.serverTimestamp(),
+            google: null,
         }, {merge: true});
+        // A photo that isn't an upload is the Google account's, and goes with it, as unbinding does.
+        const photoURL: unknown = user.get("photoURL");
+        if (photoURL && !isStorageUrl(photoURL)) txn.update(user.ref, {photoURL: ""});
         if (!undo.usedAt) {
             txn.update(undoRef, {usedAt: FieldValue.serverTimestamp()});
             const displayName: string = user.get("displayName") ?? "";
@@ -400,6 +417,7 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
     });
 
     await endSessions(uid, null);
+    await unlinkFirebaseGoogle(uid);
     await undoRef.delete();
     return {appName, heldUntil: heldUntil?.toISOString() ?? null};
 });

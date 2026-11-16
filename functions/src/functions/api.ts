@@ -1156,7 +1156,7 @@ async function deleteLink(key: ApiKey, appUserId: string, query: Record<string, 
         const link = (await txn.get(ref)).data() as AppLinkDoc | undefined;
         if (!link) return null;
         const user = await txn.get(usersCol().doc(link.uid));
-        unlinkInTxn(txn, link, {hold: true});
+        unlinkInTxn(txn, link);
         const displayName = str(user.get("displayName"));
         txn.set(recordRef(), recordDoc("account-app-unlink", {
             performedByName: displayName,

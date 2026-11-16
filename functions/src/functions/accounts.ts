@@ -1,5 +1,4 @@
 import { type CallableOptions, type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
-import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
@@ -39,10 +38,17 @@ import {
     type GoogleBinding,
     googleBindingOf,
     googleIndexRef,
-    PASSWORD_PEPPER
+    PASSWORD_PEPPER,
+    unlinkFirebaseGoogle,
 } from "../utils/credentials";
 import { requireNotBanned } from "../utils/bans";
-import { accountLinksQuery, type AppLinkDoc, appLinkUserName, unlinkInTxn } from "../utils/appLinks";
+import {
+    accountLinksQuery,
+    type AppLinkDoc,
+    appLinkUserName,
+    disownLinkInTxn,
+    readLinkDisown,
+} from "../utils/appLinks";
 import { appsCol, readApp } from "../utils/apps";
 import { CODE_MAIL_HOURLY_CAP } from "../utils/config";
 import { deletionPending } from "../utils/deletion";
@@ -580,16 +586,6 @@ export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
 });
 
 /**
- * Takes Google off the Firebase Auth record an older account has, since Firebase's
- * own Google sign-in would otherwise work until it's turned off.
- */
-async function unlinkFirebaseGoogle(uid: string): Promise<void> {
-    await getAuth().updateUser(uid, {providersToUnlink: ["google.com"]}).catch((err: unknown) => {
-        if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
-    });
-}
-
-/**
  * Takes the Google account off the caller's account, which needs a password to
  * still be signed in to.
  */
@@ -849,19 +845,25 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
 
         // Whoever moved it may have linked their own account in an app after,
         // which would go on reading this one, and whose notice went to their
-        // own address: those go below, without a hold, so its owner can link
-        // theirs back at once. Not the links from before: the owner's address
-        // was told of those, with a way to undo one it didn't make
-        // (undoAppLink), and its owner could otherwise skip a link's hold by
-        // moving off an address of theirs and back. Undo links from before
-        // changedAt was kept say when by when they run out. Their apps' names
-        // are read now, before anything is written, for the record.
+        // own address: those go below, as links the account never made
+        // (disownLinkInTxn), which holds each app's account and leaves this
+        // one free to link its owner's at once, once in LINK_HOLD_DAYS per
+        // app. Without that limit, moving to a second address, linking and
+        // undoing the move would skip a link's hold every time, as undoing
+        // also lifts the month between email changes. Not the links from
+        // before: the owner's address was told of those, with a way to undo
+        // one it didn't make (undoAppLink). Undo links from before changedAt
+        // was kept say when by when they run out. Their apps' names, and what
+        // disowning each takes, are read now, before anything is written.
         const changedAt = (undo.get("changedAt") as Timestamp | undefined)?.toMillis()
             ?? (undo.get("expiresAt") as Timestamp).toMillis() - EMAIL_UNDO_DAYS * 24 * HOUR_MS;
         const linksSince = appLinks.docs
             .map(doc => doc.data() as AppLinkDoc)
             .filter(link => link.linkedAt.toMillis() >= changedAt);
-        const linkApps = await Promise.all(linksSince.map(link => txn.get(appsCol().doc(link.appId))));
+        const [linkApps, disowns] = await Promise.all([
+            Promise.all(linksSince.map(link => txn.get(appsCol().doc(link.appId)))),
+            Promise.all(linksSince.map(link => readLinkDisown(txn, link.appId, uid, link.appUserId))),
+        ]);
 
         if (finishing) {
             if (oldHeld.get("uid") !== uid) throw badUndoLink();
@@ -892,7 +894,7 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         if (google) txn.delete(googleIndexRef(google.sub));
         const displayName: string = user.get("displayName") ?? "";
         linksSince.forEach((link, i) => {
-            unlinkInTxn(txn, link, {hold: false});
+            disownLinkInTxn(txn, disowns[i]);
             txn.set(recordRef(), recordDoc("account-app-unlink", {
                 performedBy: uid,
                 performedByName: displayName,

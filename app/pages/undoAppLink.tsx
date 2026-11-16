@@ -10,7 +10,8 @@ import { formatSiteTime } from '~/lib/siteTime';
 /**
  * Where the "This wasn't me" link in an app-linked notice lands. Opening it
  * does nothing, as mail scanners open links; the form is what undoes the link.
- * Whoever made it could sign in, so it also sets a new password.
+ * Whoever made it could sign in, so every other way into the account is gone
+ * after it, a bound Google account included, and it sets a new password.
  */
 export const UndoAppLinkPage = () => {
     const {isEnglish} = useLanguage();
@@ -58,8 +59,10 @@ export const UndoAppLinkPage = () => {
                             <p>
                                 {isEnglish
                                     ? <>Your account is no longer linked in <strong>{undone.appName}</strong>, and
-                                        every device has been signed out. Sign in with your new password.</>
-                                    : <>您的账号已解除与<strong>{undone.appName}</strong>的绑定，所有设备均已退出登录。请使用新密码登录。</>}
+                                        every device has been signed out. Sign in with your new password. You can bind
+                                        Google again in Settings.</>
+                                    : <>您的账号已解除与<strong>{undone.appName}</strong>的绑定，所有设备均已退出登录。请使用新密码登录，之后可在设置中重新绑定
+                                        Google。</>}
                             </p>
                             <p>
                                 {undone.heldUntil
@@ -96,8 +99,8 @@ export const UndoAppLinkPage = () => {
                             <h2>{isEnglish ? 'Undo App Link' : '撤销应用绑定'}</h2>
                             <p>
                                 {isEnglish
-                                    ? 'This unlinks the app account that was just linked to yours, signs out every device and replaces your password. You can then link your own account in that app straight away, once in 30 days. Choose a new password to finish.'
-                                    : '此操作会解除刚刚绑定到您账号的应用账号，退出所有设备并替换密码。之后您可以立即绑定您自己在该应用的账号（每 30 天限一次）。请设置新密码以完成操作。'}
+                                    ? 'This unlinks the app account that was just linked to yours, signs out every device, removes any bound Google account and replaces your password. You can then link your own account in that app straight away, once in 30 days. Choose a new password to finish.'
+                                    : '此操作会解除刚刚绑定到您账号的应用账号，退出所有设备，移除已绑定的 Google 账号并替换密码。之后您可以立即绑定您自己在该应用的账号（每 30 天限一次）。请设置新密码以完成操作。'}
                             </p>
                             <form className="auth-form" onSubmit={e => void submit(e)}>
                                 <input
