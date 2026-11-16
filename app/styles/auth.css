@@ -237,6 +237,13 @@
     line-height: 0;
 }
 
+.settings-link-confirm {
+    max-width: 10rem;
+    font-size: 20px;
+    letter-spacing: 0.3em;
+    font-variant-numeric: tabular-nums;
+}
+
 .settings-link-code {
     font-size: 24px;
     font-weight: 800;

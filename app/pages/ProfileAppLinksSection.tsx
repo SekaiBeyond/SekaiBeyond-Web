@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { accountErrorMessage } from '~/lib/accountErrors';
+import { linkSharedFields } from '~/lib/appLinks';
 import { toDate } from '~/lib/collectionCache';
 import {
     callCancelAppLink,
     callConfirmAppLink,
     callGetAppLinks,
+    callRemoveAppLink,
     callStartAppLink,
-    callUnlinkApp,
+    errorCode,
     getFirebaseDb,
     type LinkableApp,
 } from '~/lib/firebase';
@@ -22,6 +24,12 @@ interface Started {
     requestId: string;
     code: string;
     qr: string;
+    /**
+     * How far the server's clock is ahead of this device's, as of starting it:
+     * the request's times are the server's, and a device's clock can be off by
+     * more than the minutes a request lasts.
+     */
+    clockOffset: number;
 }
 
 /** The request as it stands, watched in Firestore for the app's claim. `failed`: it can't be watched. */
@@ -32,6 +40,9 @@ interface Watched {
 }
 
 const STATUSES = ['waiting', 'claimed', 'linked', 'cancelled'] as const;
+
+/** The four digits the app shows its user once it has claimed the request. */
+const CONFIRM_CODE_RE = /^\d{4}$/;
 
 /**
  * The request `requestId` names, kept up to date as the app claims it, or
@@ -56,15 +67,15 @@ function useLinkRequest(requestId: string | null): Watched | null {
     return watched;
 }
 
-/** Now, a second at a time while `on`. */
-function useNow(on: boolean): number {
-    const [now, setNow] = useState(() => Date.now());
+/** The server's time now, as best this device can tell (`offset`), a second at a time while `on`. */
+function useServerNow(on: boolean, offset: number): number {
+    const [now, setNow] = useState(() => Date.now() + offset);
     useEffect(() => {
         if (!on) return;
-        setNow(Date.now());
-        const timer = setInterval(() => setNow(Date.now()), 1000);
+        setNow(Date.now() + offset);
+        const timer = setInterval(() => setNow(Date.now() + offset), 1000);
         return () => clearInterval(timer);
-    }, [on]);
+    }, [on, offset]);
     return now;
 }
 
@@ -75,8 +86,9 @@ const formatLeft = (ms: number) => {
 
 /**
  * A request in progress: the code to scan or type in the app, then, once the
- * app's user has claimed it there, who they are and the button that links
- * them. It's only linked once both sides have said yes.
+ * app's user has claimed it there, who they are and a box for the four digits
+ * the app now shows them. Only someone who can see the app can type those in,
+ * so a name copied from yours can't link you to someone else's app account.
  */
 const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
     app: LinkableApp;
@@ -89,8 +101,9 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
     const language = isEnglish ? 'en' : 'zh';
     const watched = useLinkRequest(started.requestId);
     const open = watched?.status === 'waiting' || watched?.status === 'claimed';
-    const now = useNow(!!open);
+    const now = useServerNow(!!open, started.clockOffset);
     const [busy, setBusy] = useState(false);
+    const [confirmCode, setConfirmCode] = useState('');
 
     const expired = !!watched && open && watched.expiresAt <= now;
 
@@ -100,13 +113,16 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
         if (linkedElsewhere) onLinked();
     }, [linkedElsewhere, onLinked]);
 
-    const confirm = async () => {
+    const confirm = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!CONFIRM_CODE_RE.test(confirmCode)) return;
         setBusy(true);
         try {
-            await callConfirmAppLink({requestId: started.requestId, language});
+            await callConfirmAppLink({requestId: started.requestId, code: confirmCode, language});
             showToast(isEnglish ? `${app.name} linked.` : `已绑定${app.name}。`, 'success');
             onLinked();
         } catch (err) {
+            if (errorCode(err) === 'wrong-link-code') setConfirmCode('');
             showToast(accountErrorMessage(err, isEnglish), 'error');
         } finally {
             setBusy(false);
@@ -121,9 +137,11 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
     };
 
     if (!watched || linkedElsewhere) {
-        return <div className="settings-link-panel">
-            <div className="spinner spinner-centered"/>
-        </div>;
+        return (
+            <div className="settings-link-panel">
+                <div className="spinner spinner-centered"/>
+            </div>
+        );
     }
 
     if (expired || watched.status === 'cancelled' || watched.status === 'failed') {
@@ -132,7 +150,7 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
                 <span className="settings-row-help">
                     {watched.status === 'failed'
                         ? (isEnglish ? 'Couldn’t follow this request just now. Close it and try again.' : '暂时无法获取此请求的状态，请关闭后重试。')
-                        : (isEnglish ? 'This code has run out. Start again for a new one.' : '此二维码已过期，请重新开始获取新的二维码。')}
+                        : (isEnglish ? 'This request has ended. Start again for a new code.' : '此请求已结束，请重新开始获取新的二维码。')}
                 </span>
                 <div className="settings-account-actions">
                     <button type="button" className="admin-btn admin-btn--dashed" onClick={onClose}>
@@ -146,30 +164,43 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
     if (watched.status === 'claimed') {
         const who = watched.appUserName || (isEnglish ? 'An account' : '一个账号');
         return (
-            <div className="settings-link-panel">
+            <form className="settings-link-panel" onSubmit={e => void confirm(e)}>
                 <span className="settings-row-help">
                     {isEnglish
-                        ? <>Link <strong>{who}</strong> in {app.name} to this account? Only say yes if that’s you.</>
-                        : <>要把{app.name}账号 <strong>{who}</strong> 绑定到此账号吗？只有确认是您本人时才继续。</>}
+                        ? <>Linking <strong>{who}</strong> in {app.name}. {app.name} now shows its user four digits:
+                            enter them here to link that account to this one. Anyone can use a name, so only go on if
+                            the code is on your own screen.</>
+                        : <>正在绑定{app.name}账号 <strong>{who}</strong>。{app.name}现在会向该用户显示 4
+                            位数字：在此输入即可把该账号绑定到本账号。任何人都可以使用相同的名称，所以只有数字显示在您自己的屏幕上时才继续。</>}
                 </span>
                 <span className="settings-row-help">
                     {isEnglish
-                        ? `${app.name} will see your name, photo, masked email, group, membership and event staff roles, until either side unlinks.`
-                        : `在任一方解绑前，${app.name}可以看到您的名称、头像、打码的邮箱、组别、会员状态和活动工作人员身份。`}
+                        ? `${app.name} will see your ${linkSharedFields(true)}, until either side unlinks.`
+                        : `在任一方解绑前，${app.name}可以看到您的${linkSharedFields(false)}。`}
                 </span>
+                <input
+                    className="admin-input auth-input settings-link-confirm"
+                    value={confirmCode}
+                    onChange={e => setConfirmCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder={isEnglish ? '4-digit code' : '4 位数字'}
+                    aria-label={isEnglish ? `Code ${app.name} shows` : `${app.name}显示的数字`}
+                    disabled={busy}
+                />
                 <span className="settings-row-state">
                     {isEnglish ? `${formatLeft(watched.expiresAt - now)} left` : `剩余 ${formatLeft(watched.expiresAt - now)}`}
                 </span>
                 <div className="settings-account-actions">
-                    <button type="button" className="admin-btn admin-btn--cta" disabled={busy}
-                            onClick={() => void confirm()}>
+                    <button type="submit" className="admin-btn admin-btn--cta"
+                            disabled={busy || !CONFIRM_CODE_RE.test(confirmCode)}>
                         {isEnglish ? 'Link' : '绑定'}
                     </button>
                     <button type="button" className="admin-btn admin-btn--dashed" disabled={busy} onClick={cancel}>
                         {isEnglish ? 'This isn’t me' : '不是我'}
                     </button>
                 </div>
-            </div>
+            </form>
         );
     }
 
@@ -177,8 +208,8 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
         <div className="settings-link-panel">
             <span className="settings-row-help">
                 {isEnglish
-                    ? `Open ${app.name} and scan this code, or enter the six digits under it. You’ll confirm here once it’s scanned.`
-                    : `请打开${app.name}扫描此二维码，或输入下方的 6 位数字。扫描后需回到此页确认。`}
+                    ? `Open ${app.name} and scan this code, or enter the six digits under it. ${app.name} then shows you four digits to enter here.`
+                    : `请打开${app.name}扫描此二维码，或输入下方的 6 位数字。随后${app.name}会显示 4 位数字，请回到此页输入。`}
             </span>
             <div className="settings-link-qr">
                 <QRCodeSVG value={started.qr} size={176} level="M" marginSize={2}/>
@@ -201,21 +232,30 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
 /**
  * /profile's Settings tab: the apps this account may link to its account in
  * them, such as the mini program, and its links there. Hidden when no app
- * links accounts. Everything is enforced server-side (functions/appLinks.ts).
+ * links accounts. Shown with a way to try again when it can't be loaded, since
+ * a link already made can only be removed from here. Everything is enforced
+ * server-side (functions/appLinks.ts).
  */
 export const ProfileAppLinksSection = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const language = isEnglish ? 'en' : 'zh';
     const {user} = useAuth();
     const [apps, setApps] = useState<LinkableApp[] | null>(null);
+    const [loadFailed, setLoadFailed] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [started, setStarted] = useState<Started | null>(null);
     const [busyApp, setBusyApp] = useState<string | null>(null);
 
     const load = useCallback(async () => {
+        setLoading(true);
         try {
             setApps((await callGetAppLinks()).data.apps);
+            setLoadFailed(false);
         } catch {
-            setApps(prev => prev ?? []);
+            // What was shown before stays; with nothing shown yet, say so.
+            setLoadFailed(true);
+        } finally {
+            setLoading(false);
         }
     }, []);
 
@@ -233,7 +273,14 @@ export const ProfileAppLinksSection = ({showToast}: {showToast: ShowToast}) => {
         setBusyApp(app.appId);
         try {
             const {data} = await callStartAppLink({appId: app.appId});
-            setStarted({appId: app.appId, ...data});
+            const serverTime = Date.parse(data.serverTime);
+            setStarted({
+                appId: app.appId,
+                requestId: data.requestId,
+                code: data.code,
+                qr: data.qr,
+                clockOffset: Number.isNaN(serverTime) ? 0 : serverTime - Date.now(),
+            });
         } catch (err) {
             showToast(accountErrorMessage(err, isEnglish), 'error');
         } finally {
@@ -248,7 +295,7 @@ export const ProfileAppLinksSection = ({showToast}: {showToast: ShowToast}) => {
         if (!confirmed) return;
         setBusyApp(app.appId);
         try {
-            await callUnlinkApp({appId: app.appId, language});
+            await callRemoveAppLink({appId: app.appId, language});
             await load();
             showToast(isEnglish ? `${app.name} unlinked.` : `已解绑${app.name}。`, 'success');
         } catch (err) {
@@ -258,13 +305,32 @@ export const ProfileAppLinksSection = ({showToast}: {showToast: ShowToast}) => {
         }
     };
 
+    const title = <h2 className="settings-section-title">{isEnglish ? 'Linked Apps' : '已绑定的应用'}</h2>;
+
+    if (!apps && loadFailed) {
+        return (
+            <section className="settings-section">
+                {title}
+                <p className="settings-section-note">
+                    {isEnglish ? 'Couldn’t load your linked apps just now.' : '暂时无法加载已绑定的应用。'}
+                </p>
+                <div className="settings-account-actions">
+                    <button type="button" className="admin-btn admin-btn--dashed" disabled={loading}
+                            onClick={() => void load()}>
+                        {isEnglish ? 'Try again' : '重试'}
+                    </button>
+                </div>
+            </section>
+        );
+    }
+
     if (!apps || apps.length === 0) return null;
 
     const dateFormat = {year: 'numeric', month: 'long', day: 'numeric'} as const;
 
     return (
         <section className="settings-section">
-            <h2 className="settings-section-title">{isEnglish ? 'Linked Apps' : '已绑定的应用'}</h2>
+            {title}
             <p className="settings-section-note">
                 {isEnglish
                     ? 'Link your account in one of our apps to this one, so it can show your membership and event staff roles there. You can use each without linking.'

@@ -1,8 +1,8 @@
 import { type CallableOptions, HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { appLinkChangedMail, limitNoticedChange, readMailLanguage, sendNotice, } from "../utils/accountMail";
+import { appLinkChangedMail, limitNoticedChange, readMailLanguage, sendNotice } from "../utils/accountMail";
 import {
-    accountLinkQuery,
+    accountLinkInAppQuery,
     accountLinksQuery,
     type AppLinkDoc,
     appLinkRef,
@@ -10,24 +10,35 @@ import {
     appLinkRequestsCol,
     type AppLinkUndoDoc,
     appLinkUserName,
+    assertCanLink,
+    clearAccountHoldInTxn,
     disownLinkInTxn,
     freeLinkCode,
     isLinkUndoToken,
+    LINK_CONFIRM_ATTEMPTS,
+    LINK_CONFIRM_CODE_RE,
     LINK_QR_PREFIX,
     LINK_REQUEST_ID_RE,
     LINK_REQUEST_TTL_MS,
     LINK_UNDO_DAYS,
-    linkHeldUntil,
-    linkOnHold,
+    linkConfirmCodeMatches,
     linkRequestStatus,
     linkUndoRef,
     linkUndoUrl,
     newLinkRequestId,
     newLinkUndoToken,
+    readAccountHold,
     unlinkInTxn,
 } from "../utils/appLinks";
 import { appsCol, readApp, type RegisteredApp, validateAppId } from "../utils/apps";
-import { consumeRateLimit, requireAuth, requireRegisteredSession } from "../utils/auth";
+import {
+    adminTransaction,
+    consumeRateLimit,
+    requireAuth,
+    requireCanManage,
+    requireRegisteredSession,
+    requireStaff,
+} from "../utils/auth";
 import { credentialsRef, PASSWORD_PEPPER } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
 import { db } from "../utils/firebase";
@@ -37,20 +48,23 @@ import { RESEND_API_KEY } from "../utils/resendClient";
 import { recordDoc, recordRef } from "../utils/records";
 import { callerAddressKey } from "../utils/scans";
 import { endSessions } from "../utils/sessions";
+import { validateDocId } from "../utils/validation";
 
 /**
  * The account's side of linking it to an app's account (see utils/appLinks.ts):
  * Settings lists the apps it may link, starts a request, watches it for the
- * app's claim, and confirms it, or undoes a link. The app's side is the API's
- * (functions/api.ts).
+ * app's claim, and confirms it with the code the app shows, or removes a link.
+ * The app's side is the API's (functions/api.ts). Staff see an account's links
+ * and holds, and may lift a hold.
  *
- * Starting, confirming and undoing need a device on the account's list
+ * Starting, confirming and removing need a device on the account's list
  * (requireRegisteredSession), as changing how it signs in does, and each tells
  * the account's address. The notice of a link carries a "This wasn't me" link
  * (undoAppLink), for an owner whose sign-in someone else used to link theirs.
  */
 
-const LINK_CALL = {maxInstances: 10, secrets: [RESEND_API_KEY]};
+/** Confirming checks the app's code against its peppered hash. */
+const LINK_CALL: CallableOptions = {maxInstances: 10, secrets: [RESEND_API_KEY, PASSWORD_PEPPER]};
 
 /** Requests one account may start an hour: enough for a few codes that ran out before anyone scanned them. */
 const LINK_REQUESTS_PER_HOUR = 10;
@@ -67,11 +81,15 @@ const badUndoLink = () => new HttpsError("not-found", "This link doesn't work.",
 const linkingOff = () =>
     new HttpsError("failed-precondition", "This app doesn't link accounts.", {code: "linking-off"});
 
+/** Settings' word for a request that's gone; the API's, to the app, is link-request-not-found. */
 const requestGone = () =>
     new HttpsError("not-found", "This request has run out. Start again.", {code: "link-request-gone"});
 
-/** An app that links accounts, read fresh, so turning it off counts at once. */
-async function linkingApp(raw: unknown, txn?: FirebaseFirestore.Transaction): Promise<RegisteredApp> {
+/**
+ * An app that links accounts, read fresh, so turning it off counts at once.
+ * The API's requireLinkingApp reads the same through registeredApps' cache.
+ */
+async function requireLinkingApp(raw: unknown, txn?: FirebaseFirestore.Transaction): Promise<RegisteredApp> {
     const ref = appsCol().doc(validateAppId(raw));
     const app = readApp(txn ? await txn.get(ref) : await ref.get());
     if (!app?.accountLinking) throw linkingOff();
@@ -85,7 +103,7 @@ const readRequestId = (raw: unknown): string => {
 
 /**
  * The apps the caller may link, and their links: every app that links
- * accounts, and any other they're still linked in, which they may only undo.
+ * accounts, and any other they're still linked in, which they may only remove.
  */
 export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request, "account");
@@ -106,7 +124,7 @@ export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
                 accountLinking: app.accountLinking,
                 link: link ? {
                     appUserName: appLinkUserName(link.appUserName),
-                    linkedAt: isoOrNull(link.linkedAt)
+                    linkedAt: isoOrNull(link.linkedAt),
                 } : null,
             };
         }),
@@ -117,6 +135,7 @@ export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
  * Starts a request to link the caller's account to their account in an app:
  * what Settings shows to scan, or type in, in the app. Any request of theirs
  * for the app still waiting is cancelled, so only the newest code works.
+ * Answers with the server's time too, for Settings to count down by.
  */
 export const startAppLink = onCall(LINK_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
@@ -126,10 +145,10 @@ export const startAppLink = onCall(LINK_CALL, async (request) => {
     const requestId = newLinkRequestId();
     const ref = appLinkRequestsCol().doc(requestId);
     const doc = await db.runTransaction(async (txn): Promise<AppLinkRequestDoc> => {
-        const app = await linkingApp(appId, txn);
+        const app = await requireLinkingApp(appId, txn);
         const [user, linked, earlier] = await Promise.all([
             txn.get(db.collection("users").doc(uid)),
-            txn.get(accountLinkQuery(app.id, uid)),
+            txn.get(accountLinkInAppQuery(app.id, uid)),
             txn.get(appLinkRequestsCol().where("appId", "==", app.id).where("uid", "==", uid)),
         ]);
         if (!linked.empty) {
@@ -164,55 +183,77 @@ export const startAppLink = onCall(LINK_CALL, async (request) => {
         code: doc.code,
         qr: LINK_QR_PREFIX + requestId,
         expiresAt: doc.expiresAt.toDate().toISOString(),
+        serverTime: new Date().toISOString(),
     };
+});
+
+/** The caller's claimed request, read in `txn`, or the refusal for one that isn't. */
+async function claimedRequest(
+    txn: FirebaseFirestore.Transaction,
+    ref: FirebaseFirestore.DocumentReference,
+    uid: string,
+): Promise<AppLinkRequestDoc & {appUserId: string}> {
+    const req = (await txn.get(ref)).data() as AppLinkRequestDoc | undefined;
+    if (!req || req.uid !== uid) throw requestGone();
+    const status = linkRequestStatus(req);
+    if (status === "waiting") {
+        throw new HttpsError("failed-precondition", "Nobody has scanned this code yet.", {code: "link-not-claimed"});
+    }
+    if (status !== "claimed" || !req.appUserId) throw requestGone();
+    return req as AppLinkRequestDoc & {appUserId: string};
+}
+
+const wrongCode = (attemptsLeft: number) => new HttpsError("permission-denied", attemptsLeft > 0
+    ? "That isn't the code the app shows."
+    : "That isn't the code the app shows, and too many were wrong. Start again.", {
+    code: attemptsLeft > 0 ? "wrong-link-code" : "link-code-spent",
+    attemptsLeft,
 });
 
 /**
  * Links the caller's account to the app's account that claimed their request,
- * once they've seen whose it is. Either side may have been linked meanwhile,
- * or be waiting out a hold (LINK_HOLD_DAYS), which the claim checked too.
+ * once they've seen whose it is and typed in the code the app shows them. A
+ * wrong code counts, and LINK_CONFIRM_ATTEMPTS of them cancel the request.
+ * Either side may have been linked meanwhile, or be waiting out a hold, which
+ * the claim checked too (assertCanLink).
+ *
+ * The code is checked, and a wrong one counted, before the notice is charged
+ * for, so mistyping it doesn't use up the day's notices.
  */
 export const confirmAppLink = onCall(LINK_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
-    const input = (request.data ?? {}) as {requestId?: unknown; language?: unknown};
-    const ref = appLinkRequestsCol().doc(readRequestId(input.requestId));
+    const input = (request.data ?? {}) as {requestId?: unknown; code?: unknown; language?: unknown};
+    const requestId = readRequestId(input.requestId);
+    if (typeof input.code !== "string" || !LINK_CONFIRM_CODE_RE.test(input.code)) {
+        throw new HttpsError("invalid-argument", "Enter the four digits the app shows.");
+    }
+    const code = input.code;
+    const ref = appLinkRequestsCol().doc(requestId);
+
+    const attemptsLeft = await db.runTransaction(async (txn) => {
+        const req = await claimedRequest(txn, ref, uid);
+        if (linkConfirmCodeMatches(requestId, req, code)) return null;
+        const attempts = (req.confirmAttempts ?? 0) + 1;
+        txn.update(ref, attempts >= LINK_CONFIRM_ATTEMPTS
+            ? {confirmAttempts: attempts, status: "cancelled"}
+            : {confirmAttempts: attempts});
+        return LINK_CONFIRM_ATTEMPTS - attempts;
+    });
+    if (attemptsLeft !== null) throw wrongCode(attemptsLeft);
+
     await limitNoticedChange(uid, "appLink");
     const undoToken = newLinkUndoToken();
 
     const linked = await db.runTransaction(async (txn) => {
-        const snap = await txn.get(ref);
-        const req = snap.data() as AppLinkRequestDoc | undefined;
-        if (!req || req.uid !== uid) throw requestGone();
-        const status = linkRequestStatus(req);
-        if (status === "waiting") {
-            throw new HttpsError("failed-precondition", "Nobody has scanned this code yet.", {code: "link-not-claimed"});
-        }
-        if (status !== "claimed" || !req.appUserId) throw requestGone();
-        const app = await linkingApp(req.appId, txn);
-        const linkRef = appLinkRef(app.id, req.appUserId);
-        const [user, accountLinked, appUserLinked, accountHeld, appUserHeld] = await Promise.all([
-            txn.get(db.collection("users").doc(uid)),
-            txn.get(accountLinkQuery(app.id, uid)),
-            txn.get(linkRef),
-            linkHeldUntil(txn, app.id, "account", uid, req.appUserId),
-            linkHeldUntil(txn, app.id, "app-user", req.appUserId, uid),
-        ]);
-        if (!accountLinked.empty) {
-            throw new HttpsError("already-exists", "This account is already linked in this app.", {
-                code: "account-linked",
-            });
-        }
-        if (appUserLinked.exists) {
-            throw new HttpsError("already-exists", "That app account is already linked to another account.", {
-                code: "app-user-linked",
-            });
-        }
-        if (accountHeld) throw linkOnHold("account", accountHeld);
-        if (appUserHeld) throw linkOnHold("app-user", appUserHeld);
+        const req = await claimedRequest(txn, ref, uid);
+        // Claimed again meanwhile, with a new code: not counted, as this one was right.
+        if (!linkConfirmCodeMatches(requestId, req, code)) throw wrongCode(LINK_CONFIRM_ATTEMPTS);
+        const app = await requireLinkingApp(req.appId, txn);
+        const user = await assertCanLink(txn, app.id, uid, req.appUserId);
 
         const appUserName = appLinkUserName(req.appUserName);
         const link: AppLinkDoc = {appId: app.id, appUserId: req.appUserId, uid, appUserName, linkedAt: Timestamp.now()};
-        txn.create(linkRef, link);
+        txn.create(appLinkRef(app.id, req.appUserId), link);
         txn.update(ref, {status: "linked"});
         const displayName: string = user.get("displayName") ?? "";
         txn.set(recordRef(), recordDoc("account-app-link", {
@@ -241,7 +282,7 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
 
     if (linked.email) {
         await sendNotice(await appLinkChangedMail(
-            linked.email, linked.appName, linked.appUserName, true, readMailLanguage(input.language),
+            linked.email, linked.appName, linked.appUserName, "linked", readMailLanguage(input.language),
             linkUndoUrl(undoToken)));
     }
     return {linked: true};
@@ -261,11 +302,11 @@ export const cancelAppLink = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Undoes the caller's link in an app, which stops the app reading anything of
+ * Removes the caller's link in an app, which stops the app reading anything of
  * the account at once. Each side then waits out LINK_HOLD_DAYS before linking
  * anyone else. Works on an app that has since stopped linking accounts too.
  */
-export const unlinkApp = onCall(LINK_CALL, async (request) => {
+export const removeAppLink = onCall(LINK_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {appId?: unknown; language?: unknown};
     const appId = validateAppId(input.appId);
@@ -274,13 +315,13 @@ export const unlinkApp = onCall(LINK_CALL, async (request) => {
     const unlinked = await db.runTransaction(async (txn) => {
         const [user, linked, appSnap] = await Promise.all([
             txn.get(db.collection("users").doc(uid)),
-            txn.get(accountLinkQuery(appId, uid)),
+            txn.get(accountLinkInAppQuery(appId, uid)),
             txn.get(appsCol().doc(appId)),
         ]);
         if (linked.empty) return null;
         const link = linked.docs[0].data() as AppLinkDoc;
         const appName = readApp(appSnap)?.name ?? appId;
-        unlinkInTxn(txn, link, true);
+        unlinkInTxn(txn, link, {hold: true});
         const displayName: string = user.get("displayName") ?? "";
         txn.set(recordRef(), recordDoc("account-app-unlink", {
             performedBy: uid,
@@ -296,7 +337,7 @@ export const unlinkApp = onCall(LINK_CALL, async (request) => {
 
     if (unlinked?.email) {
         await sendNotice(await appLinkChangedMail(
-            unlinked.email, unlinked.appName, appLinkUserName(unlinked.appUserName), false,
+            unlinked.email, unlinked.appName, appLinkUserName(unlinked.appUserName), "unlinked",
             readMailLanguage(input.language)));
     }
     return {unlinked: !!unlinked};
@@ -307,7 +348,9 @@ export const unlinkApp = onCall(LINK_CALL, async (request) => {
  * whose sign-in someone else used to link their own account in an app. Undoes
  * the link without holding the account to that app's account, and lifts the
  * hold if it's been unlinked since, so the owner can link their own at once;
- * the app's account waits out the hold before linking anyone (disownLinkInTxn).
+ * the app's account waits out the hold before linking anyone. Only once in
+ * LINK_HOLD_DAYS per app: after that, the account is held as unlinking in
+ * Settings would hold it (disownLinkInTxn), which `heldUntil` says.
  *
  * Whoever linked it could sign in, so, as undoing an email change does, it
  * replaces the password and signs every device out, and the new password is
@@ -323,7 +366,7 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
     const undoRef = linkUndoRef(input.token);
     const passwordHash = await hashPassword(await checkNewPassword(input.password));
 
-    const {uid, appName} = await db.runTransaction(async (txn) => {
+    const {uid, appName, heldUntil} = await db.runTransaction(async (txn) => {
         const undo = (await txn.get(undoRef)).data() as AppLinkUndoDoc | undefined;
         if (!undo || undo.expiresAt.toMillis() <= Date.now()) throw badUndoLink();
         const [user, appSnap] = await Promise.all([
@@ -333,10 +376,10 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
         if (!user.exists || user.get("email") !== undo.email) throw badUndoLink();
         const appName = readApp(appSnap)?.name ?? undo.appId;
 
-        await disownLinkInTxn(txn, undo.appId, undo.uid, undo.appUserId);
+        const heldUntil = await disownLinkInTxn(txn, undo.appId, undo.uid, undo.appUserId);
         txn.set(credentialsRef(undo.uid), {
             passwordHash,
-            passwordChangedAt: FieldValue.serverTimestamp()
+            passwordChangedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
         if (!undo.usedAt) {
             txn.update(undoRef, {usedAt: FieldValue.serverTimestamp()});
@@ -351,10 +394,80 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
                 appUserName: appLinkUserName(undo.appUserName),
             }));
         }
-        return {uid: undo.uid, appName};
+        return {uid: undo.uid, appName, heldUntil};
     });
 
     await endSessions(uid, null);
     await undoRef.delete();
-    return {appName};
+    return {appName, heldUntil: heldUntil?.toISOString() ?? null};
+});
+
+/**
+ * An account's links and holds, app by app, for staff looking at it in the
+ * Users tab: who it's linked to in each app, and which it's held to and until
+ * when. Only apps with one or the other are listed.
+ */
+export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    await requireStaff(uid);
+    const targetUid = validateDocId((request.data as {uid?: unknown} | null)?.uid, "uid");
+
+    const [appsSnap, linksSnap] = await Promise.all([appsCol().get(), accountLinksQuery(targetUid).get()]);
+    const links = new Map(linksSnap.docs.map(doc => {
+        const link = doc.data() as AppLinkDoc;
+        return [link.appId, link];
+    }));
+    const apps = appsSnap.docs.map(doc => readApp(doc)!).sort((a, b) => a.name.localeCompare(b.name));
+    const holds = await Promise.all(apps.map(app => readAccountHold(app.id, targetUid)));
+    return {
+        apps: apps.flatMap((app, i) => {
+            const link = links.get(app.id);
+            const hold = holds[i];
+            if (!link && !hold) return [];
+            return [{
+                appId: app.id,
+                name: app.name,
+                link: link ? {
+                    appUserId: link.appUserId,
+                    appUserName: appLinkUserName(link.appUserName),
+                    linkedAt: isoOrNull(link.linkedAt),
+                } : null,
+                hold: hold ? {appUserId: hold.partner, until: hold.until.toISOString()} : null,
+            }];
+        }),
+    };
+});
+
+/**
+ * Lifts the hold on an account in an app, so it can link another of its own
+ * accounts there before LINK_HOLD_DAYS are up: for someone who linked the
+ * wrong one, or was linked by someone else twice in that time. Core-staff and
+ * above, for accounts below them, never their own. On the Records tab.
+ */
+export const clearAppLinkHold = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    const input = (request.data ?? {}) as {targetUid?: unknown; appId?: unknown};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const appId = validateAppId(input.appId);
+    if (targetUid === uid) throw new HttpsError("permission-denied", "Cannot lift your own hold.");
+
+    const cleared = await adminTransaction(uid, async (txn, callerSnap) => {
+        const [target, appSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(targetUid)),
+            txn.get(appsCol().doc(appId)),
+        ]);
+        if (!target.exists) throw new HttpsError("not-found", "Target user not found.");
+        requireCanManage(callerSnap.data()!.group, target.get("group"));
+        if (!await clearAccountHoldInTxn(txn, appId, targetUid)) return false;
+        txn.set(recordRef(), recordDoc("account-app-hold-clear", {
+            performedBy: uid,
+            performedByName: callerSnap.get("displayName") ?? "",
+            targetUid,
+            targetName: target.get("displayName") ?? "",
+            appId,
+            appName: readApp(appSnap)?.name ?? appId,
+        }));
+        return true;
+    });
+    return {cleared};
 });

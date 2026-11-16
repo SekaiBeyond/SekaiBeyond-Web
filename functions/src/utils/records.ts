@@ -112,6 +112,7 @@ export type RecordType =
     | "account-app-link"
     | "account-app-unlink"
     | "account-app-link-undo"
+    | "account-app-hold-clear"
     | "account-email-change"
     | "account-email-undo"
     | "account-ban"

@@ -658,23 +658,46 @@ export interface LinkableApp {
 export const callGetAppLinks = () =>
     httpsCallable<Record<string, never>, {apps: LinkableApp[]}>(getFunctions(), 'getAppLinks')({});
 
-/** A request to link the caller's account in an app: what to show for scanning or typing in there. */
+/**
+ * A request to link the caller's account in an app: what to show for scanning
+ * or typing in there, and the server's time, to count down by.
+ */
 export const callStartAppLink = (data: {appId: string}) =>
-    httpsCallable<typeof data, {requestId: string; code: string; qr: string; expiresAt: string}>(
+    httpsCallable<typeof data, {requestId: string; code: string; qr: string; expiresAt: string; serverTime: string}>(
         getFunctions(), 'startAppLink')(data);
 
-export const callConfirmAppLink = (data: {requestId: string; language: Language}) =>
+/** `code`: the four digits the app shows its user once it has claimed the request. */
+export const callConfirmAppLink = (data: {requestId: string; code: string; language: Language}) =>
     httpsCallable<typeof data, {linked: boolean}>(getFunctions(), 'confirmAppLink')(data);
 
 export const callCancelAppLink = (data: {requestId: string}) =>
     httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelAppLink')(data);
 
-export const callUnlinkApp = (data: {appId: string; language: Language}) =>
-    httpsCallable<typeof data, {unlinked: boolean}>(getFunctions(), 'unlinkApp')(data);
+export const callRemoveAppLink = (data: {appId: string; language: Language}) =>
+    httpsCallable<typeof data, {unlinked: boolean}>(getFunctions(), 'removeAppLink')(data);
 
-/** The "This wasn't me" link in a link's notice. Signs nobody in: the new password does that, once it's set. */
+/**
+ * The "This wasn't me" link in a link's notice. Signs nobody in: the new
+ * password does that, once it's set. `heldUntil`: when the account may link
+ * another account in the app, for a second undo within the hold, else null.
+ */
 export const callUndoAppLink = (data: {token: string; password: string}) =>
-    httpsCallable<typeof data, {appName: string}>(getFunctions(), 'undoAppLink')(data);
+    httpsCallable<typeof data, {appName: string; heldUntil: string | null}>(getFunctions(), 'undoAppLink')(data);
+
+/** An account's link and hold in one app, as staff see them in the Users tab. */
+export interface UserAppLink {
+    appId: string;
+    name: string;
+    link: {appUserId: string; appUserName: string; linkedAt: string | null} | null;
+    /** Keeping it from linking anyone in the app but `appUserId`, until `until`. */
+    hold: {appUserId: string; until: string} | null;
+}
+
+export const callGetUserAppLinks = (data: {uid: string}) =>
+    httpsCallable<typeof data, {apps: UserAppLink[]}>(getFunctions(), 'getUserAppLinks')(data);
+
+export const callClearAppLinkHold = (data: {targetUid: string; appId: string}) =>
+    httpsCallable<typeof data, {cleared: boolean}>(getFunctions(), 'clearAppLinkHold')(data);
 
 /** What the sign-in page shows of an app. Needs no sign-in. */
 export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>

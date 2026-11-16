@@ -218,6 +218,11 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>undid a link to the {r.appName || r.appId} account{who} they didn’t make</>
                 : <>撤销了一个并非本人操作的{r.appName || r.appId}账号{who}绑定</>;
         }
+        case 'account-app-hold-clear':
+            // Staff letting an account link another of its own app accounts before the 30 days are up.
+            return isEnglish
+                ? <>lifted {target}'s hold on linking in {r.appName || r.appId}</>
+                : <>解除了 {target} 在{r.appName || r.appId}的绑定等待期</>;
         case 'account-ban': {
             const term = r.banUntil
                 ? (isEnglish ? `until ${fmtExpiry(r.banUntil)}` : `至 ${fmtExpiry(r.banUntil)}`)

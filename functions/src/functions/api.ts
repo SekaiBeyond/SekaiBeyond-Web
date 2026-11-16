@@ -23,7 +23,6 @@ import { signedInSinceSessionsEnded } from "../utils/sessions";
 import { maskEmail } from "../utils/accountEmail";
 import { appLinkChangedMail, readMailLanguage, sendNotice } from "../utils/accountMail";
 import {
-    accountLinkQuery,
     APP_USER_ID_RE,
     type AppLinkDoc,
     appLinkRef,
@@ -31,15 +30,17 @@ import {
     appLinkRequestsCol,
     appLinksCol,
     appLinkUserName,
+    assertCanLink,
     LINK_CODE_RE,
     LINK_REQUEST_ID_RE,
     LINK_REQUEST_TTL_MS,
-    linkHeldUntil,
+    linkConfirmCodeHash,
     linkRequestStatus,
-    type LinkSide,
+    newLinkConfirmCode,
     unlinkInTxn,
 } from "../utils/appLinks";
 import { activeBan } from "../utils/bans";
+import { PASSWORD_PEPPER } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
 import { isMembershipActive } from "../utils/membership";
 import { detectImageMime, isStorageUrl } from "../utils/storage";
@@ -127,9 +128,13 @@ const LAST_USED_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 /** How old the list of key IDs (see isKnownKeyId) may be before a key missing from it has it listed again. */
 const KNOWN_KEYS_MAX_AGE_MS = 5_000;
 
+/**
+ * An error only the API answers with. One the account's side shares, such as
+ * a link's refusals (assertCanLink), is an HttpsError, whose `details` the
+ * API sends on (see `api`).
+ */
 class ApiError extends Error {
-    /** `extra`: fields the error object carries besides its code and message. */
-    constructor(readonly status: number, readonly code: string, message: string, readonly extra?: Record<string, unknown>) {
+    constructor(readonly status: number, readonly code: string, message: string) {
         super(message);
     }
 }
@@ -911,10 +916,11 @@ async function getOrder(key: ApiKey, eventId: string, orderId: string): Promise<
 
 /**
  * The key's app, refused unless the key holds account-links and the app links
- * accounts (utils/appLinks.ts). Turning linking off in the Apps tool reaches
- * here within seconds (registeredApps), which stops every link the app has.
+ * accounts (utils/appLinks.ts). Read through registeredApps' cache, so turning
+ * linking off in the Apps tool reaches here within seconds, which stops every
+ * link the app has; Settings' requireLinkingApp reads it fresh.
  */
-async function requireLinking(key: ApiKey): Promise<RegisteredApp> {
+async function requireLinkingApp(key: ApiKey): Promise<RegisteredApp> {
     requireScope(key, "account-links");
     const app = (await registeredApps()).get(key.appId);
     if (!app?.accountLinking) {
@@ -948,13 +954,15 @@ function accountPreviewJson(user: Snapshot) {
 }
 
 /**
- * A link request as the app sees it. Whose account it's for is shown while
- * it's open, and its uid once it's linked; never once it's run out or been
- * cancelled.
+ * A link request as the app sees it. Whose account it's for is shown only
+ * while it's waiting or claimed, for the app's user to tell it's theirs, and
+ * its uid once it's linked. Once linked, what the account is here is the
+ * link's to say (GET /v1/links/{appUserId}), which stops with an unlink; the
+ * request outlives it until its TTL policy deletes it.
  */
 function linkRequestJson(requestId: string, req: AppLinkRequestDoc, user: Snapshot | null) {
     const status = linkRequestStatus(req);
-    const open = status === "waiting" || status === "claimed" || status === "linked";
+    const open = status === "waiting" || status === "claimed";
     return {
         requestId,
         status,
@@ -966,17 +974,17 @@ function linkRequestJson(requestId: string, req: AppLinkRequestDoc, user: Snapsh
 }
 
 /**
- * A request of the key's app, by its ID (what the QR code carries) or by its
- * six digits, which only find one still waiting to be claimed.
+ * A request of the key's app, by `idOrCode`: its ID, which the QR code
+ * carries, or its six digits, which only find one still waiting to be claimed.
  */
-async function findLinkRequest(appId: string, ref: string): Promise<FirebaseFirestore.DocumentSnapshot> {
-    if (LINK_REQUEST_ID_RE.test(ref)) {
-        const snap = await appLinkRequestsCol().doc(ref).get();
+async function findLinkRequest(appId: string, idOrCode: string): Promise<FirebaseFirestore.DocumentSnapshot> {
+    if (LINK_REQUEST_ID_RE.test(idOrCode)) {
+        const snap = await appLinkRequestsCol().doc(idOrCode).get();
         if (!snap.exists || snap.get("appId") !== appId) throw linkRequestNotFound();
         return snap;
     }
-    if (!LINK_CODE_RE.test(ref)) throw linkRequestNotFound();
-    const found = await appLinkRequestsCol().where("appId", "==", appId).where("code", "==", ref).get();
+    if (!LINK_CODE_RE.test(idOrCode)) throw linkRequestNotFound();
+    const found = await appLinkRequestsCol().where("appId", "==", appId).where("code", "==", idOrCode).get();
     const waiting = found.docs.find(doc => linkRequestStatus(doc.data() as AppLinkRequestDoc) === "waiting");
     if (!waiting) throw linkRequestNotFound();
     return waiting;
@@ -986,92 +994,79 @@ async function findLinkRequest(appId: string, ref: string): Promise<FirebaseFire
  * A request as it stands, for the app to show its user whose account it's
  * for before they claim it, and to learn when the account has confirmed.
  */
-async function getLinkRequest(key: ApiKey, ref: string): Promise<ApiReply> {
-    const app = await requireLinking(key);
-    const snap = await findLinkRequest(app.id, ref);
+async function getLinkRequest(key: ApiKey, idOrCode: string): Promise<ApiReply> {
+    const app = await requireLinkingApp(key);
+    const snap = await findLinkRequest(app.id, idOrCode);
     const req = snap.data() as AppLinkRequestDoc;
     const user = await usersCol().doc(req.uid).get();
     return {status: 200, body: linkRequestJson(snap.id, req, user)};
 }
 
-const linkOnHoldError = (side: LinkSide, until: Date) => new ApiError(409, "link-on-hold", side === "account"
-    ? "That account was linked to another app account recently, and can't link another yet."
-    : "This app account was linked to another account recently, and can't link another yet.", {
-    side,
-    until: until.toISOString(),
-});
-
 /**
  * Claims a waiting request for the app's user, once they've seen whose account
- * it's for and said yes: the account is then shown their name, and has
- * LINK_REQUEST_TTL_MS to confirm. A retry by the same user gets the same
- * answer. Either side already linked, or waiting out a hold, is refused here
- * rather than once the account has confirmed.
+ * it's for and said yes. The answer carries `confirmCode`, four digits for the
+ * app to show its user: the account is shown their name, and has
+ * LINK_REQUEST_TTL_MS to type the code in and confirm. Only its hash is kept,
+ * so a retry by the same user gets a new code in place of the last.
+ *
+ * Either side already linked, or waiting out a hold, is refused here rather
+ * than once the account has confirmed (assertCanLink, which confirming checks
+ * again).
  */
 async function claimLinkRequest(key: ApiKey, requestId: string, body: unknown): Promise<ApiReply> {
-    const app = await requireLinking(key);
+    const app = await requireLinkingApp(key);
     if (!LINK_REQUEST_ID_RE.test(requestId)) throw linkRequestNotFound();
     const input = (body && typeof body === "object" ? body : {}) as {appUserId?: unknown; appUserName?: unknown};
     const appUserId = readAppUserId(input.appUserId);
     const appUserName = sanitizeDisplayText(validateStr(input.appUserName, "appUserName", 50));
     const ref = appLinkRequestsCol().doc(requestId);
+    const confirmCode = newLinkConfirmCode();
+    const confirmCodeHash = linkConfirmCodeHash(requestId, confirmCode);
 
     return db.runTransaction(async (txn): Promise<ApiReply> => {
         const snap = await txn.get(ref);
         const req = snap.data() as AppLinkRequestDoc | undefined;
         if (!req || req.appId !== app.id) throw linkRequestNotFound();
-        const userRef = usersCol().doc(req.uid);
         const status = linkRequestStatus(req);
         if (status === "claimed" && req.appUserId === appUserId) {
-            return {status: 200, body: linkRequestJson(requestId, req, await txn.get(userRef))};
+            const user = await txn.get(usersCol().doc(req.uid));
+            txn.update(ref, {confirmCodeHash});
+            return {status: 200, body: {...linkRequestJson(requestId, req, user), confirmCode}};
         }
         if (status !== "waiting") {
-            throw new ApiError(409, "link-request-closed", status === "claimed"
+            throw new HttpsError("already-exists", status === "claimed"
                 ? "Someone else has claimed this request."
-                : `This request is ${status}: ask them to start again.`, {status});
+                : `This request is ${status}: ask them to start again.`, {code: "link-request-closed", status});
         }
 
-        const [user, accountLinked, appUserLinked, accountHeld, appUserHeld] = await Promise.all([
-            txn.get(userRef),
-            txn.get(accountLinkQuery(app.id, req.uid)),
-            txn.get(appLinkRef(app.id, appUserId)),
-            linkHeldUntil(txn, app.id, "account", req.uid, appUserId),
-            linkHeldUntil(txn, app.id, "app-user", appUserId, req.uid),
-        ]);
-        if (!user.exists || deletionPending(user.data()!)) throw linkRequestNotFound();
-        if (!accountLinked.empty) {
-            throw new ApiError(409, "account-linked", "That account is already linked to another app account.");
-        }
-        if (appUserLinked.exists) {
-            throw new ApiError(409, "app-user-linked", "This app account is already linked to an account here.", {
-                uid: appUserLinked.get("uid"),
-            });
-        }
-        if (accountHeld) throw linkOnHoldError("account", accountHeld);
-        if (appUserHeld) throw linkOnHoldError("app-user", appUserHeld);
-
+        const user = await assertCanLink(txn, app.id, req.uid, appUserId);
         const claimed: AppLinkRequestDoc = {
             ...req,
             status: "claimed",
             appUserId,
             appUserName,
+            confirmCodeHash,
+            confirmAttempts: 0,
             expiresAt: Timestamp.fromMillis(Date.now() + LINK_REQUEST_TTL_MS),
         };
         txn.update(ref, {
             status: claimed.status,
             appUserId,
             appUserName,
+            confirmCodeHash,
+            confirmAttempts: 0,
             expiresAt: claimed.expiresAt,
         });
-        return {status: 200, body: linkRequestJson(requestId, claimed, user)};
+        return {status: 200, body: {...linkRequestJson(requestId, claimed, user), confirmCode}};
     });
 }
 
 /**
  * What a linked account is here, as of now: who it is, its address masked,
  * its group and membership, the events it's staff of, and any ban or
- * deletion due. The app's to act on, and to ask again rather than keep: a
- * group, a membership or a ban here changes without the app being told.
+ * deletion due (LINK_SHARED_FIELDS, which Settings and the emails list: change
+ * them together). The app's to act on, and not to keep for long: a group, a
+ * membership or a ban here changes without the app being told.
  */
 function linkJson(link: AppLinkDoc, user: Snapshot) {
     const data = user.data()!;
@@ -1106,7 +1101,7 @@ async function readLink(appId: string, appUserId: string): Promise<{link: AppLin
 }
 
 async function getLink(key: ApiKey, appUserId: string): Promise<ApiReply> {
-    const app = await requireLinking(key);
+    const app = await requireLinkingApp(key);
     const {link, user} = await readLink(app.id, readAppUserId(appUserId));
     return {status: 200, body: linkJson(link, user)};
 }
@@ -1120,7 +1115,7 @@ const LINKS_PAGE_MAX = 500;
  * should look into and undo. `next` is the `after` for the next page.
  */
 async function listLinks(key: ApiKey, query: Record<string, unknown>): Promise<ApiReply> {
-    const app = await requireLinking(key);
+    const app = await requireLinkingApp(key);
     const after = query.after === undefined ? null : readAppUserId(query.after);
     const limit = query.limit === undefined ? LINKS_PAGE_MAX : Number(query.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > LINKS_PAGE_MAX) {
@@ -1142,13 +1137,13 @@ async function listLinks(key: ApiKey, query: Record<string, unknown>): Promise<A
  * anyone else. One not linked is fine.
  */
 async function deleteLink(key: ApiKey, appUserId: string, query: Record<string, unknown>): Promise<ApiReply> {
-    const app = await requireLinking(key);
+    const app = await requireLinkingApp(key);
     const ref = appLinkRef(app.id, readAppUserId(appUserId));
     const unlinked = await db.runTransaction(async (txn) => {
         const link = (await txn.get(ref)).data() as AppLinkDoc | undefined;
         if (!link) return null;
         const user = await txn.get(usersCol().doc(link.uid));
-        unlinkInTxn(txn, link, true);
+        unlinkInTxn(txn, link, {hold: true});
         const displayName = str(user.get("displayName"));
         txn.set(recordRef(), recordDoc("account-app-unlink", {
             performedByName: displayName,
@@ -1163,7 +1158,7 @@ async function deleteLink(key: ApiKey, appUserId: string, query: Record<string, 
     });
     if (unlinked?.email) {
         await sendNotice(await appLinkChangedMail(
-            unlinked.email, app.name, unlinked.appUserName, false, readMailLanguage(query.language)));
+            unlinked.email, app.name, unlinked.appUserName, "unlinked", readMailLanguage(query.language)));
     }
     return {status: 200, body: {unlinked: !!unlinked}};
 }
@@ -1193,7 +1188,7 @@ async function fetchGooglePhoto(photoURL: string): Promise<Buffer | null> {
  * program's server is, and this can.
  */
 async function getLinkPhoto(key: ApiKey, appUserId: string): Promise<ApiReply> {
-    const app = await requireLinking(key);
+    const app = await requireLinkingApp(key);
     const {link, user} = await readLink(app.id, readAppUserId(appUserId));
     const photoURL = str(user.get("photoURL"));
     const noPhoto = new ApiError(404, "no-photo", "This account has no photo.");
@@ -1225,7 +1220,7 @@ type Route =
     | {kind: "event-staff"; eventId: string}
     | {kind: "orders"; eventId: string}
     | {kind: "order"; eventId: string; orderId: string}
-    | {kind: "link-request"; ref: string}
+    | {kind: "link-request"; idOrCode: string}
     | {kind: "link-request-claim"; requestId: string}
     | {kind: "links"}
     | {kind: "link"; appUserId: string}
@@ -1264,10 +1259,10 @@ function matchRoute(path: string, method: string): Route | null {
     if (segments.length === 2 && segments[1] === "me") return {kind: "me"};
     if (segments.length === 2 && segments[1] === "team") return {kind: "team"};
     if (segments[1] === "link-requests") {
-        const [, , ref, sub] = segments;
-        if (ref === undefined || !SEGMENT_RE.test(ref) || segments.length > 4) return null;
-        if (sub === undefined) return {kind: "link-request", ref};
-        return sub === "claim" ? {kind: "link-request-claim", requestId: ref} : null;
+        const [, , idOrCode, sub] = segments;
+        if (idOrCode === undefined || !SEGMENT_RE.test(idOrCode) || segments.length > 4) return null;
+        if (sub === undefined) return {kind: "link-request", idOrCode};
+        return sub === "claim" ? {kind: "link-request-claim", requestId: idOrCode} : null;
     }
     if (segments[1] === "links") {
         const [, , appUserId, sub] = segments;
@@ -1309,7 +1304,7 @@ async function answer(
         case "order":
             return getOrder(key, route.eventId, route.orderId);
         case "link-request":
-            return getLinkRequest(key, route.ref);
+            return getLinkRequest(key, route.idOrCode);
         case "link-request-claim":
             return claimLinkRequest(key, route.requestId, req.body);
         case "links":
@@ -1352,7 +1347,8 @@ const HTTPS_ERROR_STATUS: Partial<Record<FunctionsErrorCode, number>> = {
 export const api = onRequest({
     maxInstances: 20,
     memory: "256MiB",
-    secrets: [RESEND_API_KEY],
+    // The pepper, for the code a link request's claim hands the app (linkConfirmCodeHash).
+    secrets: [RESEND_API_KEY, PASSWORD_PEPPER],
     cors: false
 }, async (req, res) => {
     res.set("Cache-Control", "no-store");
@@ -1408,15 +1404,18 @@ export const api = onRequest({
         send(reply.status, reply.body);
     } catch (err) {
         if (err instanceof ApiError) {
-            fail(err.status, err.code, err.message, err.extra);
+            fail(err.status, err.code, err.message);
             return;
         }
-        // The shared validators and the rate limit throw these.
+        // The shared validators, the rate limit and a link's refusals throw
+        // these. Whatever else `details` holds beside the code, such as when a
+        // hold ends, goes with it; a wait goes in Retry-After instead.
         if (err instanceof HttpsError && HTTPS_ERROR_STATUS[err.code]) {
-            const details = err.details as {code?: string; retryAfterMs?: number} | undefined;
-            if (details?.retryAfterMs) res.set("Retry-After", String(Math.ceil(details.retryAfterMs / 1000)));
-            const code = details?.code ?? (err.code === "invalid-argument" ? "invalid-request" : err.code);
-            fail(HTTPS_ERROR_STATUS[err.code]!, code, err.message);
+            const {code: detailCode, retryAfterMs, ...rest} =
+                (err.details ?? {}) as {code?: string; retryAfterMs?: number} & Record<string, unknown>;
+            if (retryAfterMs) res.set("Retry-After", String(Math.ceil(retryAfterMs / 1000)));
+            const code = detailCode ?? (err.code === "invalid-argument" ? "invalid-request" : err.code);
+            fail(HTTPS_ERROR_STATUS[err.code]!, code, err.message, rest);
             return;
         }
         console.error(`[api] ${req.method} ${req.path} failed`, err);

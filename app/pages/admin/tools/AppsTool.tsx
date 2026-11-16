@@ -16,6 +16,7 @@ import {
     callSaveApp,
     functionsErrorCode,
 } from '~/lib/firebase';
+import { LINK_SHARED_FIELDS } from '~/lib/appLinks';
 import { localized } from '~/lib/localized';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
@@ -57,8 +58,8 @@ const KEY_SCOPE_LABELS: Record<ApiScope, {en: string; zh: string; descEn: string
     },
     'account-links': {
         en: 'Link accounts', zh: '绑定账号',
-        descEn: 'Link the app\'s users to accounts here once both sides confirm, and read a linked account\'s name, photo, masked email, group, membership, event staff roles and ban. Only for an app that links accounts.',
-        descZh: '经双方确认后，把应用的用户绑定到本站账号，并读取已绑定账号的名称、头像、打码的邮箱、组别、会员、活动工作人员身份和封禁状态。仅限开启了账号绑定的应用。',
+        descEn: `Link the app's users to accounts here once both sides confirm, and read a linked account's ${LINK_SHARED_FIELDS.en}. Only for an app that links accounts. Best on a key of its own, as linking adds calls to the key's 120 a minute.`,
+        descZh: `经双方确认后，把应用的用户绑定到本站账号，并读取已绑定账号的${LINK_SHARED_FIELDS.zh}。仅限开启了账号绑定的应用。建议使用单独的密钥，因为绑定流程会占用密钥每分钟 120 次的额度。`,
     },
 };
 

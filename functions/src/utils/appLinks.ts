@@ -1,7 +1,9 @@
-import { createHash, randomBytes, randomInt } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { HttpsError } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { PUBLIC_ORIGIN } from "./config";
+import { accountPepper } from "./credentials";
+import { deletionPending } from "./deletion";
 import { db } from "./firebase";
 
 /**
@@ -20,12 +22,17 @@ import { db } from "./firebase";
  *    LINK_REQUEST_TTL_MS.
  * 2. The app's server, once its user has scanned or typed it, looks the request
  *    up (GET /v1/link-requests/…), shows them whose account it is, and, once
- *    they say yes, claims it for them (POST …/claim).
- * 3. The account sees the app's user's name, and confirms (confirmAppLink).
+ *    they say yes, claims it for them (POST …/claim). The claim's answer has a
+ *    four-digit code (LINK_CONFIRM_CODE_RE) for the app to show them.
+ * 3. The account sees the app's user's name, types in the code the app shows,
+ *    and confirms (confirmAppLink).
  *
  * The two confirmations stop both ways of tricking someone with a code: having
  * them scan yours, which would put their app account on your account here, and
- * scanning theirs, which would put yours on theirs.
+ * scanning theirs, which would put yours on theirs. The name alone wouldn't
+ * stop the second, as the app's user picks it: someone who saw your code could
+ * claim it under your name. The code the app shows proves whoever confirms
+ * here can see the claimer's screen.
  *
  * Nothing links on its own, not even two accounts on the same address: an
  * address here can change and pass to someone else, and the app's isn't proven.
@@ -56,6 +63,16 @@ export const LINK_HOLD_DAYS = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * What a linked app reads of an account (linkJson in functions/api.ts), as the
+ * emails put it. Settings and the Apps tool say the same from their copy in
+ * app/lib/appLinks.ts: change all three together, and linkJson with them.
+ */
+export const LINK_SHARED_FIELDS = {
+    en: "name, photo, masked email, group and team title, membership, event staff roles, any ban and when it ends, and any deletion date",
+    zh: "名称、头像、打码的邮箱、组别与团队头衔、会员状态、活动工作人员身份、封禁状态及截止时间，以及预定删除时间",
+} as const;
+
 export const appLinkUserName = (raw: unknown): string => typeof raw === "string" ? raw : "";
 
 /**
@@ -77,11 +94,14 @@ export const appLinksCol = () => db.collection("appLinks");
 /** An app's user's link, named for both, which an app's ID (APP_ID_RE) keeps apart: it has no "_". */
 export const appLinkRef = (appId: string, appUserId: string) => appLinksCol().doc(`${appId}_${appUserId}`);
 
-/** The query for an account's link in an app, of which there's at most one. */
-export const accountLinkQuery = (appId: string, uid: string) =>
+/**
+ * An account's link in one app, of which there's at most one. Not every link
+ * it has: that's accountLinksQuery, which deleting the account needs.
+ */
+export const accountLinkInAppQuery = (appId: string, uid: string) =>
     appLinksCol().where("appId", "==", appId).where("uid", "==", uid).limit(1);
 
-/** Every link an account has, in any app. */
+/** Every link an account has, in every app. */
 export const accountLinksQuery = (uid: string) => appLinksCol().where("uid", "==", uid);
 
 export type LinkSide = "account" | "app-user";
@@ -90,8 +110,9 @@ export type LinkSide = "account" | "app-user";
  * An `appLinkHolds` doc: one side of an undone link waiting out LINK_HOLD_DAYS
  * before linking anyone but `partner`, the one it was linked to, or anyone at
  * all when that's "": an app's account whose link the account disowned
- * (disownLinkInTxn). Server only; a TTL policy (firestore.indexes.json)
- * deletes it once it's run out.
+ * (disownLinkInTxn). The collection also keeps when an account last disowned
+ * a link (recentDisownRef). Server only; a TTL policy (firestore.indexes.json)
+ * deletes each once it's run out.
  */
 interface AppLinkHoldDoc {
     appId: string;
@@ -99,8 +120,26 @@ interface AppLinkHoldDoc {
     expiresAt: Timestamp;
 }
 
+const appLinkHoldsCol = () => db.collection("appLinkHolds");
+
 const appLinkHoldRef = (appId: string, side: LinkSide, id: string) =>
-    db.collection("appLinkHolds").doc(`${appId}_${side === "account" ? "a" : "u"}_${id}`);
+    appLinkHoldsCol().doc(`${appId}_${side === "account" ? "a" : "u"}_${id}`);
+
+/** The hold on an account's side in an app, as staff see it: who it may still link, and until when. */
+export async function readAccountHold(
+    appId: string,
+    uid: string,
+): Promise<{partner: string; until: Date} | null> {
+    const hold = (await appLinkHoldRef(appId, "account", uid).get()).data() as AppLinkHoldDoc | undefined;
+    if (!hold || hold.expiresAt.toMillis() <= Date.now()) return null;
+    return {partner: hold.partner, until: hold.expiresAt.toDate()};
+}
+
+/**
+ * When an account last disowned a link in an app, for LINK_HOLD_DAYS after:
+ * disowning one skips the hold only once in that time (disownLinkInTxn).
+ */
+const recentDisownRef = (appId: string, uid: string) => appLinkHoldsCol().doc(`${appId}_d_${uid}`);
 
 /**
  * When the hold on one side runs out, if it's holding it from linking `partner`;
@@ -118,11 +157,56 @@ export async function linkHeldUntil(
     return hold.expiresAt.toDate();
 }
 
+/**
+ * Refuses linking `uid` and `appUserId` in `appId` unless both are free to: the
+ * account is still here and not due to be deleted, neither side is linked to
+ * anyone else in the app, and neither is waiting out a hold that keeps it from
+ * the other. Read in the transaction that would link them, before it writes:
+ * the app's claim (functions/api.ts) and the account's confirming
+ * (confirmAppLink) both check it. Returns the account's user doc.
+ *
+ * Each refusal names its code in `details`, which Settings and the API both
+ * answer with; the API sends the rest of `details` too. The conflicts are
+ * `already-exists`, which the API answers with 409.
+ */
+export async function assertCanLink(
+    txn: FirebaseFirestore.Transaction,
+    appId: string,
+    uid: string,
+    appUserId: string,
+): Promise<FirebaseFirestore.DocumentSnapshot> {
+    const [user, accountLinked, appUserLinked, accountHeld, appUserHeld] = await Promise.all([
+        txn.get(db.collection("users").doc(uid)),
+        txn.get(accountLinkInAppQuery(appId, uid)),
+        txn.get(appLinkRef(appId, appUserId)),
+        linkHeldUntil(txn, appId, "account", uid, appUserId),
+        linkHeldUntil(txn, appId, "app-user", appUserId, uid),
+    ]);
+    if (!user.exists || deletionPending(user.data()!)) {
+        throw new HttpsError("failed-precondition", "The account here is due to be deleted.", {
+            code: "deletion-pending",
+        });
+    }
+    if (!accountLinked.empty) {
+        throw new HttpsError("already-exists", "The account here is already linked to another account in this app.", {
+            code: "account-linked",
+        });
+    }
+    if (appUserLinked.exists) {
+        throw new HttpsError("already-exists", "The app's account is already linked to another account here.", {
+            code: "app-user-linked",
+        });
+    }
+    if (accountHeld) throw linkOnHold("account", accountHeld);
+    if (appUserHeld) throw linkOnHold("app-user", appUserHeld);
+    return user;
+}
+
 /** The refusal for a side still waiting out a hold, saying until when. */
-export const linkOnHold = (side: LinkSide, until: Date) =>
-    new HttpsError("failed-precondition", side === "account"
-        ? "This account was linked to someone else recently, and can't link another yet."
-        : "This app account was linked to another account recently, and can't link another yet.", {
+const linkOnHold = (side: LinkSide, until: Date) =>
+    new HttpsError("already-exists", side === "account"
+        ? "The account here was linked to someone else in this app recently, and can't link another yet."
+        : "The app's account was linked to another account here recently, and can't link another yet.", {
         code: "link-on-hold",
         side,
         until: until.toISOString(),
@@ -133,7 +217,7 @@ export const linkOnHold = (side: LinkSide, until: Date) =>
  * before linking anyone else; without, as when the account is being deleted
  * or put back by its owner after a takeover, it's free at once.
  */
-export function unlinkInTxn(txn: FirebaseFirestore.Transaction, link: AppLinkDoc, hold: boolean): void {
+export function unlinkInTxn(txn: FirebaseFirestore.Transaction, link: AppLinkDoc, {hold}: {hold: boolean}): void {
     txn.delete(appLinkRef(link.appId, link.appUserId));
     if (!hold) return;
     const expiresAt = Timestamp.fromMillis(Date.now() + LINK_HOLD_DAYS * DAY_MS);
@@ -188,28 +272,70 @@ export const linkUndoUrl = (token: string): string => `${PUBLIC_ORIGIN}/undo-app
  * still there, and the hold undoing it put on the account, if it's been undone
  * since, so the account may link its own app account at once. The app's
  * account waits out LINK_HOLD_DAYS before linking anyone, this account too.
+ *
+ * Only once in LINK_HOLD_DAYS per app, though. Its owner could otherwise use
+ * it to skip the hold on their own links, and pass a membership round a group
+ * a link at a time. A second in that time still undoes the link, but holds
+ * the account as unlinking in Settings would, and staff can lift that
+ * (clearAppLinkHold) for someone who really was taken over twice.
+ *
  * Reads before it writes, so call it before any other write in `txn`. Says
- * whether there was a link to undo.
+ * when the account's hold ends, or null when it isn't held.
  */
 export async function disownLinkInTxn(
     txn: FirebaseFirestore.Transaction,
     appId: string,
     uid: string,
     appUserId: string,
-): Promise<boolean> {
+): Promise<Date | null> {
     const linkRef = appLinkRef(appId, appUserId);
     const accountHoldRef = appLinkHoldRef(appId, "account", uid);
-    const [link, accountHold] = await Promise.all([txn.get(linkRef), txn.get(accountHoldRef)]);
+    const disownRef = recentDisownRef(appId, uid);
+    const [link, accountHold, disowned] = await Promise.all([
+        txn.get(linkRef),
+        txn.get(accountHoldRef),
+        txn.get(disownRef),
+    ]);
+    const now = Date.now();
+    const holdUntil = Timestamp.fromMillis(now + LINK_HOLD_DAYS * DAY_MS);
+    const lastDisownHolds = (disowned.get("expiresAt") as Timestamp | undefined)?.toMillis() ?? 0;
+    const firstInAWhile = lastDisownHolds <= now;
+
     const linked = link.get("uid") === uid;
     if (linked) txn.delete(linkRef);
-    if (accountHold.get("partner") === appUserId) txn.delete(accountHoldRef);
-    const hold: AppLinkHoldDoc = {
+    txn.set(appLinkHoldRef(appId, "app-user", appUserId), {
         appId,
         partner: "",
-        expiresAt: Timestamp.fromMillis(Date.now() + LINK_HOLD_DAYS * DAY_MS),
-    };
-    txn.set(appLinkHoldRef(appId, "app-user", appUserId), hold);
-    return linked;
+        expiresAt: holdUntil
+    } satisfies AppLinkHoldDoc);
+
+    if (firstInAWhile) {
+        if (accountHold.get("partner") === appUserId) txn.delete(accountHoldRef);
+        txn.set(disownRef, {appId, partner: "", expiresAt: holdUntil} satisfies AppLinkHoldDoc);
+        return null;
+    }
+    if (linked) {
+        txn.set(accountHoldRef, {appId, partner: appUserId, expiresAt: holdUntil} satisfies AppLinkHoldDoc);
+        return holdUntil.toDate();
+    }
+    const held = accountHold.data() as AppLinkHoldDoc | undefined;
+    return held && held.expiresAt.toMillis() > now ? held.expiresAt.toDate() : null;
+}
+
+/**
+ * Lifts the hold on an account's side in an app, for staff helping someone
+ * who linked the wrong account of theirs. Says whether there was one.
+ */
+export async function clearAccountHoldInTxn(
+    txn: FirebaseFirestore.Transaction,
+    appId: string,
+    uid: string,
+): Promise<boolean> {
+    const ref = appLinkHoldRef(appId, "account", uid);
+    const hold = await txn.get(ref);
+    if (!hold.exists) return false;
+    txn.delete(ref);
+    return (hold.get("expiresAt") as Timestamp).toMillis() > Date.now();
 }
 
 /** Where a request stands. `expired` is never stored: it's a live one past `expiresAt`. */
@@ -228,9 +354,37 @@ export interface AppLinkRequestDoc {
     /** Set by the app's claim. */
     appUserId?: string;
     appUserName?: string;
+    /**
+     * Set by the app's claim: the code the app shows its user, for the account
+     * to type in (linkConfirmCodeHash). Peppered, as the account can read this
+     * doc, and could otherwise work out a four-digit code from its hash.
+     */
+    confirmCodeHash?: string;
+    /** Wrong codes typed in so far. LINK_CONFIRM_ATTEMPTS of them cancel it. */
+    confirmAttempts?: number;
     createdAt: Timestamp;
     /** Pushed on by a claim, so the account has its own LINK_REQUEST_TTL_MS to confirm. */
     expiresAt: Timestamp;
+}
+
+/** The code a claim hands the app to show its user, for the account to type in here. */
+export const LINK_CONFIRM_CODE_RE = /^\d{4}$/;
+
+/** Wrong codes the account may type in before its request is cancelled. */
+export const LINK_CONFIRM_ATTEMPTS = 5;
+
+export const newLinkConfirmCode = (): string => String(randomInt(0, 10_000)).padStart(4, "0");
+
+/** A request's confirming code as it's kept, keyed by the pepper, the request's ID mixed in. */
+export const linkConfirmCodeHash = (requestId: string, code: string): string =>
+    createHmac("sha256", accountPepper()).update(`link|${requestId}|${code}`).digest("hex");
+
+/** Whether `code` is the one `req`'s claim handed the app. */
+export function linkConfirmCodeMatches(requestId: string, req: AppLinkRequestDoc, code: string): boolean {
+    if (!req.confirmCodeHash || !LINK_CONFIRM_CODE_RE.test(code)) return false;
+    const expected = Buffer.from(req.confirmCodeHash, "hex");
+    const given = Buffer.from(linkConfirmCodeHash(requestId, code), "hex");
+    return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
 export const appLinkRequestsCol = () => db.collection("appLinkRequests");

@@ -43,14 +43,20 @@ interface AppInput {
     redirectUris: string[];
     firebaseProjectId: string;
     serviceAccount: string;
-    accountLinking: boolean;
+    /**
+     * Undefined when the caller didn't say, such as an Apps tool loaded before
+     * the switch existed: a new app is then off, and a saved one stays as it was.
+     */
+    accountLinking?: boolean;
 }
 
 function parseAppInput(raw: unknown): AppInput {
     const input = (raw ?? {}) as Record<string, unknown>;
     const name = sanitizeDisplayText(validateStr(input.name, "name", APP_NAME_MAX, true));
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
-    const accountLinking = input.accountLinking !== undefined && validateBoolean(input.accountLinking, "accountLinking");
+    const accountLinking = input.accountLinking === undefined
+        ? undefined
+        : validateBoolean(input.accountLinking, "accountLinking");
 
     const rawMaintainers = input.maintainerUids;
     if (!Array.isArray(rawMaintainers) || rawMaintainers.length > APP_MAINTAINERS_MAX) {
@@ -235,13 +241,27 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
 
         const callerName: string = callerSnap.data()?.displayName ?? "";
         const now = Timestamp.now();
+        const {accountLinking, ...rest} = fields;
         if (create) {
-            txn.create(ref, {...fields, createdBy: uid, createdByName: callerName, createdAt: now, updatedAt: now});
+            txn.create(ref, {
+                ...rest,
+                accountLinking: accountLinking ?? false,
+                createdBy: uid,
+                createdByName: callerName,
+                createdAt: now,
+                updatedAt: now,
+            });
         } else {
             // Left over from before (see readApp): ownerUid, the one maintainer
             // it had before it could have several, and scopes, what it once
             // read for the person signed in.
-            txn.update(ref, {...fields, ownerUid: FieldValue.delete(), scopes: FieldValue.delete(), updatedAt: now});
+            txn.update(ref, {
+                ...rest,
+                ...(accountLinking === undefined ? {} : {accountLinking}),
+                ownerUid: FieldValue.delete(),
+                scopes: FieldValue.delete(),
+                updatedAt: now,
+            });
         }
         txn.set(recordRef(), recordDoc(create ? "app-create" : "app-update", {
             performedBy: uid,

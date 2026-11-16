@@ -2,7 +2,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { chargeRateLimit, rateLimitHasRoom } from "./auth";
 import { CODE_MAIL_HOURLY_CAP, NOTICE_MAIL_RESERVE, PUBLIC_ORIGIN, RESEND_DAILY_CAP } from "./config";
 import { maskEmail } from "./accountEmail";
-import { LINK_HOLD_DAYS, LINK_UNDO_DAYS } from "./appLinks";
+import { LINK_HOLD_DAYS, LINK_SHARED_FIELDS, LINK_UNDO_DAYS } from "./appLinks";
 import { CODE_TTL_MINUTES, type CodePurpose } from "./emailCodes";
 import { EMAIL_UNDO_DAYS } from "./emailUndo";
 import { escapeHtml } from "./emailTemplate";
@@ -359,16 +359,18 @@ export async function googleChangedMail(
  * is here, so someone who got in briefly could otherwise keep watching.
  * `undoUrl`, on a link, is the "This wasn't me" link (undoAppLink): unlinking
  * in Settings would keep the owner from linking their own app account for
- * LINK_HOLD_DAYS, and this doesn't.
+ * LINK_HOLD_DAYS, and this doesn't, once in that time. What the app can see
+ * is LINK_SHARED_FIELDS, as Settings says before the link is made.
  */
 export async function appLinkChangedMail(
     to: string,
     appName: string,
     appUserName: string,
-    linked: boolean,
+    change: "linked" | "unlinked",
     language: MailLanguage,
     undoUrl?: string,
 ): Promise<ResendEnvelope> {
+    const linked = change === "linked";
     const app = escapeHtml(appName);
     const who = appUserName ? escapeHtml(appUserName) : "";
     const link = linked && undoUrl ? escapeHtml(undoUrl) : "";
@@ -380,9 +382,9 @@ export async function appLinkChangedMail(
             subject: linked ? `您的 Sekai Beyond 账号绑定了${appName}` : `您的 Sekai Beyond 账号解绑了${appName}`,
             html: page(linked ? `已绑定${app}` : `已解绑${app}`, [
                 linked
-                    ? `${account}已绑定到您的账号，${app}现在可以读取您的名称、头像、组别、会员状态和活动工作人员身份。可在“设置”中解绑。`
+                    ? `${account}已绑定到您的账号，${app}现在可以读取您的${LINK_SHARED_FIELDS.zh}。可在“设置”中解绑。`
                     : `${account}已从您的账号解绑，${app}不再能读取您账号的信息。`,
-                ...(link ? [`不是您本人的操作？<a href="${link}">撤销此绑定</a>。链接在 ${LINK_UNDO_DAYS} 天内有效，会解除此绑定、退出所有设备并替换密码。与在“设置”中解绑不同，之后您可以立即绑定自己的${app}账号，无需等待 ${LINK_HOLD_DAYS} 天。`] : []),
+                ...(link ? [`不是您本人的操作？<a href="${link}">撤销此绑定</a>。链接在 ${LINK_UNDO_DAYS} 天内有效，会解除此绑定、退出所有设备并替换密码。与在“设置”中解绑不同，之后您可以立即绑定自己的${app}账号，无需等待 ${LINK_HOLD_DAYS} 天；每个应用每 ${LINK_HOLD_DAYS} 天只能这样撤销一次。`] : []),
                 contact,
             ]),
         };
@@ -395,9 +397,9 @@ export async function appLinkChangedMail(
             : `${appName} was unlinked from your Sekai Beyond account`,
         html: page(linked ? `${app} linked` : `${app} unlinked`, [
             linked
-                ? `${account} is now linked to your account, so ${app} can see your name, photo, group, membership and event staff roles. You can unlink it in Settings.`
+                ? `${account} is now linked to your account, so ${app} can see your ${LINK_SHARED_FIELDS.en}. You can unlink it in Settings.`
                 : `${account} is no longer linked to your account, so ${app} can't see anything of it any more.`,
-            ...(link ? [`Wasn't you? <a href="${link}">Undo this link</a>. The link works for ${LINK_UNDO_DAYS} days, and unlinks it, signs out every device and replaces your password. Unlike unlinking in Settings, you can then link your own ${app} account straight away, without waiting ${LINK_HOLD_DAYS} days.`] : []),
+            ...(link ? [`Wasn't you? <a href="${link}">Undo this link</a>. The link works for ${LINK_UNDO_DAYS} days, and unlinks it, signs out every device and replaces your password. Unlike unlinking in Settings, you can then link your own ${app} account straight away, without waiting ${LINK_HOLD_DAYS} days. This works once every ${LINK_HOLD_DAYS} days for each app.`] : []),
             contact,
         ]),
     };

@@ -104,6 +104,17 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
             return isEnglish ? 'This code has run out. Start again for a new one.' : '此二维码已过期，请重新开始。';
         case 'link-not-claimed':
             return isEnglish ? 'Nobody has scanned the code yet.' : '还没有人扫描此二维码。';
+        case 'wrong-link-code': {
+            const left = functionsErrorDetails<{attemptsLeft?: unknown}>(err)?.attemptsLeft;
+            const tries = typeof left === 'number' ? left : null;
+            return isEnglish
+                ? `That isn’t the code the app shows.${tries ? ` ${tries} ${tries === 1 ? 'try' : 'tries'} left.` : ''}`
+                : `这不是应用中显示的数字。${tries ? `还可尝试 ${tries} 次。` : ''}`;
+        }
+        case 'link-code-spent':
+            return isEnglish
+                ? 'Too many wrong codes, so this request was cancelled. Start again.'
+                : '输错次数过多，此请求已取消，请重新开始。';
         case 'functions/invalid-argument':
             return isEnglish ? 'Please check what you entered.' : '请检查您输入的内容。';
         default:

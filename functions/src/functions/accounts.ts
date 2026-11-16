@@ -735,11 +735,14 @@ async function moveEmail(
         }));
 
         if (own?.undoToken) {
+            const now = Date.now();
             txn.set(emailUndoRef(own.undoToken), {
                 uid,
                 oldEmail,
                 newEmail: email,
-                expiresAt: Timestamp.fromMillis(Date.now() + EMAIL_UNDO_DAYS * 24 * HOUR_MS),
+                // Which of the account's app links undoing it removes (undoEmailChange).
+                changedAt: Timestamp.fromMillis(now),
+                expiresAt: Timestamp.fromMillis(now + EMAIL_UNDO_DAYS * 24 * HOUR_MS),
             });
         }
         return {oldEmail};
@@ -796,7 +799,8 @@ export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
  * The "This wasn't me" link: puts an account back on the address it moved off,
  * and shuts every way in that the change could have opened. Someone who got in
  * could have set a password on their own address, bound their own Google account,
- * or asked for the account to be deleted, so all of that goes, and the new
+ * asked for the account to be deleted, or linked their own account in an app
+ * since, so all of that goes, and the new
  * password set here is the only way in left. The address it moved to comes off
  * the former list too, or tickets bought under it would stay on the account.
  *
@@ -869,10 +873,20 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
 
         const google = googleBindingOf(credentials);
         if (google) txn.delete(googleIndexRef(google.sub));
-        // Whoever moved it may have linked their own account in an app, which
-        // would go on reading this one. Without a hold, so its owner can link
-        // theirs back at once.
-        for (const link of appLinks.docs) unlinkInTxn(txn, link.data() as AppLinkDoc, false);
+        // Whoever moved it may have linked their own account in an app after,
+        // which would go on reading this one, and whose notice went to their
+        // own address. Without a hold, so its owner can link theirs back at
+        // once. Not the links from before: the owner's address was told of
+        // those, with a way to undo one it didn't make (undoAppLink), and its
+        // owner could otherwise skip a link's hold by moving off an address of
+        // theirs and back. Undo links from before changedAt was kept say when
+        // by when they run out.
+        const changedAt = (undo.get("changedAt") as Timestamp | undefined)?.toMillis()
+            ?? (undo.get("expiresAt") as Timestamp).toMillis() - EMAIL_UNDO_DAYS * 24 * HOUR_MS;
+        for (const doc of appLinks.docs) {
+            const link = doc.data() as AppLinkDoc;
+            if (link.linkedAt.toMillis() >= changedAt) unlinkInTxn(txn, link, {hold: false});
+        }
         txn.set(credentials.ref, {
             passwordHash,
             passwordChangedAt: FieldValue.serverTimestamp(),
