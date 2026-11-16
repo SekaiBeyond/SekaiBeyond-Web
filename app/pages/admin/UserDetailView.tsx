@@ -42,6 +42,7 @@ import { ImageCropModal } from './ImageCropModal';
 import { MembershipSection } from './MembershipSection';
 import { PassportPageTag, PassportRow } from './passports/PassportSearch';
 import { UserAvatar } from './UserRow';
+import { UserAppLinksSection } from './UserAppLinksSection';
 import { UserSignInSection } from './UserSignInSection';
 
 /**
@@ -725,6 +726,12 @@ export const UserDetailView = ({
                 user={userRecord}
                 canManage={!readOnly && canManage}
                 onUpdated={onUpdateUser}
+                showToast={showToast}
+            />
+
+            <UserAppLinksSection
+                user={userRecord}
+                canManage={!readOnly && canManage && userRecord.uid !== currentUser.uid}
                 showToast={showToast}
             />
 

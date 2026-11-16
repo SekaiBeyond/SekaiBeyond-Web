@@ -1,5 +1,4 @@
 import { type CallableOptions, type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
-import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
@@ -39,9 +38,18 @@ import {
     type GoogleBinding,
     googleBindingOf,
     googleIndexRef,
-    PASSWORD_PEPPER
+    PASSWORD_PEPPER,
+    unlinkFirebaseGoogle,
 } from "../utils/credentials";
 import { requireNotBanned } from "../utils/bans";
+import {
+    accountLinksQuery,
+    type AppLinkDoc,
+    appLinkUserName,
+    disownLinkInTxn,
+    readLinkDisown,
+} from "../utils/appLinks";
+import { appsCol, readApp } from "../utils/apps";
 import { CODE_MAIL_HOURLY_CAP } from "../utils/config";
 import { deletionPending } from "../utils/deletion";
 import {
@@ -578,16 +586,6 @@ export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
 });
 
 /**
- * Takes Google off the Firebase Auth record an older account has, since Firebase's
- * own Google sign-in would otherwise work until it's turned off.
- */
-async function unlinkFirebaseGoogle(uid: string): Promise<void> {
-    await getAuth().updateUser(uid, {providersToUnlink: ["google.com"]}).catch((err: unknown) => {
-        if ((err as {code?: string})?.code !== "auth/user-not-found") throw err;
-    });
-}
-
-/**
  * Takes the Google account off the caller's account, which needs a password to
  * still be signed in to.
  */
@@ -734,11 +732,14 @@ async function moveEmail(
         }));
 
         if (own?.undoToken) {
+            const now = Date.now();
             txn.set(emailUndoRef(own.undoToken), {
                 uid,
                 oldEmail,
                 newEmail: email,
-                expiresAt: Timestamp.fromMillis(Date.now() + EMAIL_UNDO_DAYS * 24 * HOUR_MS),
+                // Which of the account's app links undoing it removes (undoEmailChange).
+                changedAt: Timestamp.fromMillis(now),
+                expiresAt: Timestamp.fromMillis(now + EMAIL_UNDO_DAYS * 24 * HOUR_MS),
             });
         }
         return {oldEmail};
@@ -795,7 +796,8 @@ export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
  * The "This wasn't me" link: puts an account back on the address it moved off,
  * and shuts every way in that the change could have opened. Someone who got in
  * could have set a password on their own address, bound their own Google account,
- * or asked for the account to be deleted, so all of that goes, and the new
+ * asked for the account to be deleted, or linked their own account in an app
+ * since, so all of that goes, and the new
  * password set here is the only way in left. The address it moved to comes off
  * the former list too, or tickets bought under it would stay on the account.
  *
@@ -831,14 +833,37 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         // Followed before, and the address put back, but not everything after.
         const finishing = !!undo.get("restoredAt");
 
-        const [user, credentials, oldHeld, newHeld, formerHolders] = await Promise.all([
+        const [user, credentials, oldHeld, newHeld, formerHolders, appLinks] = await Promise.all([
             txn.get(db.collection("users").doc(uid)),
             txn.get(credentialsRef(uid)),
             txn.get(emailIndexRef(oldEmail)),
             txn.get(emailIndexRef(newEmail)),
             txn.get(db.collection("users").where("formerEmails", "array-contains", oldEmail)),
+            txn.get(accountLinksQuery(uid)),
         ]);
         if (!emailUndoLive(undo, user.data())) throw badUndoLink();
+
+        // Whoever moved it may have linked their own account in an app after,
+        // which would go on reading this one, and whose notice went to their
+        // own address: those go below, as links the account never made
+        // (disownLinkInTxn), which holds each app's account and leaves this
+        // one free to link its owner's at once, once in LINK_HOLD_DAYS per
+        // app. Without that limit, moving to a second address, linking and
+        // undoing the move would skip a link's hold every time, as undoing
+        // also lifts the month between email changes. Not the links from
+        // before: the owner's address was told of those, with a way to undo
+        // one it didn't make (undoAppLink). Undo links from before changedAt
+        // was kept say when by when they run out. Their apps' names, and what
+        // disowning each takes, are read now, before anything is written.
+        const changedAt = (undo.get("changedAt") as Timestamp | undefined)?.toMillis()
+            ?? (undo.get("expiresAt") as Timestamp).toMillis() - EMAIL_UNDO_DAYS * 24 * HOUR_MS;
+        const linksSince = appLinks.docs
+            .map(doc => doc.data() as AppLinkDoc)
+            .filter(link => link.linkedAt.toMillis() >= changedAt);
+        const [linkApps, disowns] = await Promise.all([
+            Promise.all(linksSince.map(link => txn.get(appsCol().doc(link.appId)))),
+            Promise.all(linksSince.map(link => readLinkDisown(txn, link.appId, uid, link.appUserId))),
+        ]);
 
         if (finishing) {
             if (oldHeld.get("uid") !== uid) throw badUndoLink();
@@ -867,6 +892,20 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
 
         const google = googleBindingOf(credentials);
         if (google) txn.delete(googleIndexRef(google.sub));
+        const displayName: string = user.get("displayName") ?? "";
+        linksSince.forEach((link, i) => {
+            disownLinkInTxn(txn, disowns[i]);
+            txn.set(recordRef(), recordDoc("account-app-unlink", {
+                performedBy: uid,
+                performedByName: displayName,
+                targetUid: uid,
+                targetName: displayName,
+                appId: link.appId,
+                appName: readApp(linkApps[i])?.name ?? link.appId,
+                appUserName: appLinkUserName(link.appUserName),
+                linkEndedBy: "email-undo",
+            }));
+        });
         txn.set(credentials.ref, {
             passwordHash,
             passwordChangedAt: FieldValue.serverTimestamp(),
@@ -874,7 +913,6 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         }, {merge: true});
 
         if (!finishing) {
-            const displayName: string = user.get("displayName") ?? "";
             txn.set(recordRef(), recordDoc("account-email-undo", {
                 performedBy: uid,
                 performedByName: displayName,

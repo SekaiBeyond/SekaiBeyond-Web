@@ -6,9 +6,12 @@ import { db } from "./firebase";
  * What a key may do. Each API route names the one it needs (see functions/api.ts).
  * Every read of the site's data is a key's: a person's sign-in to an app only
  * says who they are. A key reads as far as its scopes go, and its app decides
- * who of its own sees what.
+ * who of its own sees what. account-links is the one that reads accounts, and
+ * only those linked to the app's own (see appLinks.ts), by the app's ID for them.
  */
-export const API_SCOPES = ["events:read", "team:read", "event-staff:read", "tickets:read", "tickets:write"] as const;
+export const API_SCOPES = [
+    "events:read", "team:read", "event-staff:read", "tickets:read", "tickets:write", "account-links",
+] as const;
 export type ApiScope = typeof API_SCOPES[number];
 
 export function isApiScope(raw: unknown): raw is ApiScope {

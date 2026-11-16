@@ -19,5 +19,6 @@ export * from "./functions/socialPlatforms";
 export * from "./functions/apiKeys";
 export { api } from "./functions/api";
 export * from "./functions/apps";
+export * from "./functions/appLinks";
 export { scheduledMailDrain } from "./functions/scheduledMail";
 export { lookUpUwBuilding, syncUwParking, uwParkingNightlySync } from "./functions/parking";

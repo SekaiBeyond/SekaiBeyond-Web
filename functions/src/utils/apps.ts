@@ -18,7 +18,9 @@ import { db } from "./firebase";
  *   data as far as their scopes go and sell tickets, with the app's ID as the
  *   namespace its order numbers live in. Who of the app's own sees what a key
  *   reads is the app's to decide;
- * - or both.
+ * - link accounts here to its own (accountLinking, see appLinks.ts), so its
+ *   server can read, with a key, what a linked account is here;
+ * - or any of these.
  *
  * A sign-in is a Firebase custom token for the app's own Firebase project,
  * signed through IAM as a service account of that project, as this project's
@@ -89,6 +91,12 @@ interface AppDoc {
     firebaseProjectId: string;
     /** The service account of that project its sign-ins are signed as, "" when sign-in is off. */
     serviceAccount: string;
+    /**
+     * Whether accounts here may link their accounts in the app (appLinks.ts).
+     * Turning it off stops every link working within seconds, on both sides,
+     * and keeps them for when it's back on.
+     */
+    accountLinking: boolean;
     createdBy: string;
     createdByName: string;
     createdAt: Timestamp;
@@ -119,6 +127,7 @@ export function readApp(snap: FirebaseFirestore.DocumentSnapshot): RegisteredApp
         redirectUris: data.redirectUris ?? [],
         firebaseProjectId: data.firebaseProjectId ?? "",
         serviceAccount: data.serviceAccount ?? "",
+        accountLinking: data.accountLinking === true,
         createdBy: data.createdBy ?? "",
         createdByName: data.createdByName ?? "",
         createdAt: data.createdAt!,

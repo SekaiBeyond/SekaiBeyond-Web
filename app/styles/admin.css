@@ -1060,6 +1060,23 @@
     margin-top: 10px;
 }
 
+/* UserAppLinksSection: one app's link and hold, the button to lift the hold under them. */
+.admin-app-link-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    overflow-wrap: anywhere;
+}
+
+.admin-app-link-row + .admin-app-link-row {
+    margin-top: 12px;
+}
+
+.admin-app-link-row p {
+    margin: 0;
+}
+
 .admin-ban-form {
     display: flex;
     flex-direction: column;

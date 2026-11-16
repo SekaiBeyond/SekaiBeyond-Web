@@ -197,6 +197,53 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish ? <>bound a Google account</> : <>绑定了 Google 账号</>;
         case 'account-google-unbind':
             return isEnglish ? <>unbound their Google account</> : <>解绑了 Google 账号</>;
+        case 'account-app-link': {
+            const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
+            return isEnglish
+                ? <>linked their {r.appName || r.appId} account{who}</>
+                : <>绑定了{r.appName || r.appId}账号{who}</>;
+        }
+        case 'account-app-unlink': {
+            const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
+            const app = r.appName || r.appId;
+            // Ended by something else: the owner undoing an email change (only
+            // links made since, each disowned as "This wasn't me" disowns one),
+            // or, with no hold, the account's deletion or the app's removal,
+            // which the record's performer did.
+            if (r.linkEndedBy === 'email-undo') {
+                return isEnglish
+                    ? <>unlinked their {app} account{who}, linked after the email change they undid</>
+                    : <>撤销邮箱更改时，解绑了在那次更改后绑定的{app}账号{who}</>;
+            }
+            if (r.linkEndedBy === 'account-deleted') {
+                return isEnglish
+                    ? <>ended {target}'s link to the {app} account{who}, as the account was deleted</>
+                    : <>{target} 的账号已删除，其与{app}账号{who}的绑定随之解除</>;
+            }
+            if (r.linkEndedBy === 'app-removed') {
+                return isEnglish
+                    ? <>ended {target}'s link to the {app} account{who} by removing the app</>
+                    : <>移除了应用，{target} 与{app}账号{who}的绑定随之解除</>;
+            }
+            // From the app, through its key, rather than from Settings.
+            const inApp = r.apiKeyName ? (isEnglish ? ' in the app' : '（在应用内）') : '';
+            return isEnglish
+                ? <>unlinked their {app} account{who}{inApp}</>
+                : <>解绑了{app}账号{who}{inApp}</>;
+        }
+        case 'account-app-link-undo': {
+            const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
+            // The "This wasn't me" link in the link's notice, which also replaced
+            // the password and took off any Google account bound.
+            return isEnglish
+                ? <>undid a link to the {r.appName || r.appId} account{who} they didn’t make</>
+                : <>撤销了一个并非本人操作的{r.appName || r.appId}账号{who}绑定</>;
+        }
+        case 'account-app-hold-clear':
+            // Staff letting an account link another of its own app accounts before the 30 days are up.
+            return isEnglish
+                ? <>lifted {target}'s hold on linking in {r.appName || r.appId}</>
+                : <>解除了 {target} 在{r.appName || r.appId}的绑定等待期</>;
         case 'account-ban': {
             const term = r.banUntil
                 ? (isEnglish ? `until ${fmtExpiry(r.banUntil)}` : `至 ${fmtExpiry(r.banUntil)}`)

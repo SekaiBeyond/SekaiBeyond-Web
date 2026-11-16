@@ -215,6 +215,50 @@
     max-width: 280px;
 }
 
+/* Linking an app's account (ProfileAppLinksSection): its code, then who claimed it. */
+.settings-link-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    /* No max-width, which would leave it room beside the row's text rather than under it. */
+    flex-basis: 100%;
+}
+
+.settings-link-panel .settings-row-help {
+    max-width: 46ch;
+}
+
+.settings-link-qr {
+    padding: 8px;
+    background: #fff;
+    border: 1px solid rgba(255, 107, 157, 0.18);
+    border-radius: 14px;
+    line-height: 0;
+}
+
+.settings-link-confirm {
+    max-width: 10rem;
+    font-size: 20px;
+    letter-spacing: 0.3em;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Why the app's claim was refused, as .redeem-error-text says what went wrong. */
+.settings-link-refusal {
+    max-width: 46ch;
+    font-size: 14px;
+    color: #e5534b;
+}
+
+.settings-link-code {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text);
+}
+
 .settings-row--account .profile-action:disabled {
     cursor: not-allowed;
     opacity: 0.45;

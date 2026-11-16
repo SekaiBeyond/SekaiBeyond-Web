@@ -11,6 +11,8 @@ export default [
     route("support", "routes/support.tsx"),
     // Where the "This wasn't me" link in an email-changed notice lands.
     route("undo-email", "routes/undoEmail.tsx"),
+    // Where the "This wasn't me" link in an app-linked notice lands.
+    route("undo-app-link", "routes/undoAppLink.tsx"),
     // Where a registered app, such as SKBY Manager, sends people to sign in with their account here.
     route("authorize", "routes/authorize.tsx"),
     // Short URL printed on physical passport stickers for easy manual entry.

@@ -5,6 +5,7 @@ import { callSetPassportPrivacy, callSetProfileVisibility } from '~/lib/firebase
 import { PRIVACY_ROWS, type PrivacyKey, privacyRow, privacyStateLabel, readVisibility, } from '~/lib/privacy';
 import type { ShowToast } from '~/lib/useToasts';
 import { ProfileAccountSection } from '~/pages/ProfileAccountSection';
+import { ProfileAppLinksSection } from '~/pages/ProfileAppLinksSection';
 import { ProfileDevicesSection } from '~/pages/ProfileDevicesSection';
 
 /**
@@ -76,14 +77,15 @@ const PrivacySwitch = ({checked, busy, label, onChange}: {
 );
 
 /**
- * /profile's Settings tab: how you sign in, what other people are shown, then
- * the devices signed in. Every switch is enforced server-side (getPublicProfile leaves hidden
+ * /profile's Settings tab: how you sign in, the apps your account is linked in,
+ * what other people are shown, then the devices signed in. Every switch is enforced server-side (getPublicProfile leaves hidden
  * sections out; getPassportPublicProfile refuses a private passport page). Only
  * the cards; the profile page owns the nav, sign-in wall and toasts.
  */
 export const ProfileSettingsTab = ({showToast}: {showToast: ShowToast}) => (
     <>
         <ProfileAccountSection showToast={showToast}/>
+        <ProfileAppLinksSection showToast={showToast}/>
         <PrivacySection showToast={showToast}/>
         <ProfileDevicesSection showToast={showToast}/>
     </>
