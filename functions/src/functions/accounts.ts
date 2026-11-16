@@ -42,7 +42,8 @@ import {
     PASSWORD_PEPPER
 } from "../utils/credentials";
 import { requireNotBanned } from "../utils/bans";
-import { accountLinksQuery, type AppLinkDoc, unlinkInTxn } from "../utils/appLinks";
+import { accountLinksQuery, type AppLinkDoc, appLinkUserName, unlinkInTxn } from "../utils/appLinks";
+import { appsCol, readApp } from "../utils/apps";
 import { CODE_MAIL_HOURLY_CAP } from "../utils/config";
 import { deletionPending } from "../utils/deletion";
 import {
@@ -846,6 +847,22 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         ]);
         if (!emailUndoLive(undo, user.data())) throw badUndoLink();
 
+        // Whoever moved it may have linked their own account in an app after,
+        // which would go on reading this one, and whose notice went to their
+        // own address: those go below, without a hold, so its owner can link
+        // theirs back at once. Not the links from before: the owner's address
+        // was told of those, with a way to undo one it didn't make
+        // (undoAppLink), and its owner could otherwise skip a link's hold by
+        // moving off an address of theirs and back. Undo links from before
+        // changedAt was kept say when by when they run out. Their apps' names
+        // are read now, before anything is written, for the record.
+        const changedAt = (undo.get("changedAt") as Timestamp | undefined)?.toMillis()
+            ?? (undo.get("expiresAt") as Timestamp).toMillis() - EMAIL_UNDO_DAYS * 24 * HOUR_MS;
+        const linksSince = appLinks.docs
+            .map(doc => doc.data() as AppLinkDoc)
+            .filter(link => link.linkedAt.toMillis() >= changedAt);
+        const linkApps = await Promise.all(linksSince.map(link => txn.get(appsCol().doc(link.appId))));
+
         if (finishing) {
             if (oldHeld.get("uid") !== uid) throw badUndoLink();
         } else {
@@ -873,20 +890,20 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
 
         const google = googleBindingOf(credentials);
         if (google) txn.delete(googleIndexRef(google.sub));
-        // Whoever moved it may have linked their own account in an app after,
-        // which would go on reading this one, and whose notice went to their
-        // own address. Without a hold, so its owner can link theirs back at
-        // once. Not the links from before: the owner's address was told of
-        // those, with a way to undo one it didn't make (undoAppLink), and its
-        // owner could otherwise skip a link's hold by moving off an address of
-        // theirs and back. Undo links from before changedAt was kept say when
-        // by when they run out.
-        const changedAt = (undo.get("changedAt") as Timestamp | undefined)?.toMillis()
-            ?? (undo.get("expiresAt") as Timestamp).toMillis() - EMAIL_UNDO_DAYS * 24 * HOUR_MS;
-        for (const doc of appLinks.docs) {
-            const link = doc.data() as AppLinkDoc;
-            if (link.linkedAt.toMillis() >= changedAt) unlinkInTxn(txn, link, {hold: false});
-        }
+        const displayName: string = user.get("displayName") ?? "";
+        linksSince.forEach((link, i) => {
+            unlinkInTxn(txn, link, {hold: false});
+            txn.set(recordRef(), recordDoc("account-app-unlink", {
+                performedBy: uid,
+                performedByName: displayName,
+                targetUid: uid,
+                targetName: displayName,
+                appId: link.appId,
+                appName: readApp(linkApps[i])?.name ?? link.appId,
+                appUserName: appLinkUserName(link.appUserName),
+                linkEndedBy: "email-undo",
+            }));
+        });
         txn.set(credentials.ref, {
             passwordHash,
             passwordChangedAt: FieldValue.serverTimestamp(),
@@ -894,7 +911,6 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         }, {merge: true});
 
         if (!finishing) {
-            const displayName: string = user.get("displayName") ?? "";
             txn.set(recordRef(), recordDoc("account-email-undo", {
                 performedBy: uid,
                 performedByName: displayName,

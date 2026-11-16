@@ -19,20 +19,49 @@ function bannedMessage(err: unknown, isEnglish: boolean): string {
 }
 
 /** A link refused while one side waits out the 30 days after an earlier one was undone. */
-function linkHoldMessage(err: unknown, isEnglish: boolean): string {
-    const details = functionsErrorDetails<{side?: unknown; until?: unknown}>(err);
+function linkHoldMessage(details: {side?: unknown; until?: unknown} | null, isEnglish: boolean): string {
     const until = typeof details?.until === 'string' ? new Date(details.until) : null;
     const when = until && !Number.isNaN(until.getTime())
         ? formatSiteTime(until, isEnglish, {year: 'numeric', month: 'long', day: 'numeric'})
         : null;
     if (details?.side === 'account') {
         return isEnglish
-            ? `Your account was linked to someone else in this app recently, so it can only link another${when ? ` from ${when}` : ' later'}.`
-            : `您的账号最近在此应用中绑定过其他账号，${when ? `需等到 ${when} 后` : '稍后'}才能绑定新的账号。`;
+            ? `Your account was linked to someone else in this app recently, so it can only link another${when ? ` from ${when}` : ' later'}. If you linked the wrong account of yours, contact us.`
+            : `您的账号最近在此应用中绑定过其他账号，${when ? `需等到 ${when} 后` : '稍后'}才能绑定新的账号。如果您绑错了自己的另一个账号，请联系我们。`;
     }
     return isEnglish
         ? `That app account was linked to another account recently, so it can only link this one${when ? ` from ${when}` : ' later'}.`
         : `该应用账号最近绑定过其他账号，${when ? `需等到 ${when} 后` : '稍后'}才能绑定此账号。`;
+}
+
+const accountLinkedMessage = (isEnglish: boolean) =>
+    isEnglish ? 'Your account is already linked in this app. Unlink it first.' : '您的账号已在此应用中绑定，请先解绑。';
+
+const appUserLinkedMessage = (isEnglish: boolean) =>
+    isEnglish ? 'That app account is already linked to another account here.' : '该应用账号已绑定本站的其他账号。';
+
+const deletionPendingMessage = (isEnglish: boolean) =>
+    isEnglish
+        ? 'Your account is due to be deleted, so this can’t be done unless the deletion is cancelled.'
+        : '您的账号即将被删除，取消删除前无法进行此操作。';
+
+/**
+ * Why the app's claim on a link request was refused, as the request keeps it
+ * for Settings to show (LinkRefusal in functions/src/utils/appLinks.ts).
+ */
+export function linkRefusalMessage(refusal: {code: string; side?: string; until?: string}, isEnglish: boolean): string {
+    switch (refusal.code) {
+        case 'link-on-hold':
+            return linkHoldMessage(refusal, isEnglish);
+        case 'app-user-linked':
+            return appUserLinkedMessage(isEnglish);
+        case 'account-linked':
+            return accountLinkedMessage(isEnglish);
+        case 'deletion-pending':
+            return deletionPendingMessage(isEnglish);
+        default:
+            return isEnglish ? 'It couldn’t be linked.' : '无法绑定。';
+    }
 }
 
 /** What went wrong with an account call, in the visitor's language. */
@@ -65,9 +94,8 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
         case 'email-change-locked':
             return isEnglish ? 'Your email can only change once a month.' : '邮箱每月只能更改一次。';
         case 'deletion-pending':
-            return isEnglish
-                ? 'Your account is due to be deleted, so its email can’t change unless the deletion is cancelled.'
-                : '您的账号即将被删除，取消删除前无法更改邮箱。';
+            // Changing the email and linking an app both refuse with it.
+            return deletionPendingMessage(isEnglish);
         case 'weak-password':
             return isEnglish ? 'Passwords need at least 8 characters.' : '密码至少需要 8 个字符。';
         case 'breached-password':
@@ -93,13 +121,11 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
         case 'linking-off':
             return isEnglish ? 'This app doesn’t link accounts right now.' : '此应用目前不支持绑定账号。';
         case 'account-linked':
-            return isEnglish ? 'Your account is already linked in this app. Unlink it first.' : '您的账号已在此应用中绑定，请先解绑。';
+            return accountLinkedMessage(isEnglish);
         case 'app-user-linked':
-            return isEnglish
-                ? 'That app account is already linked to another account here.'
-                : '该应用账号已绑定本站的其他账号。';
+            return appUserLinkedMessage(isEnglish);
         case 'link-on-hold':
-            return linkHoldMessage(err, isEnglish);
+            return linkHoldMessage(functionsErrorDetails<{side?: unknown; until?: unknown}>(err), isEnglish);
         case 'link-request-gone':
             return isEnglish ? 'This code has run out. Start again for a new one.' : '此二维码已过期，请重新开始。';
         case 'link-not-claimed':

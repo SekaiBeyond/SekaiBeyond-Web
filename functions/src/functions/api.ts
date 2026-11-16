@@ -35,6 +35,7 @@ import {
     LINK_REQUEST_ID_RE,
     LINK_REQUEST_TTL_MS,
     linkConfirmCodeHash,
+    linkRefusal,
     linkRequestStatus,
     newLinkConfirmCode,
     unlinkInTxn,
@@ -1011,7 +1012,8 @@ async function getLinkRequest(key: ApiKey, idOrCode: string): Promise<ApiReply> 
  *
  * Either side already linked, or waiting out a hold, is refused here rather
  * than once the account has confirmed (assertCanLink, which confirming checks
- * again).
+ * again). The refusal goes on the request too, which stays waiting, so
+ * Settings can tell the account why nothing has happened.
  */
 async function claimLinkRequest(key: ApiKey, requestId: string, body: unknown): Promise<ApiReply> {
     const app = await requireLinkingApp(key);
@@ -1023,7 +1025,7 @@ async function claimLinkRequest(key: ApiKey, requestId: string, body: unknown): 
     const confirmCode = newLinkConfirmCode();
     const confirmCodeHash = linkConfirmCodeHash(requestId, confirmCode);
 
-    return db.runTransaction(async (txn): Promise<ApiReply> => {
+    const outcome = await db.runTransaction(async (txn): Promise<ApiReply | {refused: HttpsError}> => {
         const snap = await txn.get(ref);
         const req = snap.data() as AppLinkRequestDoc | undefined;
         if (!req || req.appId !== app.id) throw linkRequestNotFound();
@@ -1039,7 +1041,15 @@ async function claimLinkRequest(key: ApiKey, requestId: string, body: unknown): 
                 : `This request is ${status}: ask them to start again.`, {code: "link-request-closed", status});
         }
 
-        const user = await assertCanLink(txn, app.id, req.uid, appUserId);
+        let user: Snapshot;
+        try {
+            user = await assertCanLink(txn, app.id, req.uid, appUserId);
+        } catch (err) {
+            if (!(err instanceof HttpsError)) throw err;
+            // Thrown once this is written, which throwing here would undo.
+            txn.update(ref, {refusal: linkRefusal(err)});
+            return {refused: err};
+        }
         const claimed: AppLinkRequestDoc = {
             ...req,
             status: "claimed",
@@ -1056,9 +1066,12 @@ async function claimLinkRequest(key: ApiKey, requestId: string, body: unknown): 
             confirmCodeHash,
             confirmAttempts: 0,
             expiresAt: claimed.expiresAt,
+            refusal: FieldValue.delete(),
         });
         return {status: 200, body: {...linkRequestJson(requestId, claimed, user), confirmCode}};
     });
+    if ("refused" in outcome) throw outcome.refused;
+    return outcome;
 }
 
 /**

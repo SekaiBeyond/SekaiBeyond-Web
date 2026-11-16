@@ -205,11 +205,30 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         }
         case 'account-app-unlink': {
             const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
+            const app = r.appName || r.appId;
+            // Ended with no hold by something else: the owner undoing an email
+            // change (only links made since), the account's deletion, or the
+            // app's removal, which the record's performer did.
+            if (r.linkEndedBy === 'email-undo') {
+                return isEnglish
+                    ? <>unlinked their {app} account{who}, linked after the email change they undid</>
+                    : <>撤销邮箱更改时，解绑了在那次更改后绑定的{app}账号{who}</>;
+            }
+            if (r.linkEndedBy === 'account-deleted') {
+                return isEnglish
+                    ? <>ended {target}'s link to the {app} account{who}, as the account was deleted</>
+                    : <>{target} 的账号已删除，其与{app}账号{who}的绑定随之解除</>;
+            }
+            if (r.linkEndedBy === 'app-removed') {
+                return isEnglish
+                    ? <>ended {target}'s link to the {app} account{who} by removing the app</>
+                    : <>移除了应用，{target} 与{app}账号{who}的绑定随之解除</>;
+            }
             // From the app, through its key, rather than from Settings.
             const inApp = r.apiKeyName ? (isEnglish ? ' in the app' : '（在应用内）') : '';
             return isEnglish
-                ? <>unlinked their {r.appName || r.appId} account{who}{inApp}</>
-                : <>解绑了{r.appName || r.appId}账号{who}{inApp}</>;
+                ? <>unlinked their {app} account{who}{inApp}</>
+                : <>解绑了{app}账号{who}{inApp}</>;
         }
         case 'account-app-link-undo': {
             const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';

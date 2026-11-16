@@ -29,8 +29,8 @@ import { BAN_CLEARED, enableSignIn, hasBan, setAuthDisabled } from "../utils/ban
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
-import { deleteFromApps, signOutOfApps } from "../utils/apps";
-import { accountLinksQuery } from "../utils/appLinks";
+import { appsCol, deleteFromApps, readApp, signOutOfApps } from "../utils/apps";
+import { accountLinksQuery, type AppLinkDoc, appLinkUserName } from "../utils/appLinks";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
@@ -850,11 +850,24 @@ export const onUserDeleted = onDocumentDeleted(
         // Its links to apps' accounts (utils/appLinks.ts), which leaves those
         // free to link another account at once: there's nothing left to pass on.
         // Thrown, so a retry finishes it: a link left behind would still have
-        // the app reading an account that's gone, if only its absence.
+        // the app reading an account that's gone, if only its absence. Each is
+        // recorded with it, under a fixed ID, so a retry overwrites its record.
         const links = await accountLinksQuery(uid).get();
         if (!links.empty) {
+            const apps = await db.getAll(...links.docs.map(doc => appsCol().doc((doc.data() as AppLinkDoc).appId)));
             const unlink = db.batch();
-            for (const link of links.docs) unlink.delete(link.ref);
+            links.docs.forEach((doc, i) => {
+                const link = doc.data() as AppLinkDoc;
+                unlink.delete(doc.ref);
+                unlink.set(recordRef(`account-deleted-unlink-${link.appId}-${uid}`), recordDoc("account-app-unlink", {
+                    targetUid: uid,
+                    targetName: data?.displayName ?? "",
+                    appId: link.appId,
+                    appName: readApp(apps[i])?.name ?? link.appId,
+                    appUserName: appLinkUserName(link.appUserName),
+                    linkEndedBy: "account-deleted",
+                }));
+            });
             await unlink.commit();
         }
 

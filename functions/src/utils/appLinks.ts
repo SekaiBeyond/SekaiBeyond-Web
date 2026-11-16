@@ -362,9 +362,34 @@ export interface AppLinkRequestDoc {
     confirmCodeHash?: string;
     /** Wrong codes typed in so far. LINK_CONFIRM_ATTEMPTS of them cancel it. */
     confirmAttempts?: number;
+    /**
+     * Why the app's last claim was refused (assertCanLink), while the request
+     * waits for another, so Settings can tell the account as the app tells its
+     * user. A claim that goes through clears it.
+     */
+    refusal?: LinkRefusal;
     createdAt: Timestamp;
     /** Pushed on by a claim, so the account has its own LINK_REQUEST_TTL_MS to confirm. */
     expiresAt: Timestamp;
+}
+
+/** A refused claim as Settings shows it: the refusal's code, and for a hold, which side and until when. */
+export interface LinkRefusal {
+    code: string;
+    side?: string;
+    until?: string;
+    at: Timestamp;
+}
+
+/** What a request keeps of a claim assertCanLink refused with `err`. */
+export function linkRefusal(err: HttpsError): LinkRefusal {
+    const details = (err.details ?? {}) as {code?: unknown; side?: unknown; until?: unknown};
+    return {
+        code: typeof details.code === "string" ? details.code : "link-refused",
+        ...(typeof details.side === "string" ? {side: details.side} : {}),
+        ...(typeof details.until === "string" ? {until: details.until} : {}),
+        at: Timestamp.now(),
+    };
 }
 
 /** The code a claim hands the app to show its user, for the account to type in here. */

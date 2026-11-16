@@ -3,7 +3,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { accountErrorMessage } from '~/lib/accountErrors';
+import { accountErrorMessage, linkRefusalMessage } from '~/lib/accountErrors';
 import { linkSharedFields } from '~/lib/appLinks';
 import { toDate } from '~/lib/collectionCache';
 import {
@@ -32,12 +32,31 @@ interface Started {
     clockOffset: number;
 }
 
+/** Why the app's last claim was refused, kept on a request still waiting for another. */
+interface Refusal {
+    code: string;
+    side?: string;
+    until?: string;
+}
+
 /** The request as it stands, watched in Firestore for the app's claim. `failed`: it can't be watched. */
 interface Watched {
     status: 'waiting' | 'claimed' | 'linked' | 'cancelled' | 'failed';
     appUserName: string;
     expiresAt: number;
+    refusal: Refusal | null;
 }
+
+const readRefusal = (raw: unknown): Refusal | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const {code, side, until} = raw as Record<string, unknown>;
+    if (typeof code !== 'string') return null;
+    return {
+        code,
+        ...(typeof side === 'string' ? {side} : {}),
+        ...(typeof until === 'string' ? {until} : {}),
+    };
+};
 
 const STATUSES = ['waiting', 'claimed', 'linked', 'cancelled'] as const;
 
@@ -61,8 +80,9 @@ function useLinkRequest(requestId: string | null): Watched | null {
                 status: STATUSES.includes(data.status) ? data.status : 'cancelled',
                 appUserName: typeof data.appUserName === 'string' ? data.appUserName : '',
                 expiresAt: toDate(data.expiresAt)?.getTime() ?? 0,
+                refusal: readRefusal(data.refusal),
             });
-        }, () => setWatched({status: 'failed', appUserName: '', expiresAt: 0}));
+        }, () => setWatched({status: 'failed', appUserName: '', expiresAt: 0, refusal: null}));
     }, [requestId]);
     return watched;
 }
@@ -217,6 +237,13 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
             <span className="settings-link-code" aria-label={isEnglish ? 'Code' : '数字码'}>
                 {started.code.slice(0, 3)} {started.code.slice(3)}
             </span>
+            {watched.refusal && (
+                // The app tried and was refused: say why, as the app tells its user.
+                <span className="settings-link-refusal" role="alert">
+                    {isEnglish ? `${app.name} couldn’t link: ` : `${app.name}未能绑定：`}
+                    {linkRefusalMessage(watched.refusal, isEnglish)}
+                </span>
+            )}
             <span className="settings-row-state">
                 {isEnglish ? `${formatLeft(watched.expiresAt - now)} left` : `剩余 ${formatLeft(watched.expiresAt - now)}`}
             </span>

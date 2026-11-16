@@ -310,6 +310,8 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {appId?: unknown; language?: unknown};
     const appId = validateAppId(input.appId);
+    // Nothing to remove costs none of the day's notices. Checked again below.
+    if ((await accountLinkInAppQuery(appId, uid).get()).empty) return {unlinked: false};
     await limitNoticedChange(uid, "appLink");
 
     const unlinked = await db.runTransaction(async (txn) => {

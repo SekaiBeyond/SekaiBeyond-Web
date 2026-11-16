@@ -3,7 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { GoogleAuth } from "google-auth-library";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol } from "../utils/apiKeys";
-import { appLinksCol } from "../utils/appLinks";
+import { type AppLinkDoc, appLinksCol, appLinkUserName } from "../utils/appLinks";
 import {
     APP_ID_RE,
     APP_MAINTAINERS_MAX,
@@ -277,14 +277,14 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
  * Removes an app and revokes its API keys. Its keys and sign-in to it stop at
  * once, and the API refuses its sign-ins within seconds. Its users and data in
  * its own project are its maintainers' to keep. Its account links go after,
- * as there may be more than a transaction holds: nothing reads them meanwhile,
- * since every reader looks the app up first.
+ * each on its account's record, as there may be more than a transaction holds:
+ * nothing reads them meanwhile, since every reader looks the app up first.
  */
 export const deleteApp = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const appId = validateAppId((request.data as {appId?: unknown} | null)?.appId);
 
-    await adminTransaction(uid, async (txn, callerSnap) => {
+    const removed = await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = appsCol().doc(appId);
         const [snap, keysSnap] = await Promise.all([
             txn.get(ref),
@@ -292,21 +292,41 @@ export const deleteApp = onCall({maxInstances: 10}, async (request) => {
         ]);
         const app = readApp(snap);
         if (!app) throw new HttpsError("not-found", "App not found.");
+        const callerName: string = callerSnap.data()?.displayName ?? "";
         txn.delete(ref);
         for (const keyDoc of keysSnap.docs) txn.delete(keyDoc.ref);
         txn.set(recordRef(), recordDoc("app-delete", {
             performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            performedByName: callerName,
             appId,
             appName: app.name,
         }));
+        return {appName: app.name, callerName};
     });
 
+    // Each link goes on its account's record, under a fixed ID: a link and its
+    // record make two writes, so a batch holds half as many links.
     try {
         const links = await appLinksCol().where("appId", "==", appId).get();
-        for (let i = 0; i < links.docs.length; i += BATCH_LIMIT) {
+        const perBatch = Math.floor(BATCH_LIMIT / 2);
+        for (let i = 0; i < links.docs.length; i += perBatch) {
+            const chunk = links.docs.slice(i, i + perBatch);
+            const users = await db.getAll(...chunk.map(doc => db.collection("users").doc((doc.data() as AppLinkDoc).uid)));
             const batch = db.batch();
-            for (const link of links.docs.slice(i, i + BATCH_LIMIT)) batch.delete(link.ref);
+            chunk.forEach((doc, j) => {
+                const link = doc.data() as AppLinkDoc;
+                batch.delete(doc.ref);
+                batch.set(recordRef(`app-removed-unlink-${appId}-${link.uid}`), recordDoc("account-app-unlink", {
+                    performedBy: uid,
+                    performedByName: removed.callerName,
+                    targetUid: link.uid,
+                    targetName: users[j].get("displayName") ?? "",
+                    appId,
+                    appName: removed.appName,
+                    appUserName: appLinkUserName(link.appUserName),
+                    linkEndedBy: "app-removed",
+                }));
+            });
             await batch.commit();
         }
     } catch (err) {

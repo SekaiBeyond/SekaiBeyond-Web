@@ -235,5 +235,7 @@ export interface ActivityRecord {
     appName?: string;
     /** An account link: the app's user's name, as the app gave it. */
     appUserName?: string;
+    /** An unlink nobody asked for: what ended the link (see RecordFields in functions/src/utils/records.ts). */
+    linkEndedBy?: 'email-undo' | 'account-deleted' | 'app-removed';
     timestamp: Date;
 }

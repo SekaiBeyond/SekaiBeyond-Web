@@ -244,6 +244,13 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* Why the app's claim was refused, as .redeem-error-text says what went wrong. */
+.settings-link-refusal {
+    max-width: 46ch;
+    font-size: 14px;
+    color: #e5534b;
+}
+
 .settings-link-code {
     font-size: 24px;
     font-weight: 800;
