@@ -193,12 +193,27 @@
     flex-wrap: wrap;
 }
 
+/* Under the row's words, never beside them: the whole row wide, its fields,
+   notes and buttons in one column no wider than 360px. */
 .settings-account-form {
     display: flex;
     flex-direction: column;
     gap: 10px;
     flex-basis: 100%;
+}
+
+.settings-account-form > * {
     max-width: 360px;
+}
+
+/* A field in a form or link panel, as tall and as round as the buttons under it. */
+.settings-account-form .admin-input,
+.settings-link-panel .admin-input {
+    flex: none;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-size: 14px;
 }
 
 .settings-account-form .redeem-error-text {
@@ -207,19 +222,49 @@
 
 .settings-account-actions {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
 }
 
-/* Google's button, which sizes itself to this, then Cancel. */
+/* The buttons under a form or link panel, each as wide as its words and as
+   tall as Google's own button beside them. The dashed one's own margin, for
+   its usual place as a full-width "add" button, would otherwise make the row,
+   and so the gradient one, 16px taller. */
+.settings-account-actions > .admin-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: 40px;
+    margin: 0;
+    padding: 0 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* Google's button, which sizes itself to its slot, then Cancel beside it, or
+   under it where there's no room. The slot is 44px with the button at its top. */
 .settings-google-bind {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: flex-start;
     gap: 10px;
-    max-width: 280px;
 }
 
-.settings-google-bind > .admin-btn {
-    align-self: flex-start;
+.settings-google-bind > .auth-google {
+    flex: 0 0 260px;
+    justify-content: flex-start;
+}
+
+/* The emulator's stand-in for Google's button. */
+.settings-google-bind > .auth-submit {
+    flex: 0 0 260px;
+    height: 40px;
+    margin: 0;
+    padding: 0 20px;
 }
 
 /* Linking an app's account (ProfileAppLinkRows): its code, then who claimed it. */
@@ -306,11 +351,18 @@
     line-height: 0;
 }
 
-.settings-link-confirm {
+.settings-link-panel .settings-link-confirm {
     max-width: 10rem;
-    font-size: 20px;
+    font-size: 18px;
     letter-spacing: 0.3em;
     font-variant-numeric: tabular-nums;
+}
+
+/* The digits typed spread out, the words saying what to type not, so they fit. */
+.settings-link-panel .settings-link-confirm::placeholder,
+.settings-account-form .auth-code-input::placeholder {
+    font-size: 14px;
+    letter-spacing: normal;
 }
 
 /* Why the app's claim was refused, as .redeem-error-text says what went wrong. */

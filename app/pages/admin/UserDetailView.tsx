@@ -42,8 +42,8 @@ import { ImageCropModal } from './ImageCropModal';
 import { MembershipSection } from './MembershipSection';
 import { PassportPageTag, PassportRow } from './passports/PassportSearch';
 import { UserAvatar } from './UserRow';
-import { UserAppLinksSection } from './UserAppLinksSection';
-import { UserSignInSection } from './UserSignInSection';
+import { UserConnectionsSection } from './UserConnectionsSection';
+import { UserSignInSection, useUserSignInMethods } from './UserSignInSection';
 
 /**
  * A badge or past event the user has or hasn't: a Grant or Revoke button, or for
@@ -196,6 +196,7 @@ export const UserDetailView = ({
     const {imageMb} = useUploadLimits();
     const {designs: passportDesigns} = usePassportDesigns();
     const {passports, failed: passportsFailed} = usePassportsByOwner(userRecord.uid);
+    const signIn = useUserSignInMethods(userRecord.uid);
 
     const [updating, setUpdating] = useState(false);
     const [pendingDeletionExpiresAt, setPendingDeletionExpiresAt] = useState<Date | null>(null);
@@ -724,13 +725,15 @@ export const UserDetailView = ({
 
             <UserSignInSection
                 user={userRecord}
+                signIn={signIn}
                 canManage={!readOnly && canManage}
                 onUpdated={onUpdateUser}
                 showToast={showToast}
             />
 
-            <UserAppLinksSection
+            <UserConnectionsSection
                 user={userRecord}
+                signIn={signIn}
                 canManage={!readOnly && canManage && userRecord.uid !== currentUser.uid}
                 showToast={showToast}
             />

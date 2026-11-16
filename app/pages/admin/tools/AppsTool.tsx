@@ -20,6 +20,7 @@ import { APP_PLATFORM_NAMES, APP_PLATFORMS, type AppPlatform, LINK_SHARED_FIELDS
 import { localized } from '~/lib/localized';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
+import { appBrand, ConnectionIcon } from '~/pages/ProfileConnectionRow';
 import { CreateSection } from '../CrudShell';
 import { UserAvatar } from '../UserRow';
 import { UserSearchAdd } from '../UserSearchAdd';
@@ -741,6 +742,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                         return (
                             <div key={app.id} className="admin-api-key-card">
                                 <div className="admin-api-key-head">
+                                    <ConnectionIcon brand={appBrand(app.platform ?? '')} small/>
                                     <span className="admin-api-key-name">{app.name}</span>
                                     <code className="record-code">{app.id}</code>
                                     <div className="admin-api-key-actions">

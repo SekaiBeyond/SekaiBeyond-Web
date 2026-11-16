@@ -5,35 +5,54 @@ import { callAdminChangeEmail, callGetSignInMethods, type SignInMethods } from '
 import type { UserRecord } from './types';
 import type { ShowToast } from './utils';
 
-/**
- * How an account signs in, and the way to give it a new address when its owner
- * has lost the mailbox and can't get a code. That skips the month between
- * changes, says so on the Records tab, and tells both addresses.
- */
-export const UserSignInSection = ({user, canManage, onUpdated, showToast}: {
-    user: UserRecord;
-    canManage: boolean;
-    onUpdated: (uid: string, changes: Partial<UserRecord>) => void;
-    showToast: ShowToast;
-}) => {
-    const {isEnglish} = useLanguage();
+/** How an account signs in, as the Sign-in and Connected Accounts sections both show it. */
+export interface UserSignIn {
+    /** Null until loaded. */
+    methods: SignInMethods | null;
+    failed: boolean;
+}
+
+/** How the account `uid` signs in, loaded once for its page. */
+export function useUserSignInMethods(uid: string): UserSignIn {
     const [methods, setMethods] = useState<SignInMethods | null>(null);
     const [failed, setFailed] = useState(false);
-    const [editing, setEditing] = useState(false);
-    const [email, setEmail] = useState('');
-    const [busy, setBusy] = useState(false);
 
     useEffect(() => {
         let stale = false;
         setMethods(null);
         setFailed(false);
-        setEditing(false);
-        callGetSignInMethods({uid: user.uid})
+        callGetSignInMethods({uid})
             .then(result => !stale && setMethods(result.data))
             .catch(() => !stale && setFailed(true));
         return () => {
             stale = true;
         };
+    }, [uid]);
+
+    return {methods, failed};
+}
+
+/**
+ * Whether an account has a password, and the way to give it a new address when
+ * its owner has lost the mailbox and can't get a code. That skips the month
+ * between changes, says so on the Records tab, and tells both addresses.
+ * Google is the Connected Accounts section's (UserConnectionsSection).
+ */
+export const UserSignInSection = ({user, signIn, canManage, onUpdated, showToast}: {
+    user: UserRecord;
+    signIn: UserSignIn;
+    canManage: boolean;
+    onUpdated: (uid: string, changes: Partial<UserRecord>) => void;
+    showToast: ShowToast;
+}) => {
+    const {isEnglish} = useLanguage();
+    const {methods, failed} = signIn;
+    const [editing, setEditing] = useState(false);
+    const [email, setEmail] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        setEditing(false);
     }, [user.uid]);
 
     const save = async (e: FormEvent) => {
@@ -62,30 +81,40 @@ export const UserSignInSection = ({user, canManage, onUpdated, showToast}: {
         }
     };
 
+    const passwordHelp = failed
+        ? (isEnglish ? 'Couldn’t load this.' : '加载失败。')
+        : !methods
+            ? (isEnglish ? 'Loading…' : '加载中…')
+            : methods.hasPassword
+                ? (isEnglish ? 'Set. They can sign in with their email and password.' : '已设置，可使用邮箱和密码登录。')
+                : methods.googleEmail
+                    ? (isEnglish ? 'Not set, so they sign in with Google.' : '未设置，目前使用 Google 登录。')
+                    : (isEnglish
+                        ? 'Not set, and no Google account: they’d set one with a code sent to their email.'
+                        : '未设置，也未绑定 Google：需通过发送到邮箱的验证码设置密码。');
+
+    // The rows of the account's own Account card in Settings, as staff see them.
     return (
         <div className="admin-group-section">
             <h4 className="admin-badges-title">{isEnglish ? 'Sign-in' : '登录方式'}</h4>
-            {failed ? (
-                <p>{isEnglish ? 'Couldn’t load this.' : '加载失败。'}</p>
-            ) : !methods ? (
-                <div className="spinner spinner-centered"/>
-            ) : (
-                <>
-                    <p>
-                        {isEnglish ? 'Password: ' : '密码：'}
-                        {methods.hasPassword ? (isEnglish ? 'set' : '已设置') : (isEnglish ? 'not set' : '未设置')}
-                    </p>
-                    <p>
-                        Google{isEnglish ? ': ' : '：'}
-                        {methods.googleEmail ?? (isEnglish ? 'not bound' : '未绑定')}
-                    </p>
+            <div className="settings-rows">
+                <div className="settings-row settings-row--account">
+                    <div className="settings-row-text">
+                        <span className="settings-row-title">{isEnglish ? 'Email' : '邮箱'}</span>
+                        <span className="settings-row-help">{user.email || (isEnglish ? 'None' : '无')}</span>
+                    </div>
                     {canManage && !editing && (
-                        <button type="button" className="admin-btn admin-btn--dashed" onClick={() => setEditing(true)}>
-                            {isEnglish ? 'Change Email' : '更改邮箱'}
+                        <button type="button" className="profile-action" onClick={() => setEditing(true)}>
+                            {isEnglish ? 'Change' : '更改'}
                         </button>
                     )}
                     {canManage && editing && (
                         <form className="settings-account-form" onSubmit={e => void save(e)}>
+                            <span className="settings-row-help">
+                                {isEnglish
+                                    ? 'For someone who has lost this mailbox and can’t get a code. It skips the month between changes, goes on the Records tab, and tells both addresses.'
+                                    : '适用于无法再访问此邮箱、收不到验证码的用户。此操作不受每月一次的更改限制，会记录在“记录”中，并通知新旧两个邮箱。'}
+                            </span>
                             <input
                                 type="email"
                                 required
@@ -96,7 +125,7 @@ export const UserSignInSection = ({user, canManage, onUpdated, showToast}: {
                             />
                             <div className="settings-account-actions">
                                 <button type="submit" className="admin-btn admin-btn--cta" disabled={busy}>
-                                    {isEnglish ? 'Save' : '保存'}
+                                    {isEnglish ? 'Change Email' : '更改邮箱'}
                                 </button>
                                 <button
                                     type="button"
@@ -109,8 +138,15 @@ export const UserSignInSection = ({user, canManage, onUpdated, showToast}: {
                             </div>
                         </form>
                     )}
-                </>
-            )}
+                </div>
+
+                <div className="settings-row settings-row--account">
+                    <div className="settings-row-text">
+                        <span className="settings-row-title">{isEnglish ? 'Password' : '密码'}</span>
+                        <span className="settings-row-help">{passwordHelp}</span>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

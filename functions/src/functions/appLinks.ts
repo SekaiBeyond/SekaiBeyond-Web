@@ -426,7 +426,8 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
 /**
  * An account's links and holds, app by app, for staff looking at it in the
  * Users tab: who it's linked to in each app, and which it's held to and until
- * when. Only apps with one or the other are listed.
+ * when. Listed are the apps it has one or the other in, and those it could
+ * link in, as its own Settings lists them.
  */
 export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -444,10 +445,12 @@ export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
         apps: apps.flatMap((app, i) => {
             const link = links.get(app.id);
             const hold = holds[i];
-            if (!link && !hold) return [];
+            if (!link && !hold && !app.accountLinking) return [];
             return [{
                 appId: app.id,
                 name: app.name,
+                platform: app.platform,
+                accountLinking: app.accountLinking,
                 link: link ? {
                     appUserId: link.appUserId,
                     appUserName: appLinkUserName(link.appUserName),

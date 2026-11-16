@@ -12,11 +12,25 @@ export const appBrand = (platform: AppPlatform): ConnectionBrand =>
 
 const BRAND_ICONS = {google: FcGoogle, wechat: SiWechat, app: FiGrid} as const;
 
+/** A brand's mark on its tile: a row's, or, `small`, beside a name, as in the Apps tool. */
+export const ConnectionIcon = ({brand, small = false}: {brand: ConnectionBrand; small?: boolean}) => {
+    const Icon = BRAND_ICONS[brand];
+    return (
+        <span
+            className={`settings-connection-icon settings-connection-icon--${brand}${small ? ' settings-connection-icon--small' : ''}`}
+            aria-hidden="true"
+        >
+            <Icon/>
+        </span>
+    );
+};
+
 /** Connected, not, or connected but switched off on the other side for now. */
 export type ConnectionStatus = 'on' | 'off' | 'paused';
 
 /**
- * One row of Settings' Connected Accounts card: the other side's mark, its
+ * One row of a Connected Accounts list, in Settings or on an account's page in
+ * the admin Users tab: the other side's mark, its
  * name with what it is under it, a badge saying whether it's connected, then
  * the details, the button, and under them anything the button opens.
  */
@@ -32,29 +46,24 @@ export const ConnectionRow = ({brand, title, kind, status, help, state, details,
     details?: ReactNode;
     action?: ReactNode;
     children?: ReactNode;
-}) => {
-    const Icon = BRAND_ICONS[brand];
-    return (
-        <div className="settings-row settings-row--connection">
-            <span className={`settings-connection-icon settings-connection-icon--${brand}`} aria-hidden="true">
-                <Icon/>
+}) => (
+    <div className="settings-row settings-row--connection">
+        <ConnectionIcon brand={brand}/>
+        <div className="settings-row-text">
+            <span className="settings-connection-head">
+                <span className="settings-row-title">{title}</span>
+                {status && (
+                    <span className={`settings-connection-badge settings-connection-badge--${status.value}`}>
+                        {status.label}
+                    </span>
+                )}
             </span>
-            <div className="settings-row-text">
-                <span className="settings-connection-head">
-                    <span className="settings-row-title">{title}</span>
-                    {status && (
-                        <span className={`settings-connection-badge settings-connection-badge--${status.value}`}>
-                            {status.label}
-                        </span>
-                    )}
-                </span>
-                {kind && <span className="settings-connection-kind">{kind}</span>}
-                {help && <span className="settings-row-help">{help}</span>}
-                {state && <span className="settings-row-state">{state}</span>}
-                {details}
-            </div>
-            {action}
-            {children && <div className="settings-connection-panel">{children}</div>}
+            {kind && <span className="settings-connection-kind">{kind}</span>}
+            {help && <span className="settings-row-help">{help}</span>}
+            {state && <span className="settings-row-state">{state}</span>}
+            {details}
         </div>
-    );
-};
+        {action}
+        {children && <div className="settings-connection-panel">{children}</div>}
+    </div>
+);

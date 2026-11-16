@@ -105,10 +105,12 @@ const GoogleRow = ({signIn, showToast}: {signIn: SignInState; showToast: ShowToa
             {!bound && binding && (
                 <div className="settings-google-bind">
                     <GoogleButton onToken={idToken => void bind(idToken)}/>
-                    <button type="button" className="admin-btn admin-btn--dashed" disabled={busy}
-                            onClick={() => setBinding(false)}>
-                        {isEnglish ? 'Cancel' : '取消'}
-                    </button>
+                    <div className="settings-account-actions">
+                        <button type="button" className="admin-btn admin-btn--dashed" disabled={busy}
+                                onClick={() => setBinding(false)}>
+                            {isEnglish ? 'Cancel' : '取消'}
+                        </button>
+                    </div>
                 </div>
             )}
         </ConnectionRow>

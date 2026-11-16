@@ -694,6 +694,9 @@ export const callUndoAppLink = (data: {token: string; password: string}) =>
 export interface UserAppLink {
     appId: string;
     name: string;
+    platform: AppPlatform;
+    /** Off for an app that has stopped linking accounts, whose links don't work for now. */
+    accountLinking: boolean;
     link: {appUserId: string; appUserName: string; linkedAt: string | null} | null;
     /** Keeping it from linking anyone in the app but `appUserId`, until `until`. */
     hold: {appUserId: string; until: string} | null;

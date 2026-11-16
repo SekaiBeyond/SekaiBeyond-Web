@@ -157,6 +157,12 @@
     margin-top: 4px;
 }
 
+/* A row's button, as tall as the buttons its forms and panels open (auth.css). */
+.settings-row > .profile-action,
+.settings-devices-footer > .profile-action {
+    height: 40px;
+}
+
 .settings-connection-icon {
     display: flex;
     align-items: center;
@@ -184,6 +190,20 @@
 .settings-connection-icon--app {
     background: linear-gradient(135deg, rgba(255, 107, 157, 0.14), rgba(254, 202, 87, 0.22));
     color: var(--color-primary);
+}
+
+/* Beside a name, as on an app's card in the Apps tool. */
+.settings-connection-icon--small {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    font-size: 15px;
+    box-shadow: none;
+}
+
+.settings-connection-icon--wechat.settings-connection-icon--small {
+    font-size: 16px;
 }
 
 .settings-connection-head {
