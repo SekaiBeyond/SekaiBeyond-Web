@@ -1,3 +1,5 @@
+import { eitherLanguage } from '~/lib/localized';
+
 /**
  * What an app an account is linked in reads of it, as Settings and the Apps
  * tool put it. A copy of LINK_SHARED_FIELDS in functions/src/utils/appLinks.ts,
@@ -13,11 +15,12 @@ export const linkSharedFields = (isEnglish: boolean): string =>
     isEnglish ? LINK_SHARED_FIELDS.en : LINK_SHARED_FIELDS.zh;
 
 /**
- * What an app is called for the reader: its English name in English, where it
- * has one. As appNameIn in functions/src/utils/apps.ts, which the emails use.
+ * What an app is called for the reader: its name in their language, else its
+ * other one, else its ID. As appNameIn in functions/src/utils/apps.ts, which
+ * the emails use.
  */
-export const appNameIn = (app: {name: string; nameEn?: string}, isEnglish: boolean): string =>
-    isEnglish && app.nameEn ? app.nameEn : app.name;
+export const appNameIn = (app: {nameEn: string; nameCn: string}, appId: string, isEnglish: boolean): string =>
+    eitherLanguage(isEnglish, app.nameEn, app.nameCn) || appId;
 
 /**
  * What an app runs on, for Settings to show it by. A copy of APP_PLATFORMS in

@@ -23,7 +23,12 @@ export const UndoAppLinkPage = () => {
     const [password, setPassword] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
-    const [undone, setUndone] = useState<{name: string; nameEn: string; heldUntil: Date | null} | null>(null);
+    const [undone, setUndone] = useState<{
+        appId: string;
+        nameEn: string;
+        nameCn: string;
+        heldUntil: Date | null
+    } | null>(null);
 
     // Taken off the URL so it isn't left in the browser's history. Kept from the
     // first run: a second finds the URL already clean.
@@ -41,8 +46,9 @@ export const UndoAppLinkPage = () => {
         try {
             const {data} = await callUndoAppLink({token, password});
             setUndone({
-                name: data.appName,
-                nameEn: data.appNameEn ?? '',
+                appId: data.appId,
+                nameEn: data.nameEn,
+                nameCn: data.nameCn,
                 heldUntil: data.heldUntil ? new Date(data.heldUntil) : null,
             });
         } catch (err) {
@@ -53,7 +59,7 @@ export const UndoAppLinkPage = () => {
         }
     };
 
-    const appName = undone ? appNameIn(undone, isEnglish) : '';
+    const appName = undone ? appNameIn(undone, undone.appId, isEnglish) : '';
 
     return (
         <>

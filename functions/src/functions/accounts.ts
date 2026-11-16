@@ -49,7 +49,7 @@ import {
     disownLinkInTxn,
     readLinkDisown,
 } from "../utils/appLinks";
-import { appsCol, readApp } from "../utils/apps";
+import { appRecordName, appsCol, readApp } from "../utils/apps";
 import { CODE_MAIL_HOURLY_CAP } from "../utils/config";
 import { deletionPending } from "../utils/deletion";
 import {
@@ -901,7 +901,7 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
                 targetUid: uid,
                 targetName: displayName,
                 appId: link.appId,
-                appName: readApp(linkApps[i])?.name ?? link.appId,
+                appName: appRecordName(readApp(linkApps[i]), link.appId),
                 appUserName: appLinkUserName(link.appUserName),
                 linkEndedBy: "email-undo",
             }));

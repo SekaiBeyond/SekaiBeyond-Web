@@ -1994,6 +1994,16 @@
     color: var(--color-text-muted);
 }
 
+/* Apps tool form: its names side by side, their note under both, labelled as
+   its other fields are rather than as .admin-form-grid's. */
+.admin-app-names {
+    margin-bottom: 0;
+}
+
+.admin-app-names label span {
+    font-weight: 700;
+}
+
 /* Apps tool form: the sign-in fields, boxed under the checkbox that shows them. */
 .admin-app-signin-fields {
     display: flex;

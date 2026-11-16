@@ -11,6 +11,8 @@ interface BilingualFormFieldProps {
     placeholderCn?: string;
     multiline?: boolean;
     fullWidth?: boolean;
+    maxLength?: number;
+    disabled?: boolean;
 }
 
 export const BilingualFormField = ({
@@ -18,6 +20,7 @@ export const BilingualFormField = ({
                                        onChange, onChangeCn,
                                        placeholder, placeholderCn,
                                        multiline = false, fullWidth = false,
+                                       maxLength, disabled,
                                    }: BilingualFormFieldProps) => {
     const {isEnglish} = useLanguage();
     const Tag = multiline ? 'textarea' : 'input';
@@ -33,6 +36,8 @@ export const BilingualFormField = ({
                     onChange={e => onChange(e.target.value)}
                     className={cls}
                     placeholder={placeholder ?? (isEnglish ? label : labelCn)}
+                    maxLength={maxLength}
+                    disabled={disabled}
                 />
             </label>
             <label className={fullCls}>
@@ -42,6 +47,8 @@ export const BilingualFormField = ({
                     onChange={e => onChangeCn(e.target.value)}
                     className={cls}
                     placeholder={placeholderCn ?? (isEnglish ? `${label} in Chinese` : `中文${labelCn}`)}
+                    maxLength={maxLength}
+                    disabled={disabled}
                 />
             </label>
         </>

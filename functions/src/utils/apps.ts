@@ -86,13 +86,13 @@ export const isAppPlatform = (raw: unknown): raw is AppPlatform =>
 
 /** An `apps` doc. Server only (see firestore.rules). */
 interface AppDoc {
-    name: string;
     /**
-     * What it's called for people reading the site in English, where that
-     * isn't `name`, as for an app named in Chinese; "" when it's `name` in
-     * both. See appNameIn. Missing on an app saved before there was one.
+     * What it's called in English and in Chinese, either or both "": people
+     * see the one in their language, else the other, else its ID (appNameIn).
+     * Missing on an app saved when it had one `name`: see readApp.
      */
     nameEn: string;
+    nameCn: string;
     /** Missing on an app saved before there was one: see readApp. */
     platform: AppPlatform;
     /**
@@ -126,9 +126,20 @@ export interface RegisteredApp extends AppDoc {
     id: string;
 }
 
-/** What `app` is called in `language`: its English name in English, where it has one. */
-export const appNameIn = (app: Pick<AppDoc, "name" | "nameEn">, language: MailLanguage): string =>
-    language === "en" && app.nameEn ? app.nameEn : app.name;
+/** What `app` is called in `language`: its name in that language, else its other one, else its ID. */
+export const appNameIn = (app: Pick<RegisteredApp, "id" | "nameEn" | "nameCn">, language: MailLanguage): string =>
+    (language === "en" ? app.nameEn || app.nameCn : app.nameCn || app.nameEn) || app.id;
+
+/** What records call an app: in English where it can be, as they name badges, or `appId` once it's gone. */
+export const appRecordName = (app: RegisteredApp | null, appId: string): string =>
+    app ? appNameIn(app, "en") : appId;
+
+/**
+ * The one name an app had before it had one in each language, taken as the
+ * language it's written in: Chinese if there's any Chinese in it.
+ */
+export const splitLegacyAppName = (name: string): {nameEn: string; nameCn: string} =>
+    /\p{Script=Han}/u.test(name) ? {nameEn: "", nameCn: name} : {nameEn: name, nameCn: ""};
 
 /** Whether people can sign in to `app` with their accounts here. */
 export function hasSignIn(app: Pick<AppDoc, "redirectUris" | "firebaseProjectId" | "serviceAccount">): boolean {
@@ -139,14 +150,16 @@ export const appsCol = () => db.collection("apps");
 
 export function readApp(snap: FirebaseFirestore.DocumentSnapshot): RegisteredApp | null {
     // `ownerUid`: the one maintainer an app had before it could have several,
-    // until it's next saved (saveApp deletes it, and `scopes`, what it once
+    // and `name`, the one name it had before it had one in each language,
+    // until it's next saved (saveApp deletes them, and `scopes`, what it once
     // read for the person signed in, which nothing reads).
-    const data = snap.data() as (Partial<AppDoc> & {ownerUid?: string}) | undefined;
+    const data = snap.data() as (Partial<AppDoc> & {ownerUid?: string; name?: string}) | undefined;
     if (!data) return null;
     return {
         id: snap.id,
-        name: data.name ?? snap.id,
-        nameEn: data.nameEn ?? "",
+        ...(data.nameEn === undefined && data.nameCn === undefined
+            ? splitLegacyAppName(data.name ?? "")
+            : {nameEn: data.nameEn ?? "", nameCn: data.nameCn ?? ""}),
         // Saved before there was a platform: the one app that linked accounts
         // then was the WeChat mini program, so one with linking on is that,
         // until it's next saved (saveApp writes its platform).

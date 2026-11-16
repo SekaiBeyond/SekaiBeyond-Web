@@ -45,7 +45,7 @@ export const UserConnectionsSection = ({user, signIn, canManage, showToast}: {
     });
 
     const lift = async (app: UserAppLink) => {
-        const appName = appNameIn(app, isEnglish);
+        const appName = appNameIn(app, app.appId, isEnglish);
         if (!window.confirm(isEnglish
             ? `Let ${user.displayName} link another ${appName} account now? Only do this when the one they were linked to was theirs too, or wasn't theirs at all.`
             : `允许 ${user.displayName} 现在绑定另一个${appName}账号吗？仅在其此前绑定的账号也属于本人、或根本不是本人时才这样做。`)) return;
@@ -109,7 +109,7 @@ export const UserConnectionsSection = ({user, signIn, canManage, showToast}: {
                         <ConnectionRow
                             key={app.appId}
                             brand={appBrand(app.platform)}
-                            title={appNameIn(app, isEnglish)}
+                            title={appNameIn(app, app.appId, isEnglish)}
                             kind={platform ? (isEnglish ? platform.en : platform.zh) : (isEnglish ? 'App' : '应用')}
                             status={{
                                 value: status,

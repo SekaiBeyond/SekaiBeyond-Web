@@ -120,7 +120,7 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
 }) => {
     const {isEnglish} = useLanguage();
     const language = isEnglish ? 'en' : 'zh';
-    const appName = appNameIn(app, isEnglish);
+    const appName = appNameIn(app, app.appId, isEnglish);
     const watched = useLinkRequest(started.requestId);
     const open = watched?.status === 'waiting' || watched?.status === 'claimed';
     const now = useServerNow(!!open, started.clockOffset);
@@ -374,7 +374,7 @@ export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
     };
 
     const unlink = async (app: LinkableApp) => {
-        const appName = appNameIn(app, isEnglish);
+        const appName = appNameIn(app, app.appId, isEnglish);
         const confirmed = window.confirm(isEnglish
             ? `Unlink ${appName}? It stops seeing your account at once. Either side can only link someone else after 30 days.`
             : `确定要解绑${appName}吗？解绑后它将立即无法查看您的账号信息。30 天内双方都无法绑定其他账号。`);
@@ -417,7 +417,7 @@ export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
     const dateFormat = {year: 'numeric', month: 'long', day: 'numeric'} as const;
 
     return apps.map(app => {
-        const appName = appNameIn(app, isEnglish);
+        const appName = appNameIn(app, app.appId, isEnglish);
         const linkedAt = app.link?.linkedAt
             ? new Date(app.link.linkedAt).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', dateFormat)
             : null;
