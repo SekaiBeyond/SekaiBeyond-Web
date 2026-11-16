@@ -112,17 +112,21 @@ const readRequestId = (raw: unknown): string => {
 /**
  * The apps the caller may link, and their links: every app that links
  * accounts, and any other they're still linked in, which they may only remove.
+ * Oldest first, so an app keeps its place, whatever it's renamed, and a new
+ * one joins at the end.
  */
 export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request, "account");
-    const [appsSnap, linksSnap] = await Promise.all([appsCol().get(), accountLinksQuery(uid).get()]);
+    const [appsSnap, linksSnap] = await Promise.all([
+        appsCol().orderBy("createdAt").get(),
+        accountLinksQuery(uid).get(),
+    ]);
     const links = new Map(linksSnap.docs.map(doc => {
         const link = doc.data() as AppLinkDoc;
         return [link.appId, link];
     }));
     const apps = appsSnap.docs.map(doc => readApp(doc)!)
-        .filter(app => app.accountLinking || links.has(app.id))
-        .sort((a, b) => appNameIn(a, "en").localeCompare(appNameIn(b, "en")));
+        .filter(app => app.accountLinking || links.has(app.id));
     return {
         apps: apps.map(app => {
             const link = links.get(app.id);
@@ -434,20 +438,22 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
  * An account's links and holds, app by app, for staff looking at it in the
  * Users tab: who it's linked to in each app, and which it's held to and until
  * when. Listed are the apps it has one or the other in, and those it could
- * link in, as its own Settings lists them.
+ * link in, as its own Settings lists them, and in the same order: oldest first.
  */
 export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireStaff(uid);
     const targetUid = validateDocId((request.data as {uid?: unknown} | null)?.uid, "uid");
 
-    const [appsSnap, linksSnap] = await Promise.all([appsCol().get(), accountLinksQuery(targetUid).get()]);
+    const [appsSnap, linksSnap] = await Promise.all([
+        appsCol().orderBy("createdAt").get(),
+        accountLinksQuery(targetUid).get(),
+    ]);
     const links = new Map(linksSnap.docs.map(doc => {
         const link = doc.data() as AppLinkDoc;
         return [link.appId, link];
     }));
-    const apps = appsSnap.docs.map(doc => readApp(doc)!)
-        .sort((a, b) => appNameIn(a, "en").localeCompare(appNameIn(b, "en")));
+    const apps = appsSnap.docs.map(doc => readApp(doc)!);
     const holds = await Promise.all(apps.map(app => readAccountHold(app.id, targetUid)));
     return {
         apps: apps.flatMap((app, i) => {

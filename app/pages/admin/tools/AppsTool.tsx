@@ -560,8 +560,8 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                 value={draft.nameEn} valueCn={draft.nameCn}
                                 onChange={v => set('nameEn', v)}
                                 onChangeCn={v => set('nameCn', v)}
-                                placeholder="e.g. SKBY Manager"
-                                placeholderCn="例如：彼世界小程序"
+                                placeholder={isEnglish ? 'e.g. SKBY Manager' : '例如：SKBY Manager'}
+                                placeholderCn={isEnglish ? 'e.g. 彼世界小程序' : '例如：彼世界小程序'}
                                 maxLength={60}
                                 disabled={saving}
                             />

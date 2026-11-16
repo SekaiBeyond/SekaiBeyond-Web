@@ -9,7 +9,6 @@ import {
     APP_MAINTAINERS_MAX,
     APP_PLATFORMS,
     APP_REDIRECT_URIS_MAX,
-    appNameIn,
     type AppPlatform,
     appRecordName,
     appsCol,
@@ -300,7 +299,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerName,
             appId,
-            appName: appNameIn({id: appId, nameEn: fields.nameEn, nameCn: fields.nameCn}, "en"),
+            appName: appRecordName(fields, appId),
         }));
     });
     return {saved: true, appId};

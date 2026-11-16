@@ -556,36 +556,44 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 : <>为 {attendee} 签发了 {event} 的 {count} 张门票，通过 {via} 售出{r.apiOrderId
                     && <>（订单 <span className="record-code">{r.apiOrderId}</span>）</>}</>;
         }
-        case 'api-key-create':
+        // An app with no name is recorded as "": its ID stands in.
+        case 'api-key-create': {
+            const app = r.appName || r.appId;
             return isEnglish
                 ? <>created API key {r.apiKeyName}{r.apiKeyHint && <> <span
-                    className="record-code">{r.apiKeyHint}</span></>}{r.appName && <> for {r.appName}</>}</>
-                : <>为 {r.appName ? `${r.appName} ` : ''}创建了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}{app && <> for {app}</>}</>
+                : <>为 {app ? `${app} ` : ''}创建了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
                     className="record-code">{r.apiKeyHint}</span></>}</>;
-        case 'api-key-rename':
+        }
+        case 'api-key-rename': {
+            const app = r.appName || r.appId;
             return isEnglish
                 ? <>renamed API key {r.oldName}{r.apiKeyHint && <> <span
-                    className="record-code">{r.apiKeyHint}</span></>} to {r.newName}{r.appName && <> ({r.appName})</>}</>
-                : <>将 {r.appName ? `${r.appName} 的 ` : ''}API 密钥 {r.oldName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>} to {r.newName}{app && <> ({app})</>}</>
+                : <>将 {app ? `${app} 的 ` : ''}API 密钥 {r.oldName}{r.apiKeyHint && <> <span
                     className="record-code">{r.apiKeyHint}</span></>} 重命名为 {r.newName}</>;
-        case 'api-key-revoke':
+        }
+        case 'api-key-revoke': {
+            const app = r.appName || r.appId;
             return isEnglish
                 ? <>revoked and deleted API key {r.apiKeyName}{r.apiKeyHint && <> <span
-                    className="record-code">{r.apiKeyHint}</span></>}{r.appName && <> ({r.appName})</>}</>
-                : <>吊销并删除了 {r.appName ? `${r.appName} 的 ` : ''}API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}{app && <> ({app})</>}</>
+                : <>吊销并删除了 {app ? `${app} 的 ` : ''}API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
                     className="record-code">{r.apiKeyHint}</span></>}</>;
+        }
+        // The app's ID is shown anyway, so only a name goes before it.
         case 'app-create':
             return isEnglish
-                ? <>registered app {r.appName} <span className="record-code">{r.appId}</span></>
-                : <>登记了应用 {r.appName} <span className="record-code">{r.appId}</span></>;
+                ? <>registered app {r.appName && <>{r.appName} </>}<span className="record-code">{r.appId}</span></>
+                : <>登记了应用 {r.appName && <>{r.appName} </>}<span className="record-code">{r.appId}</span></>;
         case 'app-update':
             return isEnglish
-                ? <>changed app {r.appName} <span className="record-code">{r.appId}</span></>
-                : <>修改了应用 {r.appName} <span className="record-code">{r.appId}</span></>;
+                ? <>changed app {r.appName && <>{r.appName} </>}<span className="record-code">{r.appId}</span></>
+                : <>修改了应用 {r.appName && <>{r.appName} </>}<span className="record-code">{r.appId}</span></>;
         case 'app-delete':
             return isEnglish
-                ? <>removed app {r.appName} <span className="record-code">{r.appId}</span></>
-                : <>移除了应用 {r.appName} <span className="record-code">{r.appId}</span></>;
+                ? <>removed app {r.appName && <>{r.appName} </>}<span className="record-code">{r.appId}</span></>
+                : <>移除了应用 {r.appName && <>{r.appName} </>}<span className="record-code">{r.appId}</span></>;
         case 'scheduled-mail-drain': {
             const sent = r.sentCount ?? 0;
             return isEnglish

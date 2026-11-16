@@ -130,9 +130,13 @@ export interface RegisteredApp extends AppDoc {
 export const appNameIn = (app: Pick<RegisteredApp, "id" | "nameEn" | "nameCn">, language: MailLanguage): string =>
     (language === "en" ? app.nameEn || app.nameCn : app.nameCn || app.nameEn) || app.id;
 
-/** What records call an app: in English where it can be, as they name badges, or `appId` once it's gone. */
-export const appRecordName = (app: RegisteredApp | null, appId: string): string =>
-    app ? appNameIn(app, "en") : appId;
+/**
+ * What records call an app: in English where it can be, as they name badges;
+ * "" when it has no name, as the Records tab then shows its ID, which a record
+ * keeps beside it; and `appId` once it's gone.
+ */
+export const appRecordName = (app: Pick<AppDoc, "nameEn" | "nameCn"> | null, appId: string): string =>
+    app ? app.nameEn || app.nameCn : appId;
 
 /**
  * The one name an app had before it had one in each language, taken as the
