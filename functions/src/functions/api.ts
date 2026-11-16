@@ -7,7 +7,9 @@ import { checkApiKeyRateLimit, consumeRateLimit, normalizeGroup, type UserGroup 
 import { type ApiKeyDoc, apiKeysCol, type ApiScope, hashApiKey, isApiKeyShaped } from "../utils/apiKeys";
 import {
     APP_ID_RE,
+    appNameIn,
     appOrigins,
+    appRecordName,
     appsCol,
     CODE_VERIFIER_RE,
     hasSignIn,
@@ -1151,6 +1153,7 @@ async function listLinks(key: ApiKey, query: Record<string, unknown>): Promise<A
  */
 async function deleteLink(key: ApiKey, appUserId: string, query: Record<string, unknown>): Promise<ApiReply> {
     const app = await requireLinkingApp(key);
+    const language = readMailLanguage(query.language);
     const ref = appLinkRef(app.id, readAppUserId(appUserId));
     const unlinked = await db.runTransaction(async (txn) => {
         const link = (await txn.get(ref)).data() as AppLinkDoc | undefined;
@@ -1163,7 +1166,7 @@ async function deleteLink(key: ApiKey, appUserId: string, query: Record<string, 
             targetUid: link.uid,
             targetName: displayName,
             appId: app.id,
-            appName: app.name,
+            appName: appRecordName(app, app.id),
             appUserName: appLinkUserName(link.appUserName),
             apiKeyName: key.name,
         }));
@@ -1171,7 +1174,7 @@ async function deleteLink(key: ApiKey, appUserId: string, query: Record<string, 
     });
     if (unlinked?.email) {
         await sendNotice(await appLinkChangedMail(
-            unlinked.email, app.name, unlinked.appUserName, "unlinked", readMailLanguage(query.language)));
+            unlinked.email, appNameIn(app, language), unlinked.appUserName, "unlinked", language));
     }
     return {status: 200, body: {unlinked: !!unlinked}};
 }

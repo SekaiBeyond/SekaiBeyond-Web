@@ -10,6 +10,7 @@ import {
     APP_PLATFORMS,
     APP_REDIRECT_URIS_MAX,
     type AppPlatform,
+    appRecordName,
     appsCol,
     CODE_CHALLENGE_RE,
     FIREBASE_PROJECT_ID_RE,
@@ -21,6 +22,7 @@ import {
     readApp,
     type RegisteredApp,
     SERVICE_ACCOUNT_RE,
+    splitLegacyAppName,
     validateAppId,
 } from "../utils/apps";
 import { BATCH_LIMIT } from "../utils/config";
@@ -41,7 +43,9 @@ import { sanitizeDisplayText, validateBoolean, validateDocId, validateStr } from
 const APP_NAME_MAX = 60;
 
 interface AppInput {
-    name: string;
+    /** Either or both "", when it's shown by its ID. */
+    nameEn: string;
+    nameCn: string;
     maintainerUids: string[];
     redirectUris: string[];
     firebaseProjectId: string;
@@ -57,8 +61,12 @@ interface AppInput {
 
 function parseAppInput(raw: unknown): AppInput {
     const input = (raw ?? {}) as Record<string, unknown>;
-    const name = sanitizeDisplayText(validateStr(input.name, "name", APP_NAME_MAX, true));
-    if (!name) throw new HttpsError("invalid-argument", "name is required.");
+    const readName = (field: "nameEn" | "nameCn" | "name") =>
+        sanitizeDisplayText(validateStr(input[field], field, APP_NAME_MAX));
+    // An Apps tool loaded before there were two names sends its one.
+    const names = input.nameEn === undefined && input.nameCn === undefined
+        ? splitLegacyAppName(readName("name"))
+        : {nameEn: readName("nameEn"), nameCn: readName("nameCn")};
     const accountLinking = input.accountLinking === undefined
         ? undefined
         : validateBoolean(input.accountLinking, "accountLinking");
@@ -94,7 +102,7 @@ function parseAppInput(raw: unknown): AppInput {
     // people in needs where to hand them back to, its project and its service account.
     if (redirectUris.length === 0 && rawProject === "" && rawServiceAccount === "") {
         return {
-            name,
+            ...names,
             maintainerUids,
             redirectUris: [],
             firebaseProjectId: "",
@@ -114,7 +122,7 @@ function parseAppInput(raw: unknown): AppInput {
         throw new HttpsError("invalid-argument", "serviceAccount must be a service account's address.");
     }
     return {
-        name,
+        ...names,
         maintainerUids,
         redirectUris,
         firebaseProjectId: rawProject,
@@ -215,7 +223,8 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
     return {
         apps: apps.map(app => ({
             id: app.id,
-            name: app.name,
+            nameEn: app.nameEn,
+            nameCn: app.nameCn,
             creator: app.createdBy ? appPerson(app.createdBy, users, app.createdByName) : null,
             maintainers: app.maintainerUids.map(id => appPerson(id, users)),
             redirectUris: app.redirectUris,
@@ -273,13 +282,15 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             });
         } else {
             // Left over from before (see readApp): ownerUid, the one maintainer
-            // it had before it could have several, and scopes, what it once
+            // it had before it could have several, name, the one name it had
+            // before it had one in each language, and scopes, what it once
             // read for the person signed in.
             txn.update(ref, {
                 ...rest,
                 ...(accountLinking === undefined ? {} : {accountLinking}),
                 ...(platform === undefined ? {} : {platform}),
                 ownerUid: FieldValue.delete(),
+                name: FieldValue.delete(),
                 scopes: FieldValue.delete(),
                 updatedAt: now,
             });
@@ -288,7 +299,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerName,
             appId,
-            appName: fields.name,
+            appName: appRecordName(fields, appId),
         }));
     });
     return {saved: true, appId};
@@ -320,9 +331,9 @@ export const deleteApp = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerName,
             appId,
-            appName: app.name,
+            appName: appRecordName(app, appId),
         }));
-        return {appName: app.name, callerName};
+        return {appName: appRecordName(app, appId), callerName};
     });
 
     // Each link goes on its account's record, under a fixed ID: a link and its
@@ -376,8 +387,8 @@ function redirectFor(app: RegisteredApp, raw: unknown): string {
 }
 
 /**
- * What the sign-in page shows of an app before anyone signs in: its name and
- * the names of its maintainers. Refuses an
+ * What the sign-in page shows of an app before anyone signs in: its names
+ * (see appNameIn) and the names of its maintainers. Refuses an
  * unknown app, or a place to hand back to that isn't its own, before anyone
  * is asked to sign in.
  */
@@ -389,7 +400,7 @@ export const getAppSignInInfo = onCall({maxInstances: 20}, async (request) => {
     const maintainerNames = app.maintainerUids.map(id => appPerson(id, users))
         .filter(person => !person.deleted && person.name)
         .map(person => person.name);
-    return {name: app.name, maintainerNames};
+    return {nameEn: app.nameEn, nameCn: app.nameCn, maintainerNames};
 });
 
 /**

@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
-import { appsCol, readApp, validateAppId } from "../utils/apps";
+import { appRecordName, appsCol, readApp, validateAppId } from "../utils/apps";
 import { getEventDoc } from "../utils/events";
 import { recordDoc, recordRef } from "../utils/records";
 import { sanitizeDisplayText, validateDocId, validateStr, validateStringArray } from "../utils/validation";
@@ -88,7 +88,7 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerName,
             appId,
-            appName: app.name,
+            appName: appRecordName(app, appId),
             apiKeyName: name,
             apiKeyHint: hint,
         }));
@@ -123,7 +123,7 @@ export const renameApiKey = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerName,
             appId: data.appId,
-            appName: appSnap?.get("name") as string ?? data.appId,
+            appName: appRecordName(appSnap && readApp(appSnap), data.appId),
             apiKeyName: name,
             apiKeyHint: data.hint ?? "",
             oldName,
@@ -155,7 +155,7 @@ export const revokeApiKey = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerName,
             appId: data.appId,
-            appName: appSnap?.get("name") as string ?? data.appId,
+            appName: appRecordName(appSnap && readApp(appSnap), data.appId),
             apiKeyName: data.name ?? "",
             apiKeyHint: data.hint ?? "",
         }));

@@ -16,11 +16,12 @@ import {
     callSaveApp,
     functionsErrorCode,
 } from '~/lib/firebase';
-import { APP_PLATFORM_NAMES, APP_PLATFORMS, type AppPlatform, LINK_SHARED_FIELDS } from '~/lib/appLinks';
+import { APP_PLATFORM_NAMES, APP_PLATFORMS, appNameIn, type AppPlatform, LINK_SHARED_FIELDS } from '~/lib/appLinks';
 import { localized } from '~/lib/localized';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { appBrand, ConnectionIcon } from '~/pages/ProfileConnectionRow';
+import { BilingualFormField } from '../BilingualFormField';
 import { CreateSection } from '../CrudShell';
 import { UserAvatar } from '../UserRow';
 import { UserSearchAdd } from '../UserSearchAdd';
@@ -83,7 +84,8 @@ const lifetimeOption = (k: ApiKeySummary): number => {
 };
 
 interface Draft {
-    name: string;
+    nameEn: string;
+    nameCn: string;
     maintainers: AppPerson[];
     signIn: boolean;
     redirectUris: string;
@@ -94,7 +96,8 @@ interface Draft {
 }
 
 const EMPTY_DRAFT: Draft = {
-    name: '',
+    nameEn: '',
+    nameCn: '',
     maintainers: [],
     signIn: true,
     redirectUris: '',
@@ -224,7 +227,8 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
 
     const startEdit = (app: AppSummary) => {
         setDraft({
-            name: app.name,
+            nameEn: app.nameEn ?? '',
+            nameCn: app.nameCn ?? '',
             maintainers: app.maintainers,
             signIn: app.redirectUris.length > 0,
             redirectUris: app.redirectUris.join('\n'),
@@ -251,7 +255,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const removeMaintainer = (uid: string) =>
         setDraft(prev => ({...prev, maintainers: prev.maintainers.filter(m => m.uid !== uid)}));
 
-    const canSave = !!draft.name.trim() && (
+    const canSave = (
         !draft.signIn || (
             redirectLines(draft.redirectUris).length > 0
             && !!draft.firebaseProjectId.trim()
@@ -264,7 +268,8 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
         setSaving(true);
         try {
             const fields = {
-                name: draft.name.trim(),
+                nameEn: draft.nameEn.trim(),
+                nameCn: draft.nameCn.trim(),
                 maintainerUids: draft.maintainers.map(m => m.uid),
                 redirectUris: draft.signIn ? redirectLines(draft.redirectUris) : [],
                 firebaseProjectId: draft.signIn ? draft.firebaseProjectId.trim() : '',
@@ -294,9 +299,10 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     };
 
     const remove = async (app: AppSummary) => {
+        const appName = appNameIn(app, app.id, isEnglish);
         if (!confirm(isEnglish
-            ? `Remove "${app.name}"? Nobody can sign in to it with their account here any more, its API keys are revoked, and the API stops answering it within seconds. Its own data stays with it.`
-            : `移除"${app.name}"？此后将无法再用本站账号登录该应用，其 API 密钥也将被吊销，API 会在几秒内停止响应它。该应用自己的数据不受影响。`)) return;
+            ? `Remove "${appName}"? Nobody can sign in to it with their account here any more, its API keys are revoked, and the API stops answering it within seconds. Its own data stays with it.`
+            : `移除"${appName}"？此后将无法再用本站账号登录该应用，其 API 密钥也将被吊销，API 会在几秒内停止响应它。该应用自己的数据不受影响。`)) return;
         setDeletingId(app.id);
         try {
             await callDeleteApp({appId: app.id});
@@ -362,7 +368,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                 eventIds: allEvents ? [] : eventIds,
                 expiresInDays,
             });
-            setCreated({name: keyName.trim(), appName: app.name, key: res.data.key});
+            setCreated({name: keyName.trim(), appName: appNameIn(app, app.id, isEnglish), key: res.data.key});
             resetKeyForm();
             void load(false);
         } catch (err) {
@@ -536,7 +542,9 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                 show={showForm}
                 setShow={setShowForm}
                 newLabel={isEnglish ? '+ Register App' : '+ 登记应用'}
-                title={editing ? (isEnglish ? `Edit ${editing.name}` : `编辑 ${editing.name}`) : (isEnglish ? 'Register App' : '登记应用')}
+                title={editing
+                    ? `${isEnglish ? 'Edit' : '编辑'} ${appNameIn(editing, editing.id, isEnglish)}`
+                    : (isEnglish ? 'Register App' : '登记应用')}
                 ctaLabel={editing ? (isEnglish ? 'Save' : '保存') : (isEnglish ? 'Register' : '登记')}
                 ctaBusyLabel={isEnglish ? 'Saving...' : '保存中...'}
                 busy={saving}
@@ -545,21 +553,26 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                 onCancel={resetForm}
             >
                 <div className="admin-api-key-form">
-                    <label className="admin-tickets-template-field">
-                        <span>{isEnglish ? 'Name' : '名称'}</span>
-                        <input
-                            className="admin-input"
-                            value={draft.name}
-                            onChange={e => set('name', e.target.value)}
-                            placeholder={isEnglish ? 'e.g. SKBY Manager' : '例如：SKBY Manager'}
-                            maxLength={60}
-                            disabled={saving}
-                        />
+                    <div className="admin-tickets-template-field">
+                        <div className="admin-form-grid admin-app-names">
+                            <BilingualFormField
+                                label="Name" labelCn="名称"
+                                value={draft.nameEn} valueCn={draft.nameCn}
+                                onChange={v => set('nameEn', v)}
+                                onChangeCn={v => set('nameCn', v)}
+                                placeholder={isEnglish ? 'e.g. SKBY Manager' : '例如：SKBY Manager'}
+                                placeholderCn={isEnglish ? 'e.g. 彼世界小程序' : '例如：彼世界小程序'}
+                                maxLength={60}
+                                disabled={saving}
+                            />
+                        </div>
                         <span className="admin-helper-text">
-                            {isEnglish ? 'Shown on this list and when people sign in to it.' : '在此列表中显示，并在用户登录时向用户显示。'}
+                            {isEnglish
+                                ? 'Both optional. People see the one in the language they use the site in, the other when it has none, and its ID when it has neither: on this list, in Settings, when they sign in to it, and in emails.'
+                                : '均为选填。用户看到的是与其浏览语言相同的名称，没有时显示另一种语言的名称，两者都没有时显示应用 ID：在此列表、“设置”、登录页面和邮件中均是如此。'}
                             {!editing && (isEnglish ? ' Its ID is made when it\'s registered.' : '应用 ID 会在登记时自动生成。')}
                         </span>
-                    </label>
+                    </div>
 
                     <div className="admin-tickets-template-field">
                         <span>
@@ -737,13 +750,16 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             {apps && apps.length > 0 && (
                 <div className="admin-api-key-list">
                     {apps.map(app => {
+                        const appName = appNameIn(app, app.id, isEnglish);
                         const signInEnabled = app.redirectUris.length > 0;
                         const addingKeyHere = keyAppId === app.id;
                         return (
                             <div key={app.id} className="admin-api-key-card">
                                 <div className="admin-api-key-head">
                                     <ConnectionIcon brand={appBrand(app.platform ?? '')} small/>
-                                    <span className="admin-api-key-name">{app.name}</span>
+                                    {(app.nameEn || app.nameCn) && (
+                                        <span className="admin-api-key-name">{appName}</span>
+                                    )}
                                     <code className="record-code">{app.id}</code>
                                     <div className="admin-api-key-actions">
                                         <button
@@ -881,8 +897,8 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                             <div className="admin-create-badge-form">
                                                 <h4 className="admin-badges-title">
                                                     {recreatingKey
-                                                        ? (isEnglish ? `Re-create API Key for ${app.name}` : `为 ${app.name} 重新创建 API 密钥`)
-                                                        : (isEnglish ? `New API Key for ${app.name}` : `为 ${app.name} 创建 API 密钥`)}
+                                                        ? (isEnglish ? `Re-create API Key for ${appName}` : `为 ${appName} 重新创建 API 密钥`)
+                                                        : (isEnglish ? `New API Key for ${appName}` : `为 ${appName} 创建 API 密钥`)}
                                                 </h4>
                                                 <div className="admin-api-key-form">
                                                     {recreatingKey ? (
@@ -894,13 +910,13 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                                                         className="record-code">{recreatingKey.hint}</code>.
                                                                     A key can't be shown
                                                                     again, so this makes a new one
-                                                                    under <strong>{app.name}</strong>.{' '}
+                                                                    under <strong>{appName}</strong>.{' '}
                                                                     {isExpired(recreatingKey, serverNow)
                                                                         ? 'Delete the expired one once the new key is in place.'
                                                                         : 'The old one keeps working until you revoke it, so swap the new key in first.'}</>
                                                                 : <>已从 <strong>{recreatingKey.name}</strong>{' '}
                                                                     <code
-                                                                        className="record-code">{recreatingKey.hint}</code> 填入设置。密钥无法再次显示，因此将在 <strong>{app.name}</strong> 下创建一个新密钥。
+                                                                        className="record-code">{recreatingKey.hint}</code> 填入设置。密钥无法再次显示，因此将在 <strong>{appName}</strong> 下创建一个新密钥。
                                                                     {isExpired(recreatingKey, serverNow)
                                                                         ? '新密钥启用后，可删除已过期的旧密钥。'
                                                                         : '旧密钥在吊销前仍然有效，请先换上新密钥。'}</>}

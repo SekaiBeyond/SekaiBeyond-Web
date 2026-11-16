@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { accountErrorMessage, linkRefusalMessage } from '~/lib/accountErrors';
-import { APP_PLATFORM_NAMES, linkSharedFields } from '~/lib/appLinks';
+import { APP_PLATFORM_NAMES, appNameIn, linkSharedFields } from '~/lib/appLinks';
 import { toDate } from '~/lib/collectionCache';
 import {
     callCancelAppLink,
@@ -120,6 +120,7 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
 }) => {
     const {isEnglish} = useLanguage();
     const language = isEnglish ? 'en' : 'zh';
+    const appName = appNameIn(app, app.appId, isEnglish);
     const watched = useLinkRequest(started.requestId);
     const open = watched?.status === 'waiting' || watched?.status === 'claimed';
     const now = useServerNow(!!open, started.clockOffset);
@@ -140,7 +141,7 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
         setBusy(true);
         try {
             await callConfirmAppLink({requestId: started.requestId, code: confirmCode, language});
-            showToast(isEnglish ? `${app.name} linked.` : `已绑定${app.name}。`, 'success');
+            showToast(isEnglish ? `${appName} linked.` : `已绑定${appName}。`, 'success');
             onLinked();
         } catch (err) {
             if (errorCode(err) === 'wrong-link-code') setConfirmCode('');
@@ -188,16 +189,16 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
             <form className="settings-link-panel" onSubmit={e => void confirm(e)}>
                 <span className="settings-row-help">
                     {isEnglish
-                        ? <>Linking <strong>{who}</strong> in {app.name}. {app.name} now shows its user four digits:
+                        ? <>Linking <strong>{who}</strong> in {appName}. {appName} now shows its user four digits:
                             enter them here to link that account to this one. Anyone can use a name, so only go on if
                             the code is on your own screen.</>
-                        : <>正在绑定{app.name}账号 <strong>{who}</strong>。{app.name}现在会向该用户显示 4
+                        : <>正在绑定{appName}账号 <strong>{who}</strong>。{appName}现在会向该用户显示 4
                             位数字：在此输入即可把该账号绑定到本账号。任何人都可以使用相同的名称，所以只有数字显示在您自己的屏幕上时才继续。</>}
                 </span>
                 <span className="settings-row-help">
                     {isEnglish
-                        ? `${app.name} will see your ${linkSharedFields(true)}, until either side unlinks.`
-                        : `在任一方解绑前，${app.name}可以看到您的${linkSharedFields(false)}。`}
+                        ? `${appName} will see your ${linkSharedFields(true)}, until either side unlinks.`
+                        : `在任一方解绑前，${appName}可以看到您的${linkSharedFields(false)}。`}
                 </span>
                 <input
                     className="admin-input auth-input settings-link-confirm"
@@ -206,7 +207,7 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     placeholder={isEnglish ? '4-digit code' : '4 位数字'}
-                    aria-label={isEnglish ? `Code ${app.name} shows` : `${app.name}显示的数字`}
+                    aria-label={isEnglish ? `Code ${appName} shows` : `${appName}显示的数字`}
                     disabled={busy}
                 />
                 <span className="settings-row-state">
@@ -238,33 +239,39 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
             </div>
             <div className="settings-link-guide">
                 {wechat ? (
-                    // The mini program's own words (sekai-beyond_uniapp, pages/user/sekai-link), which
-                    // it has only in Chinese: change these with them.
+                    // The mini program's own words (sekai-beyond_uniapp, pages/user/sekai-link): change
+                    // these with them. It has them only in Chinese (its en.json is for its web build), so
+                    // in English each is translated, then given as it reads there, to find on its screen.
                     <ol className="settings-link-steps">
                         <li>
                             {isEnglish
-                                ? <>In WeChat, open {app.name} and go to <strong>我的 → 网站账号</strong> (Me → Website
-                                    account).</>
-                                : <>在微信中打开{app.name}，进入<strong>「我的 → 网站账号」</strong>。</>}
+                                ? <>In WeChat, open {appName} and go to <strong>Me → Edit profile → Sekai Beyond
+                                    website account</strong> (<span
+                                    lang="zh-Hans">我的 → 编辑资料 → 彼世界网站账号</span>).</>
+                                : <>在微信中打开{appName}，进入<strong>「我的 → 编辑资料 → 彼世界网站账号」</strong>。</>}
                         </li>
                         <li>
                             {isEnglish
-                                ? <>Tap <strong>扫码绑定</strong> (Scan to link) and scan this code, or
-                                    tap <strong>输入 6 位数字</strong> and type the six digits under it.</>
+                                ? <>Tap <strong>Scan to link</strong> (<span lang="zh-Hans">扫码绑定</span>) and scan
+                                    this
+                                    code, or tap <strong>Enter 6 digits</strong> (<span
+                                        lang="zh-Hans">输入 6 位数字</span>)
+                                    and type the six digits under it.</>
                                 : <>点<strong>「扫码绑定」</strong>扫描此二维码，或点<strong>「输入 6
                                     位数字」</strong>输入下方的数字。</>}
                         </li>
                         <li>
                             {isEnglish
-                                ? <>Check it’s your account and tap <strong>是我的账号，继续</strong> (That’s me).
-                                    The mini program then shows four digits: enter them here.</>
+                                ? <>Check it’s your account and tap <strong>That’s my account, continue</strong> (<span
+                                    lang="zh-Hans">是我的账号，继续</span>). The mini program then shows four digits:
+                                    enter them here.</>
                                 : <>确认是您的账号后点<strong>「是我的账号，继续」</strong>，再在此输入小程序显示的 4
                                     位数字。</>}
                         </li>
                     </ol>
                 ) : (
                     <ol className="settings-link-steps">
-                        <li>{isEnglish ? `Open ${app.name}.` : `打开${app.name}。`}</li>
+                        <li>{isEnglish ? `Open ${appName}.` : `打开${appName}。`}</li>
                         <li>
                             {isEnglish
                                 ? 'Scan this code there, or enter the six digits under it.'
@@ -272,10 +279,15 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
                         </li>
                         <li>
                             {isEnglish
-                                ? `${app.name} then shows you four digits. Enter them here.`
-                                : `随后${app.name}会显示 4 位数字，请回到此页输入。`}
+                                ? `${appName} then shows you four digits. Enter them here.`
+                                : `随后${appName}会显示 4 位数字，请回到此页输入。`}
                         </li>
                     </ol>
+                )}
+                {wechat && isEnglish && (
+                    <span className="settings-row-help">
+                        The mini program is only in Chinese: the words in brackets are what its screens say.
+                    </span>
                 )}
                 <span className="settings-row-help">
                     {isEnglish
@@ -285,7 +297,7 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
                 {watched.refusal && (
                     // The app tried and was refused: say why, as the app tells its user.
                     <span className="settings-link-refusal" role="alert">
-                        {isEnglish ? `${app.name} couldn’t link: ` : `${app.name}未能绑定：`}
+                        {isEnglish ? `${appName} couldn’t link: ` : `${appName}未能绑定：`}
                         {linkRefusalMessage(watched.refusal, isEnglish)}
                     </span>
                 )}
@@ -362,15 +374,16 @@ export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
     };
 
     const unlink = async (app: LinkableApp) => {
+        const appName = appNameIn(app, app.appId, isEnglish);
         const confirmed = window.confirm(isEnglish
-            ? `Unlink ${app.name}? It stops seeing your account at once. Either side can only link someone else after 30 days.`
-            : `确定要解绑${app.name}吗？解绑后它将立即无法查看您的账号信息。30 天内双方都无法绑定其他账号。`);
+            ? `Unlink ${appName}? It stops seeing your account at once. Either side can only link someone else after 30 days.`
+            : `确定要解绑${appName}吗？解绑后它将立即无法查看您的账号信息。30 天内双方都无法绑定其他账号。`);
         if (!confirmed) return;
         setBusyApp(app.appId);
         try {
             await callRemoveAppLink({appId: app.appId, language});
             await load();
-            showToast(isEnglish ? `${app.name} unlinked.` : `已解绑${app.name}。`, 'success');
+            showToast(isEnglish ? `${appName} unlinked.` : `已解绑${appName}。`, 'success');
         } catch (err) {
             showToast(accountErrorMessage(err, isEnglish), 'error');
         } finally {
@@ -404,6 +417,7 @@ export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
     const dateFormat = {year: 'numeric', month: 'long', day: 'numeric'} as const;
 
     return apps.map(app => {
+        const appName = appNameIn(app, app.appId, isEnglish);
         const linkedAt = app.link?.linkedAt
             ? new Date(app.link.linkedAt).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', dateFormat)
             : null;
@@ -414,7 +428,7 @@ export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
             <ConnectionRow
                 key={app.appId}
                 brand={appBrand(app.platform)}
-                title={app.name}
+                title={appName}
                 kind={platform ? (isEnglish ? platform.en : platform.zh) : (isEnglish ? 'App' : '应用')}
                 status={{
                     value: status,
@@ -431,8 +445,8 @@ export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
                         : <>已绑定{app.link.appUserName ?
                             <strong>“{app.link.appUserName}”</strong> : '一个账号'}{linkedAt ? `，绑定于 ${linkedAt}` : ''}。</>)
                     : (isEnglish
-                        ? `Link your account there to show your membership and event staff roles in ${app.name}.`
-                        : `绑定您在${app.name}中的账号后，即可在其中显示您的会员和活动工作人员身份。`)}
+                        ? `Link your account there to show your membership and event staff roles in ${appName}.`
+                        : `绑定您在${appName}中的账号后，即可在其中显示您的会员和活动工作人员身份。`)}
                 state={app.link && !app.accountLinking
                     ? (isEnglish
                         ? 'Linking is paused for this app, so it can’t see your account for now.'
@@ -440,7 +454,7 @@ export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
                     : undefined}
                 details={!linking && (
                     <details className="settings-connection-shares">
-                        <summary>{isEnglish ? `What ${app.name} can see` : `${app.name}可以看到什么`}</summary>
+                        <summary>{isEnglish ? `What ${appName} can see` : `${appName}可以看到什么`}</summary>
                         <p>
                             {isEnglish
                                 ? `Once linked, your ${linkSharedFields(true)}, until either side unlinks. It never sees your password, and it can’t sign in here as you.`

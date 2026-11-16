@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { APP_PLATFORM_NAMES } from '~/lib/appLinks';
+import { APP_PLATFORM_NAMES, appNameIn } from '~/lib/appLinks';
 import { callClearAppLinkHold, callGetUserAppLinks, type UserAppLink } from '~/lib/firebase';
 import { formatSiteTime } from '~/lib/siteTime';
 import { appBrand, ConnectionRow, type ConnectionStatus } from '~/pages/ProfileConnectionRow';
@@ -45,9 +45,10 @@ export const UserConnectionsSection = ({user, signIn, canManage, showToast}: {
     });
 
     const lift = async (app: UserAppLink) => {
+        const appName = appNameIn(app, app.appId, isEnglish);
         if (!window.confirm(isEnglish
-            ? `Let ${user.displayName} link another ${app.name} account now? Only do this when the one they were linked to was theirs too, or wasn't theirs at all.`
-            : `允许 ${user.displayName} 现在绑定另一个${app.name}账号吗？仅在其此前绑定的账号也属于本人、或根本不是本人时才这样做。`)) return;
+            ? `Let ${user.displayName} link another ${appName} account now? Only do this when the one they were linked to was theirs too, or wasn't theirs at all.`
+            : `允许 ${user.displayName} 现在绑定另一个${appName}账号吗？仅在其此前绑定的账号也属于本人、或根本不是本人时才这样做。`)) return;
         setBusyApp(app.appId);
         try {
             await callClearAppLinkHold({targetUid: user.uid, appId: app.appId});
@@ -108,7 +109,7 @@ export const UserConnectionsSection = ({user, signIn, canManage, showToast}: {
                         <ConnectionRow
                             key={app.appId}
                             brand={appBrand(app.platform)}
-                            title={app.name}
+                            title={appNameIn(app, app.appId, isEnglish)}
                             kind={platform ? (isEnglish ? platform.en : platform.zh) : (isEnglish ? 'App' : '应用')}
                             status={{
                                 value: status,

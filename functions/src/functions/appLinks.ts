@@ -31,7 +31,7 @@ import {
     readLinkDisown,
     unlinkInTxn,
 } from "../utils/appLinks";
-import { appsCol, readApp, type RegisteredApp, validateAppId } from "../utils/apps";
+import { appNameIn, appRecordName, appsCol, readApp, type RegisteredApp, validateAppId } from "../utils/apps";
 import {
     adminTransaction,
     consumeRateLimit,
@@ -112,23 +112,28 @@ const readRequestId = (raw: unknown): string => {
 /**
  * The apps the caller may link, and their links: every app that links
  * accounts, and any other they're still linked in, which they may only remove.
+ * Oldest first, so an app keeps its place, whatever it's renamed, and a new
+ * one joins at the end.
  */
 export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request, "account");
-    const [appsSnap, linksSnap] = await Promise.all([appsCol().get(), accountLinksQuery(uid).get()]);
+    const [appsSnap, linksSnap] = await Promise.all([
+        appsCol().orderBy("createdAt").get(),
+        accountLinksQuery(uid).get(),
+    ]);
     const links = new Map(linksSnap.docs.map(doc => {
         const link = doc.data() as AppLinkDoc;
         return [link.appId, link];
     }));
     const apps = appsSnap.docs.map(doc => readApp(doc)!)
-        .filter(app => app.accountLinking || links.has(app.id))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .filter(app => app.accountLinking || links.has(app.id));
     return {
         apps: apps.map(app => {
             const link = links.get(app.id);
             return {
                 appId: app.id,
-                name: app.name,
+                nameEn: app.nameEn,
+                nameCn: app.nameCn,
                 platform: app.platform,
                 accountLinking: app.accountLinking,
                 link: link ? {
@@ -237,6 +242,7 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
         throw new HttpsError("invalid-argument", "Enter the four digits the app shows.");
     }
     const code = input.code;
+    const language = readMailLanguage(input.language);
     const ref = appLinkRequestsCol().doc(requestId);
 
     const attemptsLeft = await db.runTransaction(async (txn) => {
@@ -271,7 +277,7 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
             targetUid: uid,
             targetName: displayName,
             appId: app.id,
-            appName: app.name,
+            appName: appRecordName(app, app.id),
             appUserName,
         }));
         const email = (user.get("email") as string | undefined) ?? "";
@@ -286,13 +292,12 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
             };
             txn.set(linkUndoRef(undoToken), undo);
         }
-        return {email, appName: app.name, appUserName};
+        return {email, appName: appNameIn(app, language), appUserName};
     });
 
     if (linked.email) {
         await sendNotice(await appLinkChangedMail(
-            linked.email, linked.appName, linked.appUserName, "linked", readMailLanguage(input.language),
-            linkUndoUrl(undoToken)));
+            linked.email, linked.appName, linked.appUserName, "linked", language, linkUndoUrl(undoToken)));
     }
     return {linked: true};
 });
@@ -319,6 +324,7 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {appId?: unknown; language?: unknown};
     const appId = validateAppId(input.appId);
+    const language = readMailLanguage(input.language);
     // Nothing to remove costs none of the day's notices. Checked again below.
     if ((await accountLinkInAppQuery(appId, uid).get()).empty) return {unlinked: false};
     await limitNoticedChange(uid, "appLink");
@@ -331,7 +337,8 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
         ]);
         if (linked.empty) return null;
         const link = linked.docs[0].data() as AppLinkDoc;
-        const appName = readApp(appSnap)?.name ?? appId;
+        const app = readApp(appSnap);
+        const appName = appRecordName(app, appId);
         unlinkInTxn(txn, link);
         const displayName: string = user.get("displayName") ?? "";
         txn.set(recordRef(), recordDoc("account-app-unlink", {
@@ -343,13 +350,16 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
             appName,
             appUserName: appLinkUserName(link.appUserName),
         }));
-        return {email: (user.get("email") as string | undefined) ?? "", appName, appUserName: link.appUserName};
+        return {
+            email: (user.get("email") as string | undefined) ?? "",
+            appName: app ? appNameIn(app, language) : appId,
+            appUserName: link.appUserName,
+        };
     });
 
     if (unlinked?.email) {
         await sendNotice(await appLinkChangedMail(
-            unlinked.email, unlinked.appName, appLinkUserName(unlinked.appUserName), "unlinked",
-            readMailLanguage(input.language)));
+            unlinked.email, unlinked.appName, appLinkUserName(unlinked.appUserName), "unlinked", language));
     }
     return {unlinked: !!unlinked};
 });
@@ -378,7 +388,7 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
     const undoRef = linkUndoRef(input.token);
     const passwordHash = await hashPassword(await checkNewPassword(input.password));
 
-    const {uid, appName, heldUntil} = await db.runTransaction(async (txn) => {
+    const {uid, appId, nameEn, nameCn, heldUntil} = await db.runTransaction(async (txn) => {
         const undo = (await txn.get(undoRef)).data() as AppLinkUndoDoc | undefined;
         if (!undo || undo.expiresAt.toMillis() <= Date.now()) throw badUndoLink();
         const [user, credentials, appSnap, disown] = await Promise.all([
@@ -388,7 +398,8 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
             readLinkDisown(txn, undo.appId, undo.uid, undo.appUserId),
         ]);
         if (!user.exists || user.get("email") !== undo.email) throw badUndoLink();
-        const appName = readApp(appSnap)?.name ?? undo.appId;
+        const app = readApp(appSnap);
+        const appName = appRecordName(app, undo.appId);
 
         const heldUntil = disownLinkInTxn(txn, disown);
         const google = googleBindingOf(credentials);
@@ -414,32 +425,35 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
                 appUserName: appLinkUserName(undo.appUserName),
             }));
         }
-        return {uid: undo.uid, appName, heldUntil};
+        return {uid: undo.uid, appId: undo.appId, nameEn: app?.nameEn ?? "", nameCn: app?.nameCn ?? "", heldUntil};
     });
 
     await endSessions(uid, null);
     await unlinkFirebaseGoogle(uid);
     await undoRef.delete();
-    return {appName, heldUntil: heldUntil?.toISOString() ?? null};
+    return {appId, nameEn, nameCn, heldUntil: heldUntil?.toISOString() ?? null};
 });
 
 /**
  * An account's links and holds, app by app, for staff looking at it in the
  * Users tab: who it's linked to in each app, and which it's held to and until
  * when. Listed are the apps it has one or the other in, and those it could
- * link in, as its own Settings lists them.
+ * link in, as its own Settings lists them, and in the same order: oldest first.
  */
 export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireStaff(uid);
     const targetUid = validateDocId((request.data as {uid?: unknown} | null)?.uid, "uid");
 
-    const [appsSnap, linksSnap] = await Promise.all([appsCol().get(), accountLinksQuery(targetUid).get()]);
+    const [appsSnap, linksSnap] = await Promise.all([
+        appsCol().orderBy("createdAt").get(),
+        accountLinksQuery(targetUid).get(),
+    ]);
     const links = new Map(linksSnap.docs.map(doc => {
         const link = doc.data() as AppLinkDoc;
         return [link.appId, link];
     }));
-    const apps = appsSnap.docs.map(doc => readApp(doc)!).sort((a, b) => a.name.localeCompare(b.name));
+    const apps = appsSnap.docs.map(doc => readApp(doc)!);
     const holds = await Promise.all(apps.map(app => readAccountHold(app.id, targetUid)));
     return {
         apps: apps.flatMap((app, i) => {
@@ -448,7 +462,8 @@ export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
             if (!link && !hold && !app.accountLinking) return [];
             return [{
                 appId: app.id,
-                name: app.name,
+                nameEn: app.nameEn,
+                nameCn: app.nameCn,
                 platform: app.platform,
                 accountLinking: app.accountLinking,
                 link: link ? {
@@ -489,7 +504,7 @@ export const clearAppLinkHold = onCall({maxInstances: 10}, async (request) => {
             targetUid,
             targetName: target.get("displayName") ?? "",
             appId,
-            appName: readApp(appSnap)?.name ?? appId,
+            appName: appRecordName(readApp(appSnap), appId),
         }));
         return true;
     });

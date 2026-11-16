@@ -29,7 +29,7 @@ import { BAN_CLEARED, enableSignIn, hasBan, setAuthDisabled } from "../utils/ban
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
-import { appsCol, deleteFromApps, readApp, signOutOfApps } from "../utils/apps";
+import { appRecordName, appsCol, deleteFromApps, readApp, signOutOfApps } from "../utils/apps";
 import { accountLinksQuery, type AppLinkDoc, appLinkUserName } from "../utils/appLinks";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
@@ -863,7 +863,7 @@ export const onUserDeleted = onDocumentDeleted(
                     targetUid: uid,
                     targetName: data?.displayName ?? "",
                     appId: link.appId,
-                    appName: readApp(apps[i])?.name ?? link.appId,
+                    appName: appRecordName(readApp(apps[i]), link.appId),
                     appUserName: appLinkUserName(link.appUserName),
                     linkEndedBy: "account-deleted",
                 }));
