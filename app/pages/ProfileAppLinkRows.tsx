@@ -240,31 +240,25 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
             <div className="settings-link-guide">
                 {wechat ? (
                     // The mini program's own words (sekai-beyond_uniapp, pages/user/sekai-link): change
-                    // these with them. It has them only in Chinese (its en.json is for its web build), so
-                    // in English each is translated, then given as it reads there, to find on its screen.
+                    // these with them. In English they're given translated.
                     <ol className="settings-link-steps">
                         <li>
                             {isEnglish
                                 ? <>In WeChat, open {appName} and go to <strong>Me → Edit profile → Sekai Beyond
-                                    website account</strong> (<span
-                                    lang="zh-Hans">我的 → 编辑资料 → 彼世界网站账号</span>).</>
+                                    website account</strong>.</>
                                 : <>在微信中打开{appName}，进入<strong>「我的 → 编辑资料 → 彼世界网站账号」</strong>。</>}
                         </li>
                         <li>
                             {isEnglish
-                                ? <>Tap <strong>Scan to link</strong> (<span lang="zh-Hans">扫码绑定</span>) and scan
-                                    this
-                                    code, or tap <strong>Enter 6 digits</strong> (<span
-                                        lang="zh-Hans">输入 6 位数字</span>)
-                                    and type the six digits under it.</>
+                                ? <>Tap <strong>Scan to link</strong> and scan this code, or tap <strong>Enter 6
+                                    digits</strong> and type the six digits under it.</>
                                 : <>点<strong>「扫码绑定」</strong>扫描此二维码，或点<strong>「输入 6
                                     位数字」</strong>输入下方的数字。</>}
                         </li>
                         <li>
                             {isEnglish
-                                ? <>Check it’s your account and tap <strong>That’s my account, continue</strong> (<span
-                                    lang="zh-Hans">是我的账号，继续</span>). The mini program then shows four digits:
-                                    enter them here.</>
+                                ? <>Check it’s your account and tap <strong>That’s my account, continue</strong>. The
+                                    mini program then shows four digits: enter them here.</>
                                 : <>确认是您的账号后点<strong>「是我的账号，继续」</strong>，再在此输入小程序显示的 4
                                     位数字。</>}
                         </li>
@@ -283,11 +277,6 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
                                 : `随后${appName}会显示 4 位数字，请回到此页输入。`}
                         </li>
                     </ol>
-                )}
-                {wechat && isEnglish && (
-                    <span className="settings-row-help">
-                        The mini program is only in Chinese: the words in brackets are what its screens say.
-                    </span>
                 )}
                 <span className="settings-row-help">
                     {isEnglish
