@@ -13,6 +13,13 @@ export const linkSharedFields = (isEnglish: boolean): string =>
     isEnglish ? LINK_SHARED_FIELDS.en : LINK_SHARED_FIELDS.zh;
 
 /**
+ * What an app is called for the reader: its English name in English, where it
+ * has one. As appNameIn in functions/src/utils/apps.ts, which the emails use.
+ */
+export const appNameIn = (app: {name: string; nameEn?: string}, isEnglish: boolean): string =>
+    isEnglish && app.nameEn ? app.nameEn : app.name;
+
+/**
  * What an app runs on, for Settings to show it by. A copy of APP_PLATFORMS in
  * functions/src/utils/apps.ts: change both together.
  */

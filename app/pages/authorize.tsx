@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { PageNav } from '~/components/PageNav';
+import { appNameIn } from '~/lib/appLinks';
 import { APP_ID_RE, callGetAppSignInInfo, callIssueAppCode, errorSuffix, functionsErrorCode, } from '~/lib/firebase';
 import { stillWaitingText, useStillWaiting } from '~/lib/useStillWaiting';
 
@@ -12,7 +13,7 @@ const STATE_RE = /^[A-Za-z0-9_-]{16,128}$/;
 /** The base64url SHA-256 of the code verifier the app keeps (PKCE's S256, the one method taken). */
 const CODE_CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
 
-type Info = {name: string; maintainerNames: string[]};
+type Info = {name: string; nameEn: string; maintainerNames: string[]};
 
 /**
  * Sign in with Sekai Beyond: where a registered app (see
@@ -75,7 +76,7 @@ export const AuthorizePage = () => {
         }
     };
 
-    const appName = info && typeof info === 'object' ? info.name : '';
+    const appName = info && typeof info === 'object' ? appNameIn(info, isEnglish) : '';
     // "A, B, and C" / "A、B和C".
     const maintainers = info && typeof info === 'object'
         ? new Intl.ListFormat(isEnglish ? 'en' : 'zh', {type: 'conjunction'}).format(info.maintainerNames)

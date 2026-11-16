@@ -612,6 +612,8 @@ export interface AppPerson {
 export interface AppSummary {
     id: string;
     name: string;
+    /** What it's called in English, where that isn't `name`; "" when it's `name` in both. See appNameIn. */
+    nameEn: string;
     /** Who registered it; null if that wasn't kept. */
     creator: AppPerson | null;
     /** Who looks after it, up to APP_MAINTAINERS_MAX, in the order they were added. */
@@ -630,6 +632,7 @@ export interface AppSummary {
 
 interface AppFields {
     name: string;
+    nameEn: string;
     maintainerUids: string[];
     redirectUris: string[];
     firebaseProjectId: string;
@@ -654,6 +657,8 @@ export const callDeleteApp = (data: {appId: string}) =>
 export interface LinkableApp {
     appId: string;
     name: string;
+    /** What it's called in English, where that isn't `name`; "" when it's `name` in both. See appNameIn. */
+    nameEn: string;
     /** What it runs on: its icon in Settings, and how Settings says to open it. */
     platform: AppPlatform;
     /** Off for an app that has stopped linking accounts, whose link may only be undone. */
@@ -688,12 +693,15 @@ export const callRemoveAppLink = (data: {appId: string; language: Language}) =>
  * another account in the app, for a second undo within the hold, else null.
  */
 export const callUndoAppLink = (data: {token: string; password: string}) =>
-    httpsCallable<typeof data, {appName: string; heldUntil: string | null}>(getFunctions(), 'undoAppLink')(data);
+    httpsCallable<typeof data, {appName: string; appNameEn: string; heldUntil: string | null}>(
+        getFunctions(), 'undoAppLink')(data);
 
 /** An account's link and hold in one app, as staff see them in the Users tab. */
 export interface UserAppLink {
     appId: string;
     name: string;
+    /** What it's called in English, where that isn't `name`; "" when it's `name` in both. See appNameIn. */
+    nameEn: string;
     platform: AppPlatform;
     /** Off for an app that has stopped linking accounts, whose links don't work for now. */
     accountLinking: boolean;
@@ -710,7 +718,7 @@ export const callClearAppLinkHold = (data: {targetUid: string; appId: string}) =
 
 /** What the sign-in page shows of an app. Needs no sign-in. */
 export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>
-    httpsCallable<typeof data, {name: string; maintainerNames: string[]}>(
+    httpsCallable<typeof data, {name: string; nameEn: string; maintainerNames: string[]}>(
         getFunctions(), 'getAppSignInInfo')(data);
 
 /**

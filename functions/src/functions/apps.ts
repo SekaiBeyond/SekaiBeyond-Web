@@ -42,6 +42,8 @@ const APP_NAME_MAX = 60;
 
 interface AppInput {
     name: string;
+    /** As accountLinking: undefined leaves a saved app's as it was, and a new one's "". */
+    nameEn?: string;
     maintainerUids: string[];
     redirectUris: string[];
     firebaseProjectId: string;
@@ -59,6 +61,9 @@ function parseAppInput(raw: unknown): AppInput {
     const input = (raw ?? {}) as Record<string, unknown>;
     const name = sanitizeDisplayText(validateStr(input.name, "name", APP_NAME_MAX, true));
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
+    const nameEn = input.nameEn === undefined
+        ? undefined
+        : sanitizeDisplayText(validateStr(input.nameEn, "nameEn", APP_NAME_MAX));
     const accountLinking = input.accountLinking === undefined
         ? undefined
         : validateBoolean(input.accountLinking, "accountLinking");
@@ -95,6 +100,7 @@ function parseAppInput(raw: unknown): AppInput {
     if (redirectUris.length === 0 && rawProject === "" && rawServiceAccount === "") {
         return {
             name,
+            nameEn,
             maintainerUids,
             redirectUris: [],
             firebaseProjectId: "",
@@ -115,6 +121,7 @@ function parseAppInput(raw: unknown): AppInput {
     }
     return {
         name,
+        nameEn,
         maintainerUids,
         redirectUris,
         firebaseProjectId: rawProject,
@@ -216,6 +223,7 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
         apps: apps.map(app => ({
             id: app.id,
             name: app.name,
+            nameEn: app.nameEn,
             creator: app.createdBy ? appPerson(app.createdBy, users, app.createdByName) : null,
             maintainers: app.maintainerUids.map(id => appPerson(id, users)),
             redirectUris: app.redirectUris,
@@ -260,10 +268,11 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
 
         const callerName: string = callerSnap.data()?.displayName ?? "";
         const now = Timestamp.now();
-        const {accountLinking, platform, ...rest} = fields;
+        const {accountLinking, platform, nameEn, ...rest} = fields;
         if (create) {
             txn.create(ref, {
                 ...rest,
+                nameEn: nameEn ?? "",
                 accountLinking: accountLinking ?? false,
                 platform: platform ?? "",
                 createdBy: uid,
@@ -277,6 +286,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             // read for the person signed in.
             txn.update(ref, {
                 ...rest,
+                ...(nameEn === undefined ? {} : {nameEn}),
                 ...(accountLinking === undefined ? {} : {accountLinking}),
                 ...(platform === undefined ? {} : {platform}),
                 ownerUid: FieldValue.delete(),
@@ -376,8 +386,8 @@ function redirectFor(app: RegisteredApp, raw: unknown): string {
 }
 
 /**
- * What the sign-in page shows of an app before anyone signs in: its name and
- * the names of its maintainers. Refuses an
+ * What the sign-in page shows of an app before anyone signs in: its name (and
+ * its English one, see appNameIn) and the names of its maintainers. Refuses an
  * unknown app, or a place to hand back to that isn't its own, before anyone
  * is asked to sign in.
  */
@@ -389,7 +399,7 @@ export const getAppSignInInfo = onCall({maxInstances: 20}, async (request) => {
     const maintainerNames = app.maintainerUids.map(id => appPerson(id, users))
         .filter(person => !person.deleted && person.name)
         .map(person => person.name);
-    return {name: app.name, maintainerNames};
+    return {name: app.name, nameEn: app.nameEn, maintainerNames};
 });
 
 /**

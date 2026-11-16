@@ -31,7 +31,7 @@ import {
     readLinkDisown,
     unlinkInTxn,
 } from "../utils/appLinks";
-import { appsCol, readApp, type RegisteredApp, validateAppId } from "../utils/apps";
+import { appNameIn, appsCol, readApp, type RegisteredApp, validateAppId } from "../utils/apps";
 import {
     adminTransaction,
     consumeRateLimit,
@@ -129,6 +129,7 @@ export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
             return {
                 appId: app.id,
                 name: app.name,
+                nameEn: app.nameEn,
                 platform: app.platform,
                 accountLinking: app.accountLinking,
                 link: link ? {
@@ -237,6 +238,7 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
         throw new HttpsError("invalid-argument", "Enter the four digits the app shows.");
     }
     const code = input.code;
+    const language = readMailLanguage(input.language);
     const ref = appLinkRequestsCol().doc(requestId);
 
     const attemptsLeft = await db.runTransaction(async (txn) => {
@@ -286,13 +288,12 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
             };
             txn.set(linkUndoRef(undoToken), undo);
         }
-        return {email, appName: app.name, appUserName};
+        return {email, appName: appNameIn(app, language), appUserName};
     });
 
     if (linked.email) {
         await sendNotice(await appLinkChangedMail(
-            linked.email, linked.appName, linked.appUserName, "linked", readMailLanguage(input.language),
-            linkUndoUrl(undoToken)));
+            linked.email, linked.appName, linked.appUserName, "linked", language, linkUndoUrl(undoToken)));
     }
     return {linked: true};
 });
@@ -319,6 +320,7 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {appId?: unknown; language?: unknown};
     const appId = validateAppId(input.appId);
+    const language = readMailLanguage(input.language);
     // Nothing to remove costs none of the day's notices. Checked again below.
     if ((await accountLinkInAppQuery(appId, uid).get()).empty) return {unlinked: false};
     await limitNoticedChange(uid, "appLink");
@@ -331,7 +333,8 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
         ]);
         if (linked.empty) return null;
         const link = linked.docs[0].data() as AppLinkDoc;
-        const appName = readApp(appSnap)?.name ?? appId;
+        const app = readApp(appSnap);
+        const appName = app?.name ?? appId;
         unlinkInTxn(txn, link);
         const displayName: string = user.get("displayName") ?? "";
         txn.set(recordRef(), recordDoc("account-app-unlink", {
@@ -343,13 +346,16 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
             appName,
             appUserName: appLinkUserName(link.appUserName),
         }));
-        return {email: (user.get("email") as string | undefined) ?? "", appName, appUserName: link.appUserName};
+        return {
+            email: (user.get("email") as string | undefined) ?? "",
+            appName: app ? appNameIn(app, language) : appId,
+            appUserName: link.appUserName,
+        };
     });
 
     if (unlinked?.email) {
         await sendNotice(await appLinkChangedMail(
-            unlinked.email, unlinked.appName, appLinkUserName(unlinked.appUserName), "unlinked",
-            readMailLanguage(input.language)));
+            unlinked.email, unlinked.appName, appLinkUserName(unlinked.appUserName), "unlinked", language));
     }
     return {unlinked: !!unlinked};
 });
@@ -378,7 +384,7 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
     const undoRef = linkUndoRef(input.token);
     const passwordHash = await hashPassword(await checkNewPassword(input.password));
 
-    const {uid, appName, heldUntil} = await db.runTransaction(async (txn) => {
+    const {uid, appName, appNameEn, heldUntil} = await db.runTransaction(async (txn) => {
         const undo = (await txn.get(undoRef)).data() as AppLinkUndoDoc | undefined;
         if (!undo || undo.expiresAt.toMillis() <= Date.now()) throw badUndoLink();
         const [user, credentials, appSnap, disown] = await Promise.all([
@@ -388,7 +394,8 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
             readLinkDisown(txn, undo.appId, undo.uid, undo.appUserId),
         ]);
         if (!user.exists || user.get("email") !== undo.email) throw badUndoLink();
-        const appName = readApp(appSnap)?.name ?? undo.appId;
+        const app = readApp(appSnap);
+        const appName = app?.name ?? undo.appId;
 
         const heldUntil = disownLinkInTxn(txn, disown);
         const google = googleBindingOf(credentials);
@@ -414,13 +421,13 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
                 appUserName: appLinkUserName(undo.appUserName),
             }));
         }
-        return {uid: undo.uid, appName, heldUntil};
+        return {uid: undo.uid, appName, appNameEn: app?.nameEn ?? "", heldUntil};
     });
 
     await endSessions(uid, null);
     await unlinkFirebaseGoogle(uid);
     await undoRef.delete();
-    return {appName, heldUntil: heldUntil?.toISOString() ?? null};
+    return {appName, appNameEn, heldUntil: heldUntil?.toISOString() ?? null};
 });
 
 /**
@@ -449,6 +456,7 @@ export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
             return [{
                 appId: app.id,
                 name: app.name,
+                nameEn: app.nameEn,
                 platform: app.platform,
                 accountLinking: app.accountLinking,
                 link: link ? {

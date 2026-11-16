@@ -84,6 +84,7 @@ const lifetimeOption = (k: ApiKeySummary): number => {
 
 interface Draft {
     name: string;
+    nameEn: string;
     maintainers: AppPerson[];
     signIn: boolean;
     redirectUris: string;
@@ -95,6 +96,7 @@ interface Draft {
 
 const EMPTY_DRAFT: Draft = {
     name: '',
+    nameEn: '',
     maintainers: [],
     signIn: true,
     redirectUris: '',
@@ -225,6 +227,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const startEdit = (app: AppSummary) => {
         setDraft({
             name: app.name,
+            nameEn: app.nameEn ?? '',
             maintainers: app.maintainers,
             signIn: app.redirectUris.length > 0,
             redirectUris: app.redirectUris.join('\n'),
@@ -265,6 +268,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
         try {
             const fields = {
                 name: draft.name.trim(),
+                nameEn: draft.nameEn.trim(),
                 maintainerUids: draft.maintainers.map(m => m.uid),
                 redirectUris: draft.signIn ? redirectLines(draft.redirectUris) : [],
                 firebaseProjectId: draft.signIn ? draft.firebaseProjectId.trim() : '',
@@ -558,6 +562,23 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                         <span className="admin-helper-text">
                             {isEnglish ? 'Shown on this list and when people sign in to it.' : '在此列表中显示，并在用户登录时向用户显示。'}
                             {!editing && (isEnglish ? ' Its ID is made when it\'s registered.' : '应用 ID 会在登记时自动生成。')}
+                        </span>
+                    </label>
+
+                    <label className="admin-tickets-template-field">
+                        <span>{isEnglish ? 'English name (optional)' : '英文名称（选填）'}</span>
+                        <input
+                            className="admin-input"
+                            value={draft.nameEn}
+                            onChange={e => set('nameEn', e.target.value)}
+                            placeholder={isEnglish ? 'e.g. Sekai Beyond Mini Program' : '例如：Sekai Beyond Mini Program'}
+                            maxLength={60}
+                            disabled={saving}
+                        />
+                        <span className="admin-helper-text">
+                            {isEnglish
+                                ? 'Shown instead of its name to people using the site in English: in Settings, when they sign in to it, and in emails. Leave it blank when its name is already English.'
+                                : '用户以英文浏览本站时，在“设置”、登录页面和邮件中显示此名称而非上方的名称。名称本身已是英文时请留空。'}
                         </span>
                     </label>
 

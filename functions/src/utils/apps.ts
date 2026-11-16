@@ -4,6 +4,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { type App, initializeApp } from "firebase-admin/app";
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
 import { Timestamp } from "firebase-admin/firestore";
+import type { MailLanguage } from "./accountMail";
 import { db } from "./firebase";
 
 /**
@@ -86,6 +87,12 @@ export const isAppPlatform = (raw: unknown): raw is AppPlatform =>
 /** An `apps` doc. Server only (see firestore.rules). */
 interface AppDoc {
     name: string;
+    /**
+     * What it's called for people reading the site in English, where that
+     * isn't `name`, as for an app named in Chinese; "" when it's `name` in
+     * both. See appNameIn. Missing on an app saved before there was one.
+     */
+    nameEn: string;
     /** Missing on an app saved before there was one: see readApp. */
     platform: AppPlatform;
     /**
@@ -119,6 +126,10 @@ export interface RegisteredApp extends AppDoc {
     id: string;
 }
 
+/** What `app` is called in `language`: its English name in English, where it has one. */
+export const appNameIn = (app: Pick<AppDoc, "name" | "nameEn">, language: MailLanguage): string =>
+    language === "en" && app.nameEn ? app.nameEn : app.name;
+
 /** Whether people can sign in to `app` with their accounts here. */
 export function hasSignIn(app: Pick<AppDoc, "redirectUris" | "firebaseProjectId" | "serviceAccount">): boolean {
     return app.redirectUris.length > 0 && !!app.firebaseProjectId && !!app.serviceAccount;
@@ -135,6 +146,7 @@ export function readApp(snap: FirebaseFirestore.DocumentSnapshot): RegisteredApp
     return {
         id: snap.id,
         name: data.name ?? snap.id,
+        nameEn: data.nameEn ?? "",
         // Saved before there was a platform: the one app that linked accounts
         // then was the WeChat mini program, so one with linking on is that,
         // until it's next saved (saveApp writes its platform).
