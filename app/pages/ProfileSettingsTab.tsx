@@ -4,8 +4,8 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSetPassportPrivacy, callSetProfileVisibility } from '~/lib/firebase';
 import { PRIVACY_ROWS, type PrivacyKey, privacyRow, privacyStateLabel, readVisibility, } from '~/lib/privacy';
 import type { ShowToast } from '~/lib/useToasts';
-import { ProfileAccountSection } from '~/pages/ProfileAccountSection';
-import { ProfileAppLinksSection } from '~/pages/ProfileAppLinksSection';
+import { ProfileAccountSection, useSignInMethods } from '~/pages/ProfileAccountSection';
+import { ProfileConnectionsSection } from '~/pages/ProfileConnectionsSection';
 import { ProfileDevicesSection } from '~/pages/ProfileDevicesSection';
 
 /**
@@ -77,19 +77,24 @@ const PrivacySwitch = ({checked, busy, label, onChange}: {
 );
 
 /**
- * /profile's Settings tab: how you sign in, the apps your account is linked in,
- * what other people are shown, then the devices signed in. Every switch is enforced server-side (getPublicProfile leaves hidden
- * sections out; getPassportPublicProfile refuses a private passport page). Only
- * the cards; the profile page owns the nav, sign-in wall and toasts.
+ * /profile's Settings tab: your email and password, the accounts connected to
+ * yours (Google, and apps such as the WeChat mini program), what other people
+ * are shown, then the devices signed in. Every switch is enforced server-side
+ * (getPublicProfile leaves hidden sections out; getPassportPublicProfile
+ * refuses a private passport page). Only the cards; the profile page owns the
+ * nav, sign-in wall and toasts.
  */
-export const ProfileSettingsTab = ({showToast}: {showToast: ShowToast}) => (
-    <>
-        <ProfileAccountSection showToast={showToast}/>
-        <ProfileAppLinksSection showToast={showToast}/>
-        <PrivacySection showToast={showToast}/>
-        <ProfileDevicesSection showToast={showToast}/>
-    </>
-);
+export const ProfileSettingsTab = ({showToast}: {showToast: ShowToast}) => {
+    const signIn = useSignInMethods();
+    return (
+        <>
+            <ProfileAccountSection signIn={signIn} showToast={showToast}/>
+            <ProfileConnectionsSection signIn={signIn} showToast={showToast}/>
+            <PrivacySection showToast={showToast}/>
+            <ProfileDevicesSection showToast={showToast}/>
+        </>
+    );
+};
 
 const PrivacySection = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();

@@ -7,11 +7,14 @@ import { type AppLinkDoc, appLinksCol, appLinkUserName } from "../utils/appLinks
 import {
     APP_ID_RE,
     APP_MAINTAINERS_MAX,
+    APP_PLATFORMS,
     APP_REDIRECT_URIS_MAX,
+    type AppPlatform,
     appsCol,
     CODE_CHALLENGE_RE,
     FIREBASE_PROJECT_ID_RE,
     hasSignIn,
+    isAppPlatform,
     issueSignInCode,
     newAppId,
     normalizeRedirectUri,
@@ -48,6 +51,8 @@ interface AppInput {
      * the switch existed: a new app is then off, and a saved one stays as it was.
      */
     accountLinking?: boolean;
+    /** As accountLinking: undefined leaves a saved app's as it was, and a new one's "". */
+    platform?: AppPlatform;
 }
 
 function parseAppInput(raw: unknown): AppInput {
@@ -57,6 +62,10 @@ function parseAppInput(raw: unknown): AppInput {
     const accountLinking = input.accountLinking === undefined
         ? undefined
         : validateBoolean(input.accountLinking, "accountLinking");
+    if (input.platform !== undefined && !isAppPlatform(input.platform)) {
+        throw new HttpsError("invalid-argument", `platform must be "" or one of: ${APP_PLATFORMS.join(", ")}.`);
+    }
+    const platform = input.platform as AppPlatform | undefined;
 
     const rawMaintainers = input.maintainerUids;
     if (!Array.isArray(rawMaintainers) || rawMaintainers.length > APP_MAINTAINERS_MAX) {
@@ -84,7 +93,15 @@ function parseAppInput(raw: unknown): AppInput {
     // An app that only holds API keys leaves sign-in blank; one that signs
     // people in needs where to hand them back to, its project and its service account.
     if (redirectUris.length === 0 && rawProject === "" && rawServiceAccount === "") {
-        return {name, maintainerUids, redirectUris: [], firebaseProjectId: "", serviceAccount: "", accountLinking};
+        return {
+            name,
+            maintainerUids,
+            redirectUris: [],
+            firebaseProjectId: "",
+            serviceAccount: "",
+            accountLinking,
+            platform,
+        };
     }
     if (redirectUris.length === 0) {
         throw new HttpsError("invalid-argument",
@@ -103,6 +120,7 @@ function parseAppInput(raw: unknown): AppInput {
         firebaseProjectId: rawProject,
         serviceAccount: rawServiceAccount,
         accountLinking,
+        platform,
     };
 }
 
@@ -204,6 +222,7 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
             firebaseProjectId: app.firebaseProjectId,
             serviceAccount: app.serviceAccount,
             accountLinking: app.accountLinking,
+            platform: app.platform,
             keys: keysByApp.get(app.id) ?? [],
             createdAt: isoOrNull(app.createdAt),
             updatedAt: isoOrNull(app.updatedAt),
@@ -241,11 +260,12 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
 
         const callerName: string = callerSnap.data()?.displayName ?? "";
         const now = Timestamp.now();
-        const {accountLinking, ...rest} = fields;
+        const {accountLinking, platform, ...rest} = fields;
         if (create) {
             txn.create(ref, {
                 ...rest,
                 accountLinking: accountLinking ?? false,
+                platform: platform ?? "",
                 createdBy: uid,
                 createdByName: callerName,
                 createdAt: now,
@@ -258,6 +278,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             txn.update(ref, {
                 ...rest,
                 ...(accountLinking === undefined ? {} : {accountLinking}),
+                ...(platform === undefined ? {} : {platform}),
                 ownerUid: FieldValue.delete(),
                 scopes: FieldValue.delete(),
                 updatedAt: now,

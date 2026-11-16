@@ -210,23 +210,92 @@
     gap: 10px;
 }
 
+/* Google's button, which sizes itself to this, then Cancel. */
 .settings-google-bind {
-    flex-basis: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
     max-width: 280px;
 }
 
-/* Linking an app's account (ProfileAppLinksSection): its code, then who claimed it. */
+.settings-google-bind > .admin-btn {
+    align-self: flex-start;
+}
+
+/* Linking an app's account (ProfileAppLinkRows): its code, then who claimed it. */
 .settings-link-panel {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
-    /* No max-width, which would leave it room beside the row's text rather than under it. */
-    flex-basis: 100%;
+    padding: 18px;
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 18px;
+    background: rgba(255, 107, 157, 0.04);
 }
 
 .settings-link-panel .settings-row-help {
     max-width: 46ch;
+}
+
+/* Waiting for the app: the code to scan beside the steps, under them where it's narrow. */
+.settings-link-panel--waiting {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 18px 26px;
+}
+
+.settings-link-scan {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-link-guide {
+    display: flex;
+    flex: 1 1 220px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+}
+
+.settings-link-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: link-step;
+}
+
+.settings-link-steps li {
+    position: relative;
+    max-width: 46ch;
+    padding-left: 32px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text);
+    counter-increment: link-step;
+}
+
+.settings-link-steps li::before {
+    content: counter(link-step);
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--gradient-cta);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
 }
 
 .settings-link-qr {
@@ -259,7 +328,8 @@
     color: var(--color-text);
 }
 
-.settings-row--account .profile-action:disabled {
+.settings-row--account .profile-action:disabled,
+.settings-row--connection .profile-action:disabled {
     cursor: not-allowed;
     opacity: 0.45;
     transform: none;

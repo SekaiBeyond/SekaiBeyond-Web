@@ -142,6 +142,131 @@
     border-top: 1px solid rgba(255, 107, 157, 0.12);
 }
 
+/* A Connected Accounts row (ProfileConnectionRow): the other side's mark, what
+   it is and whether it's connected, its button, then under the words whatever
+   the button opens. Top-aligned, as opening "What it can see" makes it taller. */
+.settings-row--connection {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 16px;
+    row-gap: 14px;
+}
+
+.settings-row--connection > .profile-action {
+    margin-top: 4px;
+}
+
+.settings-connection-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    font-size: 22px;
+}
+
+.settings-connection-icon--google {
+    background: #fff;
+    border: 1px solid rgba(74, 81, 96, 0.12);
+    box-shadow: 0 2px 8px rgba(74, 81, 96, 0.06);
+}
+
+/* WeChat's own green, as its mark is always shown on it. */
+.settings-connection-icon--wechat {
+    background: #07c160;
+    color: #fff;
+    font-size: 24px;
+    box-shadow: 0 4px 12px rgba(7, 193, 96, 0.22);
+}
+
+.settings-connection-icon--app {
+    background: linear-gradient(135deg, rgba(255, 107, 157, 0.14), rgba(254, 202, 87, 0.22));
+    color: var(--color-primary);
+}
+
+.settings-connection-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+}
+
+.settings-connection-kind {
+    margin-top: -2px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-light);
+}
+
+.settings-connection-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 10px 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.7;
+    white-space: nowrap;
+}
+
+.settings-connection-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.settings-connection-badge--on {
+    color: #157a43;
+    background: rgba(78, 203, 113, 0.16);
+}
+
+.settings-connection-badge--off {
+    color: var(--color-text-muted);
+    background: rgba(160, 168, 184, 0.16);
+}
+
+.settings-connection-badge--paused {
+    color: #93600f;
+    background: rgba(254, 202, 87, 0.26);
+}
+
+/* What a linked app can see, folded away under its row. */
+.settings-connection-shares {
+    margin-top: 2px;
+    font-size: 13px;
+}
+
+.settings-connection-shares summary {
+    width: fit-content;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+.settings-connection-shares summary:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.settings-connection-shares p {
+    max-width: 56ch;
+    margin-top: 6px;
+    line-height: 1.55;
+    color: var(--color-text-muted);
+}
+
+/* What the row's button opened, lined up under its words. */
+.settings-connection-panel {
+    grid-column: 2 / -1;
+    min-width: 0;
+}
+
 @media (max-width: 640px) {
     .settings-section {
         padding: 22px 18px;
@@ -166,6 +291,21 @@
 
     .settings-devices-footer {
         justify-content: flex-start;
+    }
+
+    .settings-row--connection {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .settings-row--connection > .profile-action {
+        grid-column: 2;
+        justify-self: start;
+        margin-top: 0;
+    }
+
+    /* The whole width, for the code and its steps to sit side by side where they fit. */
+    .settings-connection-panel {
+        grid-column: 1 / -1;
     }
 }
 

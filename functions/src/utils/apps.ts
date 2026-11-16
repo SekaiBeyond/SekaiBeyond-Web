@@ -73,9 +73,21 @@ export function normalizeRedirectUri(raw: unknown): string | null {
     return url.protocol === "https:" || local ? url.href : null;
 }
 
+/**
+ * What an app runs on, for Settings to show it by: its icon there and how it
+ * says to open it when linking. "" for an app it says nothing particular of.
+ */
+export const APP_PLATFORMS = ["wechat-mini-program"] as const;
+export type AppPlatform = typeof APP_PLATFORMS[number] | "";
+
+export const isAppPlatform = (raw: unknown): raw is AppPlatform =>
+    raw === "" || (APP_PLATFORMS as readonly unknown[]).includes(raw);
+
 /** An `apps` doc. Server only (see firestore.rules). */
 interface AppDoc {
     name: string;
+    /** Missing on an app saved before there was one: see readApp. */
+    platform: AppPlatform;
     /**
      * The accounts that look after it, up to APP_MAINTAINERS_MAX, in the order
      * they were added. Shown on its sign-in page. Who registered it is
@@ -123,6 +135,12 @@ export function readApp(snap: FirebaseFirestore.DocumentSnapshot): RegisteredApp
     return {
         id: snap.id,
         name: data.name ?? snap.id,
+        // Saved before there was a platform: the one app that linked accounts
+        // then was the WeChat mini program, so one with linking on is that,
+        // until it's next saved (saveApp writes its platform).
+        platform: isAppPlatform(data.platform)
+            ? data.platform
+            : data.accountLinking === true ? "wechat-mini-program" : "",
         maintainerUids: data.maintainerUids ?? (data.ownerUid ? [data.ownerUid] : []),
         redirectUris: data.redirectUris ?? [],
         firebaseProjectId: data.firebaseProjectId ?? "",

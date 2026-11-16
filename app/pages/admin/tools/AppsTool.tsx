@@ -16,7 +16,7 @@ import {
     callSaveApp,
     functionsErrorCode,
 } from '~/lib/firebase';
-import { LINK_SHARED_FIELDS } from '~/lib/appLinks';
+import { APP_PLATFORM_NAMES, APP_PLATFORMS, type AppPlatform, LINK_SHARED_FIELDS } from '~/lib/appLinks';
 import { localized } from '~/lib/localized';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
@@ -89,6 +89,7 @@ interface Draft {
     firebaseProjectId: string;
     serviceAccount: string;
     accountLinking: boolean;
+    platform: AppPlatform;
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -99,6 +100,7 @@ const EMPTY_DRAFT: Draft = {
     firebaseProjectId: '',
     serviceAccount: '',
     accountLinking: false,
+    platform: '',
 };
 
 const redirectLines = (text: string) => text.split('\n').map(line => line.trim()).filter(Boolean);
@@ -228,6 +230,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             firebaseProjectId: app.firebaseProjectId,
             serviceAccount: app.serviceAccount,
             accountLinking: app.accountLinking,
+            platform: app.platform ?? '',
         });
         setEditing(app);
         setShowForm(true);
@@ -266,6 +269,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                 firebaseProjectId: draft.signIn ? draft.firebaseProjectId.trim() : '',
                 serviceAccount: draft.signIn ? draft.serviceAccount.trim() : '',
                 accountLinking: draft.accountLinking,
+                platform: draft.platform,
             };
             await callSaveApp(editing ? {...fields, appId: editing.id, create: false} : {...fields, create: true});
             showToast(editing
@@ -691,6 +695,29 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                             </span>
                         </span>
                     </label>
+
+                    {draft.accountLinking && (
+                        <label className="admin-tickets-template-field">
+                            <span>{isEnglish ? 'Shown in Settings as' : '在“设置”中显示为'}</span>
+                            <select
+                                className="admin-input"
+                                value={draft.platform}
+                                onChange={e => set('platform', e.target.value as AppPlatform)}
+                                disabled={saving}
+                            >
+                                {(['', ...APP_PLATFORMS] as const).map(platform => (
+                                    <option key={platform} value={platform}>
+                                        {isEnglish ? APP_PLATFORM_NAMES[platform].en : APP_PLATFORM_NAMES[platform].zh}
+                                    </option>
+                                ))}
+                            </select>
+                            <span className="admin-helper-text">
+                                {isEnglish
+                                    ? 'Gives the app its icon in Settings, and says where to open it when someone links: a WeChat mini program is opened in WeChat and scans the code with its own scanner.'
+                                    : '决定应用在“设置”中的图标，以及绑定时提示用户在哪里打开它：微信小程序需在微信中打开，并用小程序自带的扫码功能扫描二维码。'}
+                            </span>
+                        </label>
+                    )}
                 </div>
             </CreateSection>
 
@@ -765,6 +792,11 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                                     {app.accountLinking && (
                                         <span className="admin-tickets-tag admin-tickets-tag-used">
                                             {isEnglish ? 'Account linking' : '已开启账号绑定'}
+                                        </span>
+                                    )}
+                                    {app.platform && (
+                                        <span className="admin-tickets-tag admin-tickets-tag-used">
+                                            {isEnglish ? APP_PLATFORM_NAMES[app.platform].en : APP_PLATFORM_NAMES[app.platform].zh}
                                         </span>
                                     )}
                                 </div>

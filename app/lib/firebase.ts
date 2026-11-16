@@ -21,6 +21,7 @@ import type { UploadLimits } from "./uploadLimits";
 import type { ConContent } from "./conContent";
 import type { PassportPublicProfile } from "./passports";
 import type { ProfileVisibility } from "./privacy";
+import type { AppPlatform } from "./appLinks";
 
 const requiredEnvVars = [
     'VITE_FIREBASE_API_KEY',
@@ -620,6 +621,8 @@ export interface AppSummary {
     serviceAccount: string;
     /** Whether accounts here may link their accounts in it. */
     accountLinking: boolean;
+    /** What it runs on, for Settings to show it by. */
+    platform: AppPlatform;
     keys: ApiKeySummary[];
     createdAt: string | null;
     updatedAt: string | null;
@@ -632,6 +635,7 @@ interface AppFields {
     firebaseProjectId: string;
     serviceAccount: string;
     accountLinking: boolean;
+    platform: AppPlatform;
 }
 
 /** Every app with its API keys, the service account an app's maintainers grant roles to ("" where it can't be told), and the server time. */
@@ -650,6 +654,8 @@ export const callDeleteApp = (data: {appId: string}) =>
 export interface LinkableApp {
     appId: string;
     name: string;
+    /** What it runs on: its icon in Settings, and how Settings says to open it. */
+    platform: AppPlatform;
     /** Off for an app that has stopped linking accounts, whose link may only be undone. */
     accountLinking: boolean;
     link: {appUserName: string; linkedAt: string | null} | null;

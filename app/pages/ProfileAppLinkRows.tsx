@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { accountErrorMessage, linkRefusalMessage } from '~/lib/accountErrors';
-import { linkSharedFields } from '~/lib/appLinks';
+import { APP_PLATFORM_NAMES, linkSharedFields } from '~/lib/appLinks';
 import { toDate } from '~/lib/collectionCache';
 import {
     callCancelAppLink,
@@ -17,6 +17,7 @@ import {
     type LinkableApp,
 } from '~/lib/firebase';
 import type { ShowToast } from '~/lib/useToasts';
+import { appBrand, ConnectionRow, type ConnectionStatus } from '~/pages/ProfileConnectionRow';
 
 /** A request this tab started, as startAppLink gave it. */
 interface Started {
@@ -224,46 +225,91 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
         );
     }
 
+    const wechat = app.platform === 'wechat-mini-program';
     return (
-        <div className="settings-link-panel">
-            <span className="settings-row-help">
-                {isEnglish
-                    ? `Open ${app.name} and scan this code, or enter the six digits under it. ${app.name} then shows you four digits to enter here.`
-                    : `请打开${app.name}扫描此二维码，或输入下方的 6 位数字。随后${app.name}会显示 4 位数字，请回到此页输入。`}
-            </span>
-            <div className="settings-link-qr">
-                <QRCodeSVG value={started.qr} size={176} level="M" marginSize={2}/>
-            </div>
-            <span className="settings-link-code" aria-label={isEnglish ? 'Code' : '数字码'}>
-                {started.code.slice(0, 3)} {started.code.slice(3)}
-            </span>
-            {watched.refusal && (
-                // The app tried and was refused: say why, as the app tells its user.
-                <span className="settings-link-refusal" role="alert">
-                    {isEnglish ? `${app.name} couldn’t link: ` : `${app.name}未能绑定：`}
-                    {linkRefusalMessage(watched.refusal, isEnglish)}
+        <div className="settings-link-panel settings-link-panel--waiting">
+            <div className="settings-link-scan">
+                <div className="settings-link-qr">
+                    <QRCodeSVG value={started.qr} size={176} level="M" marginSize={2}/>
+                </div>
+                <span className="settings-link-code" aria-label={isEnglish ? 'Code' : '数字码'}>
+                    {started.code.slice(0, 3)} {started.code.slice(3)}
                 </span>
-            )}
-            <span className="settings-row-state">
-                {isEnglish ? `${formatLeft(watched.expiresAt - now)} left` : `剩余 ${formatLeft(watched.expiresAt - now)}`}
-            </span>
-            <div className="settings-account-actions">
-                <button type="button" className="admin-btn admin-btn--dashed" onClick={cancel}>
-                    {isEnglish ? 'Cancel' : '取消'}
-                </button>
+            </div>
+            <div className="settings-link-guide">
+                {wechat ? (
+                    // The mini program's own words (sekai-beyond_uniapp, pages/user/sekai-link), which
+                    // it has only in Chinese: change these with them.
+                    <ol className="settings-link-steps">
+                        <li>
+                            {isEnglish
+                                ? <>In WeChat, open {app.name} and go to <strong>我的 → 网站账号</strong> (Me → Website
+                                    account).</>
+                                : <>在微信中打开{app.name}，进入<strong>「我的 → 网站账号」</strong>。</>}
+                        </li>
+                        <li>
+                            {isEnglish
+                                ? <>Tap <strong>扫码绑定</strong> (Scan to link) and scan this code, or
+                                    tap <strong>输入 6 位数字</strong> and type the six digits under it.</>
+                                : <>点<strong>「扫码绑定」</strong>扫描此二维码，或点<strong>「输入 6
+                                    位数字」</strong>输入下方的数字。</>}
+                        </li>
+                        <li>
+                            {isEnglish
+                                ? <>Check it’s your account and tap <strong>是我的账号，继续</strong> (That’s me).
+                                    The mini program then shows four digits: enter them here.</>
+                                : <>确认是您的账号后点<strong>「是我的账号，继续」</strong>，再在此输入小程序显示的 4
+                                    位数字。</>}
+                        </li>
+                    </ol>
+                ) : (
+                    <ol className="settings-link-steps">
+                        <li>{isEnglish ? `Open ${app.name}.` : `打开${app.name}。`}</li>
+                        <li>
+                            {isEnglish
+                                ? 'Scan this code there, or enter the six digits under it.'
+                                : '在应用中扫描此二维码，或输入下方的 6 位数字。'}
+                        </li>
+                        <li>
+                            {isEnglish
+                                ? `${app.name} then shows you four digits. Enter them here.`
+                                : `随后${app.name}会显示 4 位数字，请回到此页输入。`}
+                        </li>
+                    </ol>
+                )}
+                <span className="settings-row-help">
+                    {isEnglish
+                        ? 'On the same phone? Enter the six digits instead of scanning.'
+                        : '在同一部手机上操作？请直接输入 6 位数字，无需扫码。'}
+                </span>
+                {watched.refusal && (
+                    // The app tried and was refused: say why, as the app tells its user.
+                    <span className="settings-link-refusal" role="alert">
+                        {isEnglish ? `${app.name} couldn’t link: ` : `${app.name}未能绑定：`}
+                        {linkRefusalMessage(watched.refusal, isEnglish)}
+                    </span>
+                )}
+                <span className="settings-row-state">
+                    {isEnglish ? `${formatLeft(watched.expiresAt - now)} left` : `剩余 ${formatLeft(watched.expiresAt - now)}`}
+                </span>
+                <div className="settings-account-actions">
+                    <button type="button" className="admin-btn admin-btn--dashed" onClick={cancel}>
+                        {isEnglish ? 'Cancel' : '取消'}
+                    </button>
+                </div>
             </div>
         </div>
     );
 };
 
 /**
- * /profile's Settings tab: the apps this account may link to its account in
- * them, such as the mini program, and its links there. Hidden when no app
- * links accounts. Shown with a way to try again when it can't be loaded, since
- * a link already made can only be removed from here. Everything is enforced
- * server-side (functions/appLinks.ts).
+ * The Connected Accounts card's rows for the apps this account may link to its
+ * account in them, such as the WeChat mini program, and its links there. None
+ * when no app links accounts. A row with a way to try again when they can't be
+ * loaded, since a link already made can only be removed from here. Everything
+ * is enforced server-side (functions/appLinks.ts).
  */
-export const ProfileAppLinksSection = ({showToast}: {showToast: ShowToast}) => {
+export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const language = isEnglish ? 'en' : 'zh';
     const {user} = useAuth();
@@ -332,86 +378,98 @@ export const ProfileAppLinksSection = ({showToast}: {showToast: ShowToast}) => {
         }
     };
 
-    const title = <h2 className="settings-section-title">{isEnglish ? 'Linked Apps' : '已绑定的应用'}</h2>;
-
     if (!apps && loadFailed) {
         return (
-            <section className="settings-section">
-                {title}
-                <p className="settings-section-note">
-                    {isEnglish ? 'Couldn’t load your linked apps just now.' : '暂时无法加载已绑定的应用。'}
-                </p>
-                <div className="settings-account-actions">
-                    <button type="button" className="admin-btn admin-btn--dashed" disabled={loading}
-                            onClick={() => void load()}>
+            <ConnectionRow
+                brand="app"
+                title={isEnglish ? 'Linked apps' : '已绑定的应用'}
+                help={isEnglish ? 'Couldn’t load your linked apps just now.' : '暂时无法加载已绑定的应用。'}
+                action={(
+                    <button type="button" className="profile-action" disabled={loading} onClick={() => void load()}>
                         {isEnglish ? 'Try again' : '重试'}
                     </button>
-                </div>
-            </section>
+                )}
+            />
         );
     }
 
-    if (!apps || apps.length === 0) return null;
+    if (!apps) {
+        return (
+            <div className="settings-row">
+                <div className="spinner spinner-centered"/>
+            </div>
+        );
+    }
 
     const dateFormat = {year: 'numeric', month: 'long', day: 'numeric'} as const;
 
-    return (
-        <section className="settings-section">
-            {title}
-            <p className="settings-section-note">
-                {isEnglish
-                    ? 'Link your account in one of our apps to this one, so it can show your membership and event staff roles there. You can use each without linking.'
-                    : '把您在我们应用中的账号与本站账号绑定后，应用中就能显示您的会员和活动工作人员身份。不绑定也可以分别使用。'}
-            </p>
-            <div className="settings-rows">
-                {apps.map(app => {
-                    const linkedAt = app.link?.linkedAt
-                        ? new Date(app.link.linkedAt).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', dateFormat)
-                        : null;
-                    const linking = started?.appId === app.appId;
-                    return (
-                        <div key={app.appId} className="settings-row settings-row--account">
-                            <div className="settings-row-text">
-                                <span className="settings-row-title">{app.name}</span>
-                                <span className="settings-row-help">
-                                    {app.link
-                                        ? (isEnglish
-                                            ? `Linked to ${app.link.appUserName || 'an account'}${linkedAt ? ` since ${linkedAt}` : ''}.`
-                                            : `已绑定${app.link.appUserName ? `“${app.link.appUserName}”` : '一个账号'}${linkedAt ? `，绑定于 ${linkedAt}` : ''}。`)
-                                        : (isEnglish ? 'Not linked.' : '未绑定。')}
-                                </span>
-                                {app.link && !app.accountLinking && (
-                                    <span className="settings-row-state">
-                                        {isEnglish
-                                            ? 'Linking is paused for this app, so it can’t see your account for now.'
-                                            : '此应用的绑定功能已暂停，目前无法查看您的账号信息。'}
-                                    </span>
-                                )}
-                            </div>
-                            {app.link ? (
-                                <button type="button" className="profile-action" disabled={busyApp === app.appId}
-                                        onClick={() => void unlink(app)}>
-                                    {isEnglish ? 'Unlink' : '解绑'}
-                                </button>
-                            ) : app.accountLinking && !linking && (
-                                <button type="button" className="profile-action" disabled={busyApp === app.appId}
-                                        onClick={() => void start(app)}>
-                                    {isEnglish ? 'Link' : '绑定'}
-                                </button>
-                            )}
-                            {linking && started && (
-                                <LinkPanel
-                                    app={app}
-                                    started={started}
-                                    showToast={showToast}
-                                    onClose={() => setStarted(null)}
-                                    onLinked={linked}
-                                />
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        </section>
-    );
+    return apps.map(app => {
+        const linkedAt = app.link?.linkedAt
+            ? new Date(app.link.linkedAt).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', dateFormat)
+            : null;
+        const linking = started?.appId === app.appId;
+        const platform = app.platform ? APP_PLATFORM_NAMES[app.platform] : null;
+        const status: ConnectionStatus = !app.link ? 'off' : app.accountLinking ? 'on' : 'paused';
+        return (
+            <ConnectionRow
+                key={app.appId}
+                brand={appBrand(app.platform)}
+                title={app.name}
+                kind={platform ? (isEnglish ? platform.en : platform.zh) : (isEnglish ? 'App' : '应用')}
+                status={{
+                    value: status,
+                    label: {
+                        on: isEnglish ? 'Linked' : '已绑定',
+                        off: isEnglish ? 'Not linked' : '未绑定',
+                        paused: isEnglish ? 'Paused' : '已暂停',
+                    }[status],
+                }}
+                help={app.link
+                    ? (isEnglish
+                        ? <>Linked
+                            to <strong>{app.link.appUserName || 'an account'}</strong>{linkedAt ? ` since ${linkedAt}` : ''}.</>
+                        : <>已绑定{app.link.appUserName ?
+                            <strong>“{app.link.appUserName}”</strong> : '一个账号'}{linkedAt ? `，绑定于 ${linkedAt}` : ''}。</>)
+                    : (isEnglish
+                        ? `Link your account there to show your membership and event staff roles in ${app.name}.`
+                        : `绑定您在${app.name}中的账号后，即可在其中显示您的会员和活动工作人员身份。`)}
+                state={app.link && !app.accountLinking
+                    ? (isEnglish
+                        ? 'Linking is paused for this app, so it can’t see your account for now.'
+                        : '此应用的绑定功能已暂停，目前无法查看您的账号信息。')
+                    : undefined}
+                details={!linking && (
+                    <details className="settings-connection-shares">
+                        <summary>{isEnglish ? `What ${app.name} can see` : `${app.name}可以看到什么`}</summary>
+                        <p>
+                            {isEnglish
+                                ? `Once linked, your ${linkSharedFields(true)}, until either side unlinks. It never sees your password, and it can’t sign in here as you.`
+                                : `绑定后，在任一方解绑前，可以看到您的${linkSharedFields(false)}。它不会获得您的密码，也无法以您的身份登录本站。`}
+                        </p>
+                    </details>
+                )}
+                action={app.link ? (
+                    <button type="button" className="profile-action" disabled={busyApp === app.appId}
+                            onClick={() => void unlink(app)}>
+                        {isEnglish ? 'Unlink' : '解绑'}
+                    </button>
+                ) : app.accountLinking && !linking && (
+                    <button type="button" className="profile-action" disabled={busyApp === app.appId}
+                            onClick={() => void start(app)}>
+                        {isEnglish ? 'Link' : '绑定'}
+                    </button>
+                )}
+            >
+                {linking && started && (
+                    <LinkPanel
+                        app={app}
+                        started={started}
+                        showToast={showToast}
+                        onClose={() => setStarted(null)}
+                        onLinked={linked}
+                    />
+                )}
+            </ConnectionRow>
+        );
+    });
 };

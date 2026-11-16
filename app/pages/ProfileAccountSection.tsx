@@ -1,16 +1,13 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useAuth } from '~/components/AuthProvider';
-import { GoogleButton } from '~/components/GoogleButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { accountErrorMessage } from '~/lib/accountErrors';
 import {
-    callBindGoogle,
     callCancelAccountDeletion,
     callChangeEmail,
     callChangePassword,
     callGetSignInMethods,
     callSendEmailCode,
-    callUnbindGoogle,
     type SignInMethods,
 } from '~/lib/firebase';
 import type { ShowToast } from '~/lib/useToasts';
@@ -23,6 +20,41 @@ const CODE_FIELD = {
     required: true,
     className: 'admin-input auth-input auth-code-input',
 } as const;
+
+/** How the account signs in, which the Account and Connected Accounts cards both show. */
+export interface SignInState {
+    /** Null until first loaded. */
+    methods: SignInMethods | null;
+    /** The last load failed. */
+    failed: boolean;
+    reload: () => Promise<void>;
+}
+
+/**
+ * How the signed-in account signs in, loaded once for the Settings tab: a
+ * password set in one card is what lets Google be unbound in the other.
+ */
+export function useSignInMethods(): SignInState {
+    const {user} = useAuth();
+    const [methods, setMethods] = useState<SignInMethods | null>(null);
+    const [failed, setFailed] = useState(false);
+
+    const reload = useCallback(async () => {
+        try {
+            setMethods((await callGetSignInMethods()).data);
+            setFailed(false);
+        } catch {
+            setFailed(true);
+        }
+    }, []);
+
+    const uid = user?.uid;
+    useEffect(() => {
+        if (uid) void reload();
+    }, [uid, reload]);
+
+    return {methods, failed, reload};
+}
 
 /** The busy flag and error line every form here shares. */
 function useFormAction() {
@@ -264,72 +296,20 @@ const DeletionRow = ({deleteAt, ownRequest, showToast}: {
 };
 
 /**
- * /profile's Settings tab: the account's address and how it signs in. Everything
- * here is enforced server-side, the month between email changes included; the
- * buttons only spare someone a refused call.
+ * /profile's Settings tab: the account's address and password. Google and
+ * linked apps are the Connected Accounts card's (ProfileConnectionsSection).
+ * Everything here is enforced server-side, the month between email changes
+ * included; the buttons only spare someone a refused call.
  */
-export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
+export const ProfileAccountSection = ({signIn, showToast}: {signIn: SignInState; showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
-    const language = isEnglish ? 'en' : 'zh';
-    const {user, profile, refreshProfile} = useAuth();
-    const [methods, setMethods] = useState<SignInMethods | null>(null);
-    const [failed, setFailed] = useState(false);
+    const {user, profile} = useAuth();
+    const {methods, failed, reload} = signIn;
     const [editing, setEditing] = useState<'email' | 'password' | null>(null);
-    const [bindingGoogle, setBindingGoogle] = useState(false);
-    const [googleBusy, setGoogleBusy] = useState(false);
-
-    const load = useCallback(async () => {
-        try {
-            setMethods((await callGetSignInMethods()).data);
-            setFailed(false);
-        } catch {
-            setFailed(true);
-        }
-    }, []);
-
-    const uid = user?.uid;
-    useEffect(() => {
-        if (uid) void load();
-    }, [uid, load]);
 
     const closeForm = () => {
         setEditing(null);
-        void load();
-    };
-
-    const bind = async (idToken: string) => {
-        setGoogleBusy(true);
-        try {
-            await callBindGoogle({idToken, language});
-            setBindingGoogle(false);
-            await Promise.all([load(), refreshProfile().catch(() => {
-            })]);
-            showToast(isEnglish ? 'Google account bound.' : '已绑定 Google 账号。', 'success');
-        } catch (err) {
-            showToast(accountErrorMessage(err, isEnglish), 'error');
-        } finally {
-            setGoogleBusy(false);
-        }
-    };
-
-    const unbind = async () => {
-        const confirmed = window.confirm(
-            isEnglish
-                ? 'Unbind this Google account? You’ll sign in with your email and password instead.'
-                : '确定要解绑此 Google 账号吗？之后需使用邮箱和密码登录。',
-        );
-        if (!confirmed) return;
-        setGoogleBusy(true);
-        try {
-            await callUnbindGoogle({language});
-            await Promise.all([load(), refreshProfile().catch(() => {
-            })]);
-            showToast(isEnglish ? 'Google account unbound.' : '已解绑 Google 账号。', 'success');
-        } catch (err) {
-            showToast(accountErrorMessage(err, isEnglish), 'error');
-        } finally {
-            setGoogleBusy(false);
-        }
+        void reload();
     };
 
     if (!profile) return null;
@@ -338,7 +318,6 @@ export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
     const lockedUntil = methods?.emailChangeAllowedAt
         ? new Date(methods.emailChangeAllowedAt).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', dateFormat)
         : null;
-    const canUnbind = !!methods?.hasPassword;
 
     return (
         <section className="settings-section">
@@ -409,35 +388,6 @@ export const ProfileAccountSection = ({showToast}: {showToast: ShowToast}) => {
                                 onCancel={() => setEditing(null)}
                                 showToast={showToast}
                             />
-                        )}
-                    </Row>
-
-                    <Row
-                        title="Google"
-                        help={methods.googleEmail
-                            ?? (isEnglish ? 'Not bound. Bind one to sign in with Google.' : '未绑定。绑定后可使用 Google 登录。')}
-                        state={methods.googleEmail && !canUnbind
-                            ? (isEnglish ? 'Set a password before unbinding, or you’d have no way to sign in.' : '解绑前请先设置密码，否则将无法登录。')
-                            : undefined}
-                        action={methods.googleEmail ? (
-                            <button
-                                type="button"
-                                className="profile-action"
-                                disabled={googleBusy || !canUnbind}
-                                onClick={() => void unbind()}
-                            >
-                                {isEnglish ? 'Unbind' : '解绑'}
-                            </button>
-                        ) : !bindingGoogle && (
-                            <button type="button" className="profile-action" onClick={() => setBindingGoogle(true)}>
-                                {isEnglish ? 'Bind' : '绑定'}
-                            </button>
-                        )}
-                    >
-                        {!methods.googleEmail && bindingGoogle && (
-                            <div className="settings-google-bind">
-                                <GoogleButton onToken={idToken => void bind(idToken)}/>
-                            </div>
                         )}
                     </Row>
                 </div>

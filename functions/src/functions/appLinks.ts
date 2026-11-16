@@ -129,6 +129,7 @@ export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
             return {
                 appId: app.id,
                 name: app.name,
+                platform: app.platform,
                 accountLinking: app.accountLinking,
                 link: link ? {
                     appUserName: appLinkUserName(link.appUserName),
