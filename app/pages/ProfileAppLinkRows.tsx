@@ -243,9 +243,9 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
                     <ol className="settings-link-steps">
                         <li>
                             {isEnglish
-                                ? <>In WeChat, open {app.name} and go to <strong>我的 → 网站账号</strong> (Me → Website
-                                    account).</>
-                                : <>在微信中打开{app.name}，进入<strong>「我的 → 网站账号」</strong>。</>}
+                                ? <>In WeChat, open {app.name} and go to <strong>我的 → 编辑资料 → 彼世界网站账号</strong> (Me →
+                                    Edit profile → Sekai Beyond website account).</>
+                                : <>在微信中打开{app.name}，进入<strong>「我的 → 编辑资料 → 彼世界网站账号」</strong>。</>}
                         </li>
                         <li>
                             {isEnglish
