@@ -6,7 +6,8 @@ export function Banner({tone, className, children}: {
     children: ReactNode;
 }) {
     return (
-        <div className={`admin-tickets-send-banner admin-tickets-send-banner-${tone}${className ? ` ${className}` : ''}`}>
+        <div
+            className={`admin-tickets-send-banner admin-tickets-send-banner-${tone}${className ? ` ${className}` : ''}`}>
             {children}
         </div>
     );

@@ -61,7 +61,8 @@ export const WalletPassesTool = ({onBack, showToast}: WalletPassesToolProps) => 
         >
             {status && (
                 <>
-                    <Banner tone={off || atLimit || lowHeadroom || status.readingSource !== 'live' ? 'warning' : 'info'}>
+                    <Banner
+                        tone={off || atLimit || lowHeadroom || status.readingSource !== 'live' ? 'warning' : 'info'}>
                         <span>
                             {!status.configured
                                 ? (isEnglish

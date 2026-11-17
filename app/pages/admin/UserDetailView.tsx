@@ -816,7 +816,7 @@ export const UserDetailView = ({
                             disabled={deletionBusy || !canManage || userRecord.uid === currentUser.uid}
                             title={
                                 userRecord.uid === currentUser.uid
-                                    ? (isEnglish ? 'Use the Danger Zone on your own profile' : '请在个人主页的危险操作区删除自己')
+                                    ? (isEnglish ? 'Delete your own account from Settings on your profile' : '请在个人主页的“设置”中删除自己的账号')
                                     : manageTooltip
                             }
                         >

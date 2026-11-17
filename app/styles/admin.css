@@ -76,6 +76,17 @@
     box-shadow: var(--shadow-primary);
 }
 
+.admin-btn--danger {
+    border: none;
+    background: var(--color-error);
+    color: white;
+    font-weight: 700;
+}
+
+.admin-btn--danger:hover:not(:disabled) {
+    background: #c94545;
+}
+
 .admin-btn--purple {
     padding: 8px 14px;
     border: none;

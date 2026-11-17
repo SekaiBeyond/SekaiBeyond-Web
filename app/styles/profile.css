@@ -740,6 +740,16 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     transform: translateY(-1px);
 }
 
+.profile-action--danger {
+    border-color: rgba(224, 85, 85, 0.35);
+    color: var(--color-error);
+}
+
+.profile-action--danger:hover {
+    border-color: var(--color-error);
+    background: rgba(224, 85, 85, 0.06);
+}
+
 .profile-action:focus-visible {
     outline: 3px solid rgba(255, 107, 157, 0.45);
     outline-offset: 2px;

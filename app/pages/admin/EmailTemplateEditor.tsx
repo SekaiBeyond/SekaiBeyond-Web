@@ -127,7 +127,16 @@ export const formatSavedAt = (date: Date, isEnglish: boolean): string =>
 
 type RenderPreview = (template: EmailTemplate, contactEmail: string) => {subject: string; html: string};
 
-export function EmailTemplateSection({editor, failedText, status, placeholders, warning, footer, readOnly, renderPreview}: {
+export function EmailTemplateSection({
+                                         editor,
+                                         failedText,
+                                         status,
+                                         placeholders,
+                                         warning,
+                                         footer,
+                                         readOnly,
+                                         renderPreview
+                                     }: {
     editor: EmailTemplateState;
     failedText: string;
     status?: ReactNode;
