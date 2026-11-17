@@ -9,29 +9,7 @@ import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import { localized } from '~/lib/localized';
 import { ticketTypeLabel } from '~/pages/admin/tickets/types';
 
-export function useHeldTickets(uid: string | null): {ticketEvents: HeldTicketEvent[] | null; failed: boolean} {
-    const [ticketEvents, setTicketEvents] = useState<HeldTicketEvent[] | null>(null);
-    const [failed, setFailed] = useState(false);
-
-    useEffect(() => {
-        setTicketEvents(null);
-        setFailed(false);
-        if (!uid) return;
-        let stale = false;
-        callGetMyTickets()
-            .then(result => {
-                if (!stale) setTicketEvents(result.data.events);
-            })
-            .catch(() => {
-                if (!stale) setFailed(true);
-            });
-        return () => {
-            stale = true;
-        };
-    }, [uid]);
-
-    return {ticketEvents, failed};
-}
+export const fetchHeldTickets = async (): Promise<HeldTicketEvent[]> => (await callGetMyTickets()).data.events;
 
 function useScreenAwake() {
     useEffect(() => {

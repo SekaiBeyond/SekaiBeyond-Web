@@ -5,7 +5,7 @@ import type { ShowToast } from '../utils';
 import type { AttendeeData, ParsedRow, ParseError } from './types';
 import { useAccountLinks } from './useAccountLinks';
 import { type ColumnMapping, parseFile, validateRows } from './importValidation';
-import { ImportIssues } from './ImportIssues';
+import { ImportIssues, SHEET_ACCEPT } from './ImportIssues';
 import { ImportPreviewTable, MAX_PREVIEW } from './ImportPreviewTable';
 
 const MAPPING_LABEL_STYLE = {
@@ -56,7 +56,7 @@ const guessColumn = (fields: string[], headers: string[]): string => {
 
 interface ImportSectionProps {
     eventId: string;
-    existingAttendees?: AttendeeData[];
+    existingAttendees: AttendeeData[];
     readOnly: boolean;
     showToast: ShowToast;
     onImported: () => void;
@@ -196,7 +196,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    accept={SHEET_ACCEPT}
                     onChange={handleFile}
                     disabled={readOnly || busy}
                 />
@@ -204,8 +204,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
 
             {rawFields.length > 0 && (
                 <div style={{marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-                    <div className="admin-tickets-import-mapping"
-                         style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
+                    <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
                         {MAPPING_FIELDS.map(field => (
                             <label key={field.key} style={MAPPING_LABEL_STYLE}>
                                 <span style={MAPPING_SPAN_STYLE}>{isEnglish ? field.en : field.zh}</span>

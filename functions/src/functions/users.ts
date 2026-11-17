@@ -114,15 +114,11 @@ export const setProfileVisibility = onCall({maxInstances: 10}, async (request) =
     const sections = parseVisibilityInput((request.data as {sections?: unknown})?.sections);
 
     const userRef = db.collection("users").doc(uid);
-    const merged = await db.runTransaction(async (txn) => {
+    await db.runTransaction(async (txn) => {
         const snap = await txn.get(userRef);
         if (!snap.exists) throw new HttpsError("not-found", "User not found.");
-        const next = {...readVisibility(snap.data()?.profileVisibility), ...sections};
-        txn.update(userRef, {profileVisibility: next});
-        return next;
+        txn.update(userRef, {profileVisibility: {...readVisibility(snap.data()?.profileVisibility), ...sections}});
     });
-
-    return {visibility: merged};
 });
 
 function requireAdminOver(callerSnap: FirebaseFirestore.DocumentSnapshot, targetData: FirebaseFirestore.DocumentData): void {
@@ -313,8 +309,6 @@ export const deleteBanner = onCall({maxInstances: 10}, async (request) => {
             targetName: targetData.displayName ?? "",
         }));
     }
-
-    return {deleted: true};
 });
 
 function readTitle(raw: unknown): string {
@@ -386,7 +380,6 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
     });
 
     if (oldGroup !== newGroup) await signOutOfApps(targetUid);
-    return {oldGroup, newGroup};
 });
 export const setMembership = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -487,8 +480,6 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
             newTitleCn: titleCn,
         }));
     });
-
-    return {success: true};
 });
 export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -498,7 +489,7 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
     const badgeId = validateDocId(input.badgeId, "badgeId");
     const grant = validateBoolean(input.grant, "grant");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const targetSnap = await txn.get(db.collection("users").doc(targetUid));
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         requireCanManage(callerSnap.data()!.group, targetSnap.data()!.group);
@@ -517,7 +508,6 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
             badgeId,
             badgeName: badgeSnap.data()?.name ?? badgeId,
         }));
-        return {granted: grant};
     });
 });
 
@@ -607,7 +597,6 @@ export const unbanUser = onCall({maxInstances: 10}, async (request) => {
     });
 
     if (lifted) await enableSignIn(targetUid);
-    return {lifted};
 });
 
 export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND_API_KEY]}, async (request) => {
@@ -669,7 +658,6 @@ export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND
             await sendNotice(await accountDeletionAfterMoveMail(oldEmail, deleteAt.toDate(), language));
         }
     }
-    return {deleteAt: deleteAt.toDate().toISOString()};
 });
 export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) => {
     const callerUid = await requireAuth(request);
@@ -713,8 +701,6 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
             targetName: targetData.displayName ?? "",
         }));
     });
-
-    return {cancelled: true};
 });
 export const onUserDeleted = onDocumentDeleted(
     {document: "users/{uid}", maxInstances: 10, retry: true},

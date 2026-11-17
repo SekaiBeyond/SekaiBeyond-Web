@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { toDate } from '~/lib/collectionCache';
 import { errorSuffix, getFirebaseDb } from '~/lib/firebase';
+import { useSiteConfig } from '~/lib/siteConfig';
 import { ModalShell } from './ModalShell';
+import { usesContactEmail } from './tickets/helpers';
 import type { EmailTemplate } from './tickets/types';
 import type { ShowToast } from './utils';
 
@@ -123,13 +125,52 @@ export const formatSavedAt = (date: Date, isEnglish: boolean): string =>
         hour: '2-digit', minute: '2-digit',
     });
 
-interface EmailTemplateFieldsProps {
+type RenderPreview = (template: EmailTemplate, contactEmail: string) => {subject: string; html: string};
+
+export function EmailTemplateSection({editor, failedText, status, placeholders, warning, footer, readOnly, renderPreview}: {
+    editor: EmailTemplateState;
+    failedText: string;
+    status?: ReactNode;
+    placeholders: string;
+    warning?: ReactNode;
+    footer?: ReactNode;
+    readOnly?: boolean;
+    renderPreview: RenderPreview;
+}) {
+    const {isEnglish} = useLanguage();
+    const {config} = useSiteConfig();
+
+    if (editor.loading) return <div className="spinner spinner-centered"/>;
+    if (editor.loadFailed) return <p className="admin-no-results">{failedText}</p>;
+
+    return (
+        <div className="admin-tickets-template">
+            <h3>{isEnglish ? 'Email template' : '邮件模板'}</h3>
+            {status}
+            <p className="admin-helper-text">{placeholders}</p>
+            {warning}
+            {!config.contactEmail && usesContactEmail(editor.template) && (
+                <p className="admin-helper-text admin-tickets-edit-warning">
+                    {isEnglish
+                        ? 'This template uses {{ contactEmail }}, but Site Config has no Contact Email. Sending is refused until one is set.'
+                        : '此模板使用了 {{ contactEmail }}，但网站设置中尚未填写联系邮箱。填写之前将无法发送。'}
+                </p>
+            )}
+            <EmailTemplateFields
+                editor={editor}
+                readOnly={readOnly}
+                renderPreview={template => renderPreview(template, config.contactEmail)}
+            />
+            {footer}
+        </div>
+    );
+}
+
+function EmailTemplateFields({editor, readOnly = false, renderPreview}: {
     editor: EmailTemplateState;
     readOnly?: boolean;
     renderPreview: (template: EmailTemplate) => {subject: string; html: string};
-}
-
-export function EmailTemplateFields({editor, readOnly = false, renderPreview}: EmailTemplateFieldsProps) {
+}) {
     const {isEnglish} = useLanguage();
     const [showPreview, setShowPreview] = useState(false);
     const {template, setTemplate, saving, isDirty, isAtDefault, save, resetToDefault} = editor;

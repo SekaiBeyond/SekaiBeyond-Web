@@ -164,15 +164,30 @@ export const SignInModal = () => {
 
     if (!show) return null;
 
-    const emailField = (
+    const emailInput = (onChange: (value: string) => void) => (
         <input
             type="email"
             autoComplete="email"
             required
             readOnly={busy}
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={e => onChange(e.target.value)}
             placeholder={isEnglish ? 'Email' : '邮箱'}
+            className="admin-input auth-input"
+        />
+    );
+    const emailField = emailInput(setEmail);
+
+    const nameField = (
+        <input
+            type="text"
+            autoComplete="name"
+            required
+            maxLength={50}
+            readOnly={busy}
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            placeholder={isEnglish ? 'Your name' : '您的名称'}
             className="admin-input auth-input"
         />
     );
@@ -312,17 +327,7 @@ export const SignInModal = () => {
                         </p>
                         <form className="auth-form" onSubmit={signUp}>
                             {codeField}
-                            <input
-                                type="text"
-                                autoComplete="name"
-                                required
-                                maxLength={50}
-                                readOnly={busy}
-                                value={displayName}
-                                onChange={e => setDisplayName(e.target.value)}
-                                placeholder={isEnglish ? 'Your name' : '您的名称'}
-                                className="admin-input auth-input"
-                            />
+                            {nameField}
                             {passwordField(isEnglish ? 'Password (at least 8 characters)' : '密码（至少 8 个字符）', 'new-password')}
                             {errorLine}
                             {submitButton(isEnglish ? 'Create Account' : '创建账号')}
@@ -384,31 +389,12 @@ export const SignInModal = () => {
                                 : '此 Google 账号尚未注册 Sekai Beyond。请确认您的信息以完成注册。'}
                         </p>
                         <form className="auth-form" onSubmit={createWithGoogle}>
-                            <input
-                                type="text"
-                                autoComplete="name"
-                                required
-                                maxLength={50}
-                                readOnly={busy}
-                                value={displayName}
-                                onChange={e => setDisplayName(e.target.value)}
-                                placeholder={isEnglish ? 'Your name' : '您的名称'}
-                                className="admin-input auth-input"
-                            />
-                            <input
-                                type="email"
-                                autoComplete="email"
-                                required
-                                readOnly={busy}
-                                value={email}
-                                onChange={e => {
-                                    setEmail(e.target.value);
-                                    setGoogleCodeSent(false);
-                                    setCode('');
-                                }}
-                                placeholder={isEnglish ? 'Email' : '邮箱'}
-                                className="admin-input auth-input"
-                            />
+                            {nameField}
+                            {emailInput(value => {
+                                setEmail(value);
+                                setGoogleCodeSent(false);
+                                setCode('');
+                            })}
                             {googleNeedsCode && googleCodeSent && (
                                 <>
                                     <p className="auth-note">

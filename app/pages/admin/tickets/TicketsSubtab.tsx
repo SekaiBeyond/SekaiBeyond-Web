@@ -20,6 +20,7 @@ import { eventDayStatus, formatEventDays } from '~/lib/eventDays';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { downloadBlob } from '~/lib/download';
 import { AttendeeModal } from '../AttendeeModal';
+import { Banner } from '../Banner';
 import { TicketScanner } from '../TicketScanner';
 import type { ShowToast } from '../utils';
 import { AttendeesSection } from './AttendeesSection';
@@ -453,7 +454,7 @@ export function TicketsSubtab({
             </div>
 
             {templateSaved === false && section !== 'emails' && section !== 'scan' && (
-                <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
+                <Banner tone="warning">
                     <strong>{isEnglish ? 'No ticket email saved yet.' : '尚未保存门票邮件。'}</strong>
                     <p>
                         {isEnglish
@@ -463,7 +464,7 @@ export function TicketsSubtab({
                     <button className="admin-toggle-btn admin-toggle-edit" onClick={() => setSection('emails')}>
                         {isEnglish ? 'Set Up Ticket Email' : '设置门票邮件'}
                     </button>
-                </div>
+                </Banner>
             )}
 
             {section === 'scan' && scanOpen && (

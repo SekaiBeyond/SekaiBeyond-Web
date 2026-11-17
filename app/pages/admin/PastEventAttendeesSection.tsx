@@ -12,7 +12,7 @@ interface PastEventAttendeesSectionProps {
     loading: boolean;
     onReload: () => void | Promise<void>;
     showToast: ShowToast;
-    readOnly?: boolean;
+    readOnly: boolean;
 }
 
 export function PastEventAttendeesSection({
@@ -21,7 +21,7 @@ export function PastEventAttendeesSection({
                                               loading,
                                               onReload,
                                               showToast,
-                                              readOnly = false,
+                                              readOnly,
                                           }: PastEventAttendeesSectionProps) {
     const {isEnglish} = useLanguage();
     const [busyUid, setBusyUid] = useState<string | null>(null);

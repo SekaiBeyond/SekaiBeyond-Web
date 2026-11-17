@@ -152,7 +152,7 @@ export const PassportStockTable = ({
                     return (
                         <tr
                             key={passport.id}
-                            className={`admin-data-table-row--clickable admin-passport-row admin-passport-row--${passport.status}`}
+                            className={`admin-data-table-row--clickable admin-passport-row--${passport.status}`}
                             tabIndex={0}
                             role="button"
                             onClick={() => onOpen(passport.id)}

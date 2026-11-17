@@ -116,7 +116,6 @@ export function useMarkerElements(
         const markers: Record<string, Marker> = {};
         for (const point of latest.current.points) {
             const element = document.createElement('div');
-            element.className = 'map-marker';
             markers[point.key] = new Marker({element, ...latest.current.options})
                 .setLngLat([point.lng, point.lat])
                 .addTo(map);

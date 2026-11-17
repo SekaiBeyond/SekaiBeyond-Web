@@ -37,7 +37,7 @@ export const saveSocialPlatform = onCall({maxInstances: 10}, async (request) => 
     const docId = platformId ?? db.collection("socialPlatforms").doc().id;
     const data = {label, labelCn, order};
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = db.collection("socialPlatforms").doc(docId);
         if (platformId) {
             const existing = await txn.get(ref);
@@ -50,7 +50,6 @@ export const saveSocialPlatform = onCall({maxInstances: 10}, async (request) => 
             ...performer(uid, callerSnap),
             platformLabel: label,
         }));
-        return {id: docId};
     });
 });
 
@@ -59,7 +58,7 @@ export const deleteSocialPlatform = onCall({maxInstances: 10}, async (request) =
 
     const platformId = validateDocId((request.data as {id?: string})?.id, "id");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = db.collection("socialPlatforms").doc(platformId);
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "Social platform not found.");
@@ -69,7 +68,6 @@ export const deleteSocialPlatform = onCall({maxInstances: 10}, async (request) =
             ...performer(uid, callerSnap),
             platformLabel: snap.data()?.label ?? platformId,
         }));
-        return {deleted: true};
     });
 });
 
@@ -82,16 +80,9 @@ export const seedSocialPlatforms = onCall({maxInstances: 10}, async (request) =>
         DEFAULT_SOCIAL_PLATFORMS.map(p => col.doc(p.id).get()),
     );
 
+    const missing = DEFAULT_SOCIAL_PLATFORMS.filter((_, i) => !existing[i].exists);
+    if (missing.length === 0) return;
     const batch = db.batch();
-    let seeded = 0;
-    existing.forEach((snap, i) => {
-        if (!snap.exists) {
-            const {id, ...data} = DEFAULT_SOCIAL_PLATFORMS[i];
-            batch.set(col.doc(id), data);
-            seeded++;
-        }
-    });
-    if (seeded > 0) await batch.commit();
-
-    return {seeded};
+    for (const {id, ...data} of missing) batch.set(col.doc(id), data);
+    await batch.commit();
 });

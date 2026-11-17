@@ -54,10 +54,9 @@ export async function requestDeletion(request: CallableRequest, kind: Deletable)
     return {deleteAt: deleteAt.toDate().toISOString()};
 }
 
-export async function cancelDeletion(request: CallableRequest, kind: Deletable): Promise<{cancelled: boolean}> {
+export async function cancelDeletion(request: CallableRequest, kind: Deletable): Promise<void> {
     await changeDeletion(request, kind, data => {
         if (!deletionPending(data)) throw new HttpsError("not-found", "No pending deletion.");
         return {deleteAt: FieldValue.delete(), recordType: kind.cancelled};
     });
-    return {cancelled: true};
 }

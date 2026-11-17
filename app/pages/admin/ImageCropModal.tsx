@@ -1,7 +1,75 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { useUploadLimits } from '~/lib/uploadLimits';
 import { useModalEffects } from '~/lib/useModalEffects';
-import { type ShowToast, WEBP_QUALITY } from './utils';
+import { type ShowToast, validateImageFile, WEBP_QUALITY } from './utils';
+
+interface Outcome {
+    done: string;
+    failed: string;
+}
+
+export function useImageEditor({aspect = 1, outputWidth, showToast, upload, removal}: {
+    aspect?: number;
+    outputWidth?: number;
+    showToast: ShowToast;
+    upload?: Outcome & {send: (file: File) => Promise<unknown>};
+    removal: Outcome;
+}) {
+    const {isEnglish} = useLanguage();
+    const {imageMb} = useUploadLimits();
+    const inputRef = useRef<HTMLInputElement>(null);
+    const [pending, setPending] = useState<File | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const run = async (task: () => Promise<unknown>, {done, failed}: Outcome, tone: 'success' | 'warning') => {
+        setBusy(true);
+        try {
+            await task();
+            showToast(done, tone);
+        } catch {
+            showToast(failed, 'error');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return {
+        busy,
+        choose: () => {
+            if (!busy) inputRef.current?.click();
+        },
+        remove: (question: string, task: () => Promise<unknown>) => {
+            if (window.confirm(question)) void run(task, removal, 'warning');
+        },
+        input: (
+            <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={e => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (file && validateImageFile(file, imageMb, isEnglish, showToast, true)) setPending(file);
+                }}
+            />
+        ),
+        cropModal: pending && upload && (
+            <ImageCropModal
+                imageSource={pending}
+                aspect={aspect}
+                outputWidth={outputWidth}
+                onConfirm={cropped => {
+                    setPending(null);
+                    void run(() => upload.send(cropped), upload, 'success');
+                }}
+                onCancel={() => setPending(null)}
+                showToast={showToast}
+            />
+        ),
+    };
+}
 
 interface ImageCropModalProps {
     imageSource: File | string;

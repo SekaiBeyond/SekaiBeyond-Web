@@ -166,12 +166,6 @@
     font-size: 18px;
 }
 
-.claim-card .claim-event-category {
-    color: var(--color-primary);
-    font-weight: 600;
-    font-size: 14px;
-}
-
 .claim-actions {
     margin-top: 24px;
     display: flex;

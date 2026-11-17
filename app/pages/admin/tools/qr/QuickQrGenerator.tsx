@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { fileStamp } from '~/lib/csv';
 import { isValidHttpUrl } from '~/lib/urls';
+import { CopyField } from '../../CopyField';
 import { QrPreview, useQrDownload } from './qrExport';
 
 const QR_SIZE = 280;
@@ -13,26 +15,7 @@ export const QuickQrGenerator = () => {
     const trimmed = url.trim();
     const valid = isValidHttpUrl(trimmed);
 
-    const downloadPng = () => {
-        const now = new Date();
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-        requestDownload(trimmed, `qr-code-${stamp}`);
-    };
-
-    const [copyLabel, setCopyLabel] = useState('');
-    const copyUrl = () => {
-        if (!valid) return;
-        navigator.clipboard.writeText(trimmed)
-            .then(() => {
-                setCopyLabel(isEnglish ? 'Copied!' : '已复制');
-                setTimeout(() => setCopyLabel(''), 1500);
-            })
-            .catch(() => {
-                setCopyLabel(isEnglish ? 'Failed' : '失败');
-                setTimeout(() => setCopyLabel(''), 1500);
-            });
-    };
+    const downloadPng = () => requestDownload(trimmed, `qr-code-${fileStamp()}`);
 
     return (
         <>
@@ -59,17 +42,7 @@ export const QuickQrGenerator = () => {
                     <div className="admin-single-code-qr">
                         <QrPreview value={trimmed} size={QR_SIZE}/>
                     </div>
-                    <div className="admin-code-url">
-                        <input
-                            readOnly
-                            value={trimmed}
-                            onClick={e => (e.target as HTMLInputElement).select()}
-                            className="admin-code-input"
-                        />
-                        <button className="admin-btn admin-btn--purple" onClick={copyUrl} type="button">
-                            {copyLabel || (isEnglish ? 'Copy' : '复制')}
-                        </button>
-                    </div>
+                    <CopyField value={trimmed}/>
                     <div className="admin-single-code-actions">
                         <button className="admin-toggle-btn admin-toggle-save" onClick={downloadPng} type="button">
                             {isEnglish ? 'Download PNG' : '下载 PNG'}

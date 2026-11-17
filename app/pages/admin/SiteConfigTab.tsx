@@ -18,7 +18,7 @@ import { refreshAfterSave, type ShowToast } from './utils';
 
 interface SiteConfigTabProps {
     showToast: ShowToast;
-    readOnly?: boolean;
+    readOnly: boolean;
 }
 
 const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
@@ -40,7 +40,7 @@ const PolicyPreview = ({label, content}: {label: string; content: string}) => {
     );
 };
 
-export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps) => {
+export const SiteConfigTab = ({showToast, readOnly}: SiteConfigTabProps) => {
     const {isEnglish} = useLanguage();
 
     const {config, loading: configLoading, failed: configFailed, refresh: refreshConfig} = useSiteConfig();

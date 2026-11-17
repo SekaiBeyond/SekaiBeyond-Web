@@ -24,12 +24,12 @@ export const touchSession = onCall({maxInstances: 20}, async (request) => {
     const device = describeUserAgent(request.rawRequest?.headers?.["user-agent"]);
     const ref = sessionRef(uid, sessionId);
 
-    const registered = await db.runTransaction(async (txn) => {
+    await db.runTransaction(async (txn) => {
         const [userSnap, snap] = await Promise.all([
             txn.get(db.collection("users").doc(uid)),
             txn.get(ref),
         ]);
-        if (!userSnap.exists) return false;
+        if (!userSnap.exists) return;
         if (snap.data()?.endedAt || activeBan(userSnap.data())
             || (!snap.exists && !signedInSinceSessionsEnded(request.auth!.token, userSnap.data()))) {
             throw new HttpsError("unauthenticated", "This device has been signed out.", {code: "session-ended"});
@@ -42,10 +42,7 @@ export const touchSession = onCall({maxInstances: 20}, async (request) => {
                 endedAt: null,
             }),
         }, {merge: true});
-        return true;
     });
-
-    return {registered};
 });
 
 export const endSession = onCall({maxInstances: 10}, async (request) => {
@@ -59,7 +56,7 @@ export const endSession = onCall({maxInstances: 10}, async (request) => {
 
     if (target === own) {
         await ref.delete();
-        return {ended: true};
+        return;
     }
 
     await db.runTransaction(async (txn) => {
@@ -67,7 +64,6 @@ export const endSession = onCall({maxInstances: 10}, async (request) => {
         if (!snap.exists || snap.data()?.endedAt) return;
         txn.update(ref, {endedAt: FieldValue.serverTimestamp()});
     });
-    return {ended: true};
 });
 
 export const endOtherSessions = onCall({maxInstances: 10}, async (request) => {
@@ -79,5 +75,4 @@ export const endOtherSessions = onCall({maxInstances: 10}, async (request) => {
 export const endAllSessions = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     await endSessions(uid, null);
-    return {ended: true};
 });

@@ -33,6 +33,7 @@ import { localized } from '~/lib/localized';
 import type { BadgeActivationCode, UserRecord } from './types';
 import { docToUserRecord, type ShowToast } from './utils';
 import { AccountPicker } from './AccountPicker';
+import { CopyField } from './CopyField';
 import { UserRow } from './UserRow';
 import { BilingualFormField } from './BilingualFormField';
 import { ImageUploadField } from './ImageUploadField';
@@ -330,7 +331,7 @@ export const BadgeDetailView = ({
 
     return (
         <div className="admin-section">
-            <div className="admin-event-detail">
+            <div>
                 <button className="admin-btn admin-btn--link" onClick={onBack}>
                     &larr; {isEnglish ? 'All Badges' : '所有徽章'}
                 </button>
@@ -489,7 +490,7 @@ export const BadgeDetailView = ({
                                 <span className="admin-badges-count">{badgeActivationCodes.length}</span>}
                         </h4>
 
-                        <div className="admin-activation-create-form">
+                        <div>
                             <div className="admin-code-time-inputs">
                                 <label>
                                     <span>{isEnglish ? 'Max Uses' : '最大使用次数'}</span>
@@ -569,13 +570,7 @@ export const BadgeDetailView = ({
                                         </span>
                                     )}
                                 </div>
-                                <div className="admin-code-url">
-                                    <input readOnly value={formatCode(ac.code)} className="admin-code-input"/>
-                                    <button className="admin-btn admin-btn--purple"
-                                            onClick={() => navigator.clipboard.writeText(formatCode(ac.code))}>
-                                        {isEnglish ? 'Copy' : '复制'}
-                                    </button>
-                                </div>
+                                <CopyField value={formatCode(ac.code)}/>
                                 <div className="admin-single-code-actions">
                                     <button
                                         className={`admin-toggle-btn ${ac.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}

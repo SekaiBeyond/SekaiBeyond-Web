@@ -5,7 +5,7 @@ import { formatGroupWithTitle, normalizeGroup, useAuth } from '~/components/Auth
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { PageNav } from '~/components/PageNav';
 import { onPassportClaimed, openRedeemModal } from '~/components/RedeemModal';
-import { callGetPassportPublicProfile, callSetPassportPrivacy } from '~/lib/firebase';
+import { callGetPassportPublicProfile } from '~/lib/firebase';
 import {
     isPassportCodeShape,
     normalizePassportCode,
@@ -17,6 +17,7 @@ import {
 } from '~/lib/passports';
 import { privacyRow, privacyStateLabel } from '~/lib/privacy';
 import { type ShowToast, ToastContainer, useToasts } from '~/lib/useToasts';
+import { usePrivacySettings } from '~/pages/ProfileSettingsTab';
 
 export const PassportPage = () => {
     const {passportId: raw} = useParams();
@@ -418,44 +419,23 @@ const CoverFace = ({design, name, back = false}: {
 
 const PrivacyToggle = ({initialHidden, showToast}: {initialHidden: boolean; showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
-    const {refreshProfile} = useAuth();
-    const [hidden, setHidden] = useState(initialHidden);
-    const [busy, setBusy] = useState(false);
-
-    const row = privacyRow('passportPage');
-    const state = privacyStateLabel(row, !hidden, isEnglish);
-
-    const toggle = async () => {
-        const next = !hidden;
-        setBusy(true);
-        try {
-            await callSetPassportPrivacy({hide: next});
-            setHidden(next);
-            showToast(
-                `${isEnglish ? row.title.en : row.title.zh} · ${privacyStateLabel(row, !next, isEnglish)}`,
-                'success',
-            );
-            refreshProfile().catch(() => {
-            });
-        } catch {
-            showToast(isEnglish ? 'Failed to save. Please try again.' : '保存失败，请重试。', 'error');
-        } finally {
-            setBusy(false);
-        }
-    };
+    const {values, saving, setVisible} = usePrivacySettings(showToast, {passportPage: !initialHidden});
+    const visible = values.passportPage;
 
     return (
         <button
             type="button"
             role="switch"
-            aria-checked={!hidden}
+            aria-checked={visible}
             aria-label={isEnglish ? 'Show this page to people who scan it' : '向扫描者公开此页面'}
-            className={`passport-privacy${hidden ? ' passport-privacy--private' : ''}`}
-            disabled={busy}
-            onClick={() => void toggle()}
+            className={`passport-privacy${visible ? '' : ' passport-privacy--private'}`}
+            disabled={saving !== null}
+            onClick={() => void setVisible('passportPage', !visible)}
         >
-            {hidden ? <FiLock aria-hidden="true"/> : <FiGlobe aria-hidden="true"/>}
-            <span className="passport-privacy-tip" aria-hidden="true">{state}</span>
+            {visible ? <FiGlobe aria-hidden="true"/> : <FiLock aria-hidden="true"/>}
+            <span className="passport-privacy-tip" aria-hidden="true">
+                {privacyStateLabel(privacyRow('passportPage'), visible, isEnglish)}
+            </span>
         </button>
     );
 };

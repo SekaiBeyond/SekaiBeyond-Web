@@ -327,7 +327,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                     onLookupUser={onLookupUser}
                 />
             ) : (
-                <div className="admin-event-detail">
+                <div>
                     <button className="admin-btn admin-btn--link" onClick={() => setManagedEvent(null)}>
                         &larr; {isEnglish ? 'All Events' : '所有活动'}
                     </button>

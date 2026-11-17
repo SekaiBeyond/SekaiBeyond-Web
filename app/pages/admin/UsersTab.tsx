@@ -220,7 +220,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             </div>
 
             {search.results.length > 0 && !selectedUser && (
-                <div className="admin-results">
+                <div>
                     {search.results.map((u) => (
                         <UserRow key={u.uid} user={u} onClick={() => setSelectedUser(u)}>
                             <UserTags user={u} pendingDeletion={pendingDeletionUids.has(u.uid)}/>
@@ -237,7 +237,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             )}
 
             {!selectedUser && search.results.length === 0 && (
-                <div className="admin-recent-users">
+                <div>
                     <h4 className="admin-badges-title">
                         {membersOnly
                             ? (isEnglish ? 'Active Members' : '有效会员')

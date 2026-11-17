@@ -86,7 +86,7 @@ function buildSeries(scans: ScanEvent[], seriesKeys: string[], isEnglish: boolea
 export function ScanTrendsSection({id, fetchScans, platforms}: {
     id: string;
     fetchScans: (id: string) => Promise<ScanHistory>;
-    platforms?: string[];
+    platforms: string[];
 }) {
     const {isEnglish} = useLanguage();
     const [history, setHistory] = useState<ScanHistory | null>(null);
@@ -137,10 +137,10 @@ export function ScanTrendsSection({id, fetchScans, platforms}: {
 
 interface ScanTrendsProps {
     scans: ScanEvent[];
-    platforms?: string[];
+    platforms: string[];
 }
 
-function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
+function ScanTrends({scans, platforms}: ScanTrendsProps) {
     const {isEnglish} = useLanguage();
     const {platforms: platformDefs} = useSocialPlatforms();
     const [selected, setSelected] = useState<string | null>(null);

@@ -381,7 +381,7 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
 
             {popupContent && createPortal(
                 selectedVenue ? (
-                    <div className="admin-locmap-popup-body">
+                    <div>
                         <div className="admin-locmap-popup-title">{selectedVenue.nameEn}</div>
                         {selectedVenue.nameCn && <div className="admin-locmap-popup-meta">{selectedVenue.nameCn}</div>}
                         <div className="admin-locmap-popup-meta">
@@ -394,7 +394,7 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
                         {venueActions(selectedVenue.id)}
                     </div>
                 ) : selectedLot ? (
-                    <div className="admin-locmap-popup-body">
+                    <div>
                         <div className="admin-locmap-popup-title">{lotTitle(selectedLot)}</div>
                         <div className="admin-locmap-popup-meta">
                             {uwLotTypeLabel(selectedLot.type, isEnglish)} · {selectedLot.access === 'Pay to Park'

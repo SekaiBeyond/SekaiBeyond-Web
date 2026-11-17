@@ -334,7 +334,7 @@ export const RedeemModal = () => {
                                 <p className="claim-event-title redeem-centered-text">
                                     {localized(isEnglish, badge.name, badge.nameCn)}
                                 </p>
-                                <p className="claim-event-category redeem-centered-text">
+                                <p className="redeem-centered-text">
                                     {localized(isEnglish, badge.description, badge.descriptionCn)}
                                 </p>
                             </>

@@ -51,10 +51,10 @@ const TOOLS: ToolDef[] = [
 
 interface ToolsTabProps {
     showToast: ShowToast;
-    readOnly?: boolean;
+    readOnly: boolean;
 }
 
-export const ToolsTab = ({showToast, readOnly = false}: ToolsTabProps) => {
+export const ToolsTab = ({showToast, readOnly}: ToolsTabProps) => {
     const {isEnglish} = useLanguage();
     const [activeTool, setActiveTool] = useState<ToolId | null>(null);
 

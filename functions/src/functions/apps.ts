@@ -279,7 +279,6 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
         await deleteStorageFile(oldIconUrl, [APP_ICON_PREFIX])
             .catch(logStorageCleanupError(`saveApp ${appId}`));
     }
-    return {saved: true, appId};
 });
 
 export const deleteApp = onCall({maxInstances: 10}, async (request) => {
@@ -337,7 +336,6 @@ export const deleteApp = onCall({maxInstances: 10}, async (request) => {
     } catch (err) {
         console.error(`[apps] couldn't delete ${appId}'s account links`, err);
     }
-    return {deleted: true};
 });
 
 async function findApp(raw: unknown): Promise<RegisteredApp> {

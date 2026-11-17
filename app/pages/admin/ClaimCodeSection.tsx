@@ -14,6 +14,7 @@ import {
 } from '~/lib/firebase';
 import { formatCode } from '~/lib/codes';
 import { formatSiteTime, parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
+import { CopyButton, CopyField } from './CopyField';
 import type { BadgeCode } from './types';
 import { getClaimUrl, type ShowToast } from './utils';
 
@@ -132,7 +133,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const [limitUses, setLimitUses] = useState(false);
     const [maxUsesText, setMaxUsesText] = useState('');
     const [editingWindow, setEditingWindow] = useState(false);
-    const [copied, setCopied] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [toggling, setToggling] = useState(false);
     const [savingWindow, setSavingWindow] = useState(false);
@@ -192,12 +192,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
             stale = true;
         };
     }, [eventId, variant, showToast]);
-
-    useEffect(() => {
-        if (!copied) return;
-        const timer = setTimeout(() => setCopied(false), 2000);
-        return () => clearTimeout(timer);
-    }, [copied]);
 
     const generateCode = async () => {
         setGenerating(true);
@@ -312,18 +306,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const eventEndLocal = eventEndAt ? toDatetimeLocal(eventEndAt) : '';
 
     const copyValue = code ? (isStaff ? formatCode(code.code) : getClaimUrl(code.code)) : '';
-
-    const copyCode = async () => {
-        try {
-            await navigator.clipboard.writeText(copyValue);
-            setCopied(true);
-        } catch {
-            showToast(
-                isEnglish ? 'Couldn\'t copy. Select the code and copy it by hand.' : '复制失败，请手动选择并复制。',
-                'error',
-            );
-        }
-    };
 
     if (loading) {
         return (
@@ -495,15 +477,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         </>
     );
 
-    const copyButton = (
-        <button
-            className={`admin-btn admin-btn--purple ${copied ? 'admin-btn--copied' : ''}`}
-            onClick={() => void copyCode()}
-        >
-            {copied ? (isEnglish ? 'Copied ✓' : '已复制 ✓') : (isEnglish ? 'Copy' : '复制')}
-        </button>
-    );
-
     if (!isStaff) {
         return (
             <div className="admin-codes-section">
@@ -511,15 +484,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                     <div className="admin-single-code-qr">
                         <QRCodeSVG value={copyValue} size={200} level="M"/>
                     </div>
-                    <div className="admin-code-url">
-                        <input
-                            readOnly
-                            value={copyValue}
-                            onClick={(e) => (e.target as HTMLInputElement).select()}
-                            className="admin-code-input"
-                        />
-                        {copyButton}
-                    </div>
+                    <CopyField value={copyValue}/>
                     {stateTag && <span className={stateTag.className}>{tr(stateTag)}</span>}
                     {!readOnly && (
                         <>
@@ -554,7 +519,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                     <code className={`admin-staff-code-value ${code.active ? '' : 'admin-staff-code-value--off'}`}>
                         {copyValue}
                     </code>
-                    {copyButton}
+                    <CopyButton value={copyValue}/>
                 </div>
 
                 <div className="admin-staff-code-usage">
@@ -608,7 +573,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                                         className="admin-number-input"
                                         aria-label={isEnglish ? 'Max uses' : '最大使用次数'}
                                     />
-                                    <span className="admin-staff-code-unit">{isEnglish ? 'uses' : '次'}</span>
+                                    <span>{isEnglish ? 'uses' : '次'}</span>
                                     <button
                                         className="admin-toggle-btn admin-toggle-save"
                                         onClick={() => void saveMaxUses()}

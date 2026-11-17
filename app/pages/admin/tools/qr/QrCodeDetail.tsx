@@ -19,6 +19,8 @@ import {
 } from './QrCodeForm';
 import { QrPreview, useQrDownload } from './qrExport';
 import { ScanTrendsSection } from '../../ScanTrends';
+import { CopyField } from '../../CopyField';
+import { StatTile } from '../../StatTile';
 import { QrSpotsMap } from './QrSpotsMap';
 import { refreshAfterSave, type ShowToast } from '../../utils';
 
@@ -84,12 +86,6 @@ export const QrCodeDetail = ({
     const downloadPng = () => {
         const safe = (code.label || 'qr-code').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
         requestDownload(scanValue, `qr-${safe}`);
-    };
-
-    const copyLink = () => {
-        navigator.clipboard.writeText(scanValue)
-            .then(() => showToast(isEnglish ? 'Link copied.' : '链接已复制。', 'success'))
-            .catch(() => showToast(isEnglish ? 'Failed to copy.' : '复制失败。', 'error'));
     };
 
     const saveEdit = async () => {
@@ -202,17 +198,7 @@ export const QrCodeDetail = ({
                         <div className="admin-qr-paper">
                             <QrPreview value={scanValue} size={QR_SIZE}/>
                         </div>
-                        <div className="admin-code-url">
-                            <input
-                                readOnly
-                                value={scanValue}
-                                onClick={e => (e.target as HTMLInputElement).select()}
-                                className="admin-code-input"
-                            />
-                            <button className="admin-btn admin-btn--purple" onClick={copyLink} type="button">
-                                {isEnglish ? 'Copy' : '复制'}
-                            </button>
-                        </div>
+                        <CopyField value={scanValue}/>
                         <button className="admin-toggle-btn admin-toggle-save" onClick={downloadPng}
                                 type="button">
                             {isEnglish ? 'Download PNG' : '下载 PNG'}
@@ -223,22 +209,10 @@ export const QrCodeDetail = ({
 
                 <div className="admin-qr-detail-meta">
                     <div className="admin-stats-tiles">
-                        <div className="admin-stats-tile">
-                            <div
-                                className="admin-stats-tile-label">{isEnglish ? 'Total Scans' : '总扫描数'}</div>
-                            <div className="admin-stats-tile-value">{code.scanCount}</div>
-                        </div>
-                        <div className="admin-stats-tile">
-                            <div className="admin-stats-tile-label">{isEnglish ? 'Last Scan' : '最近扫描'}</div>
-                            <div className="admin-stats-tile-value admin-stats-tile-value--sm">
-                                {fmtDate(code.lastScanAt)}
-                            </div>
-                        </div>
+                        <StatTile label={isEnglish ? 'Total Scans' : '总扫描数'} value={code.scanCount}/>
+                        <StatTile label={isEnglish ? 'Last Scan' : '最近扫描'} value={fmtDate(code.lastScanAt)}/>
                         {social && (
-                            <div className="admin-stats-tile">
-                                <div className="admin-stats-tile-label">{isEnglish ? 'Platforms' : '平台数'}</div>
-                                <div className="admin-stats-tile-value">{code.platforms.length}</div>
-                            </div>
+                            <StatTile label={isEnglish ? 'Platforms' : '平台数'} value={code.platforms.length}/>
                         )}
                     </div>
 

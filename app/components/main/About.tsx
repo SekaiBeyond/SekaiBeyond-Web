@@ -189,7 +189,7 @@ export const About = () => {
                                     onClick={() => setActiveRealmId(realm.id)}
                                 >
                                     <span className="about-realm-tab-icon" aria-hidden="true">{realm.icon}</span>
-                                    <span className="about-realm-tab-label">
+                                    <span>
                                         {isEnglish ? realm.labelEn : realm.labelZh}
                                     </span>
                                 </button>

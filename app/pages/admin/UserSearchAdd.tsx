@@ -32,8 +32,7 @@ export function UserSearchAdd({
     const candidates = search.results.filter(u => !excludeUids.has(u.uid));
 
     return (
-        <div className="admin-event-staff-add"
-             style={{marginTop: inField ? 0 : 16, flexDirection: 'column', alignItems: 'stretch', gap: 8}}>
+        <div style={{marginTop: inField ? 0 : 16}}>
             <div className="admin-search" style={inField ? {marginBottom: 0} : undefined}>
                 <UserSearchInput
                     search={search}

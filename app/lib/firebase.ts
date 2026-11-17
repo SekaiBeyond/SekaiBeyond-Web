@@ -112,7 +112,7 @@ export const callSendEmailCode = (data: {
     email: string;
     language: Language;
 }) =>
-    httpsCallable<typeof data, {sent: boolean}>(getFunctions(), 'sendEmailCode')(data);
+    httpsCallable<typeof data>(getFunctions(), 'sendEmailCode')(data);
 
 export const callSignUpWithEmail = (data: {email: string; code: string; displayName: string; password: string}) =>
     httpsCallable<typeof data, {token: string}>(getFunctions(), 'signUpWithEmail')(data);
@@ -147,10 +147,10 @@ export const callBindGoogleWithPassword = (data: {
     httpsCallable<typeof data, {token: string}>(getFunctions(), 'bindGoogleWithPassword')(data);
 
 export const callBindGoogle = (data: {idToken: string; language: Language}) =>
-    httpsCallable<typeof data, {bound: boolean}>(getFunctions(), 'bindGoogle')(data);
+    httpsCallable<typeof data>(getFunctions(), 'bindGoogle')(data);
 
 export const callUnbindGoogle = (data: {language: Language}) =>
-    httpsCallable<typeof data, {unbound: boolean}>(getFunctions(), 'unbindGoogle')(data);
+    httpsCallable<typeof data>(getFunctions(), 'unbindGoogle')(data);
 
 export interface SignInMethods {
     hasPassword: boolean;
@@ -165,7 +165,7 @@ export const callChangePassword = (data: {code: string; password: string; langua
     httpsCallable<typeof data, {token: string}>(getFunctions(), 'changePassword')(data);
 
 export const callChangeEmail = (data: {email: string; code: string; language: Language}) =>
-    httpsCallable<typeof data, {email: string}>(getFunctions(), 'changeEmail')(data);
+    httpsCallable<typeof data>(getFunctions(), 'changeEmail')(data);
 
 export const callUndoEmailChange = (data: {token: string; password: string; language: Language}) =>
     httpsCallable<typeof data, {email: string}>(getFunctions(), 'undoEmailChange')(data);
@@ -174,15 +174,15 @@ export const callAdminChangeEmail = (data: {targetUid: string; email: string; la
     httpsCallable<typeof data, {email: string}>(getFunctions(), 'adminChangeEmail')(data);
 
 export const callTouchSession = () =>
-    httpsCallable<Record<string, never>, {registered: boolean}>(getFunctions(), 'touchSession')({});
+    httpsCallable<Record<string, never>>(getFunctions(), 'touchSession')({});
 
 export const callEndSession = (data: {sessionId: string}) =>
-    httpsCallable<typeof data, {ended: boolean}>(getFunctions(), 'endSession')(data);
+    httpsCallable<typeof data>(getFunctions(), 'endSession')(data);
 
 const END_OWN_SESSION_TIMEOUT_MS = 4_000;
 
 export const callEndOwnSession = () =>
-    httpsCallable<Record<string, never>, {ended: boolean}>(getFunctions(), 'endSession', {
+    httpsCallable<Record<string, never>>(getFunctions(), 'endSession', {
         timeout: END_OWN_SESSION_TIMEOUT_MS,
     })({});
 
@@ -190,7 +190,7 @@ export const callEndOtherSessions = () =>
     httpsCallable<Record<string, never>, {ended: number}>(getFunctions(), 'endOtherSessions')({});
 
 export const callEndAllSessions = () =>
-    httpsCallable<Record<string, never>, {ended: boolean}>(getFunctions(), 'endAllSessions')({});
+    httpsCallable<Record<string, never>>(getFunctions(), 'endAllSessions')({});
 
 export const callClaimEventCode = (data: {code: string}) =>
     httpsCallable<typeof data, {
@@ -243,16 +243,16 @@ export const callRequestEventDeletion = (data: {eventId: string}) =>
     httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestEventDeletion')(data);
 
 export const callCancelEventDeletion = (data: {eventId: string}) =>
-    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelEventDeletion')(data);
+    httpsCallable<typeof data>(getFunctions(), 'cancelEventDeletion')(data);
 
 export const callRequestBadgeDeletion = (data: {badgeId: string}) =>
     httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestBadgeDeletion')(data);
 
 export const callCancelBadgeDeletion = (data: {badgeId: string}) =>
-    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelBadgeDeletion')(data);
+    httpsCallable<typeof data>(getFunctions(), 'cancelBadgeDeletion')(data);
 
 export const callChangeUserGroup = (data: {targetUid: string; newGroup: string; title?: string; titleCn?: string}) =>
-    httpsCallable<typeof data, {oldGroup: string; newGroup: string}>(getFunctions(), 'changeUserGroup')(data);
+    httpsCallable<typeof data>(getFunctions(), 'changeUserGroup')(data);
 
 export const callSetMembership = (data: {targetUid: string; expiresAt?: string | null; extendDays?: number}) =>
     httpsCallable<typeof data, {membershipExpiresAt: string | null}>(getFunctions(), 'setMembership')(data);
@@ -263,10 +263,10 @@ export const callBanUser = (data: {targetUid: string; until?: string | null; rea
     )(data);
 
 export const callUnbanUser = (data: {targetUid: string}) =>
-    httpsCallable<typeof data, {lifted: boolean}>(getFunctions(), 'unbanUser')(data);
+    httpsCallable<typeof data>(getFunctions(), 'unbanUser')(data);
 
 export const callSetUserTitle = (data: {targetUid: string; title?: string; titleCn?: string}) =>
-    httpsCallable<typeof data, {success: boolean}>(getFunctions(), 'setUserTitle')(data);
+    httpsCallable<typeof data>(getFunctions(), 'setUserTitle')(data);
 
 export const callSavePastEvent = (data: {
     eventId?: string;
@@ -275,10 +275,10 @@ export const callSavePastEvent = (data: {
     description: string; descriptionCn: string; icon: string;
     recapLink: string; recapLinkCn: string;
     con: boolean;
-}) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'savePastEvent')(data);
+}) => httpsCallable<typeof data>(getFunctions(), 'savePastEvent')(data);
 
 export const callSetPastEventPublished = (data: {eventId: string; published: boolean}) =>
-    httpsCallable<typeof data, {published: boolean}>(getFunctions(), 'setPastEventPublished')(data);
+    httpsCallable<typeof data>(getFunctions(), 'setPastEventPublished')(data);
 
 export const callSaveUpcomingEvent = (data: {
     eventId?: string;
@@ -289,25 +289,25 @@ export const callSaveUpcomingEvent = (data: {
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;
     paid: boolean;
     con: boolean;
-}) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'saveUpcomingEvent')(data);
+}) => httpsCallable<typeof data>(getFunctions(), 'saveUpcomingEvent')(data);
 
 export const callRequestUpcomingEventDeletion = (data: {eventId: string}) =>
     httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestUpcomingEventDeletion')(data);
 
 export const callCancelUpcomingEventDeletion = (data: {eventId: string}) =>
-    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelUpcomingEventDeletion')(data);
+    httpsCallable<typeof data>(getFunctions(), 'cancelUpcomingEventDeletion')(data);
 
 export const callSetUpcomingEventPublished = (data: {eventId: string; published: boolean}) =>
-    httpsCallable<typeof data, {published: boolean}>(getFunctions(), 'setUpcomingEventPublished')(data);
+    httpsCallable<typeof data>(getFunctions(), 'setUpcomingEventPublished')(data);
 
 export const callArchiveUpcomingEvent = (data: {eventId: string; tagIds: string[]}) =>
-    httpsCallable<typeof data, {pastEventId: string}>(getFunctions(), 'archiveUpcomingEvent')(data);
+    httpsCallable<typeof data>(getFunctions(), 'archiveUpcomingEvent')(data);
 
 export const callImportEventAttendees = (data: {
     eventId: string;
     attendees: Array<{email: string; name: string; ticketCount: number; type: string; notes?: string}>;
     onDuplicate?: 'skip' | 'override';
-}) => httpsCallable<typeof data, {added: number; replaced: number; skipped: number; total: number}>(
+}) => httpsCallable<typeof data, {added: number; replaced: number; skipped: number}>(
     getFunctions(), 'importEventAttendees')(data);
 
 export const callAddWalkInAttendee = (data: {
@@ -318,8 +318,7 @@ export const callAddWalkInAttendee = (data: {
     type: string;
     notes: string;
     checkIn: boolean;
-}) => httpsCallable<typeof data, {attendeeId: string; checkedIn: boolean; userCheckedIn: boolean}>(
-    getFunctions(), 'addWalkInAttendee')(data);
+}) => httpsCallable<typeof data>(getFunctions(), 'addWalkInAttendee')(data);
 
 export const callImportHometownTickets = (data: {
     eventId: string;
@@ -344,13 +343,12 @@ export const callSyncHometownOrderTimes = (data: {
     getFunctions(), 'syncHometownOrderTimes')(data);
 
 export const callSetHometownAdmitUnlisted = (data: {eventId: string; enabled: boolean}) =>
-    httpsCallable<typeof data, {enabled: boolean}>(getFunctions(), 'setHometownAdmitUnlisted')(data);
+    httpsCallable<typeof data>(getFunctions(), 'setHometownAdmitUnlisted')(data);
 
 const REDEEM_TIMEOUT_MS = 20_000;
 
 export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
     httpsCallable<typeof data, {
-        success?: boolean;
         alreadyRedeemed?: boolean;
         hometown?: boolean;
         unlisted?: boolean;
@@ -358,7 +356,6 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         attendeeName: string;
         attendeeEmail: string;
         eventTitle: string;
-        ticketIndex: number;
         ticketType: string;
         notes?: string;
         userCheckedIn?: boolean;
@@ -401,21 +398,19 @@ export const callGetAttendeeAccounts = (data: {eventId: string; emails: string[]
     httpsCallable<typeof data, {accounts: AttendeeAccount[]}>(getFunctions(), 'getAttendeeAccounts')(data);
 
 export const callVoidTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
-    httpsCallable<typeof data, {voided: boolean}>(getFunctions(), 'voidTicket')(data);
+    httpsCallable<typeof data>(getFunctions(), 'voidTicket')(data);
 
 export const callUnvoidTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
-    httpsCallable<typeof data, {unvoided: boolean}>(getFunctions(), 'unvoidTicket')(data);
+    httpsCallable<typeof data>(getFunctions(), 'unvoidTicket')(data);
 
 export const callAdminRedeemTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
-    httpsCallable<typeof data, {redeemed: boolean; alreadyRedeemed?: boolean}>(
-        getFunctions(), 'adminRedeemTicket')(data);
+    httpsCallable<typeof data, {alreadyRedeemed: boolean}>(getFunctions(), 'adminRedeemTicket')(data);
 
 export const callResetTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
-    httpsCallable<typeof data, {reset: boolean}>(getFunctions(), 'resetTicket')(data);
+    httpsCallable<typeof data>(getFunctions(), 'resetTicket')(data);
 
 export const callDeleteEventAttendee = (data: {eventId: string; attendeeId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(
-        getFunctions(), 'deleteEventAttendee')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deleteEventAttendee')(data);
 
 export const callUpdateEventAttendee = (data: {
     eventId: string;
@@ -424,7 +419,7 @@ export const callUpdateEventAttendee = (data: {
     ticketCount: number;
     type: string;
     notes?: string;
-}) => httpsCallable<typeof data, {updated: boolean; regenerated: boolean; notes?: string}>(
+}) => httpsCallable<typeof data, {regenerated: boolean; notes?: string}>(
     getFunctions(), 'updateEventAttendee')(data);
 
 export const callUpdateTicketType = (data: {
@@ -432,8 +427,7 @@ export const callUpdateTicketType = (data: {
     attendeeId: string;
     ticketId: string;
     type: string;
-}) => httpsCallable<typeof data, {updated: boolean}>(
-    getFunctions(), 'updateTicketType')(data);
+}) => httpsCallable<typeof data>(getFunctions(), 'updateTicketType')(data);
 
 export const callUpdateTicketNotes = (data: {
     eventId: string;
@@ -544,7 +538,7 @@ export const callRenameApiKey = (data: {keyId: string; name: string}) =>
     httpsCallable<typeof data, {name: string}>(getFunctions(), 'renameApiKey')(data);
 
 export const callRevokeApiKey = (data: {keyId: string}) =>
-    httpsCallable<typeof data, {revoked: boolean}>(getFunctions(), 'revokeApiKey')(data);
+    httpsCallable<typeof data>(getFunctions(), 'revokeApiKey')(data);
 
 export const APP_ID_RE = /^[a-z0-9-]{1,32}$/;
 
@@ -591,10 +585,10 @@ export const callListApps = () =>
         getFunctions(), 'listApps')({});
 
 export const callSaveApp = (data: AppFields & ({create: true} | {appId: string; create: false})) =>
-    httpsCallable<typeof data, {saved: boolean; appId: string}>(getFunctions(), 'saveApp')(data);
+    httpsCallable<typeof data>(getFunctions(), 'saveApp')(data);
 
 export const callDeleteApp = (data: {appId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteApp')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deleteApp')(data);
 
 export interface LinkableApp {
     appId: string;
@@ -614,13 +608,13 @@ export const callStartAppLink = (data: {appId: string}) =>
         getFunctions(), 'startAppLink')(data);
 
 export const callConfirmAppLink = (data: {requestId: string; code: string; language: Language}) =>
-    httpsCallable<typeof data, {linked: boolean}>(getFunctions(), 'confirmAppLink')(data);
+    httpsCallable<typeof data>(getFunctions(), 'confirmAppLink')(data);
 
 export const callCancelAppLink = (data: {requestId: string}) =>
-    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelAppLink')(data);
+    httpsCallable<typeof data>(getFunctions(), 'cancelAppLink')(data);
 
 export const callRemoveAppLink = (data: {appId: string; language: Language}) =>
-    httpsCallable<typeof data, {unlinked: boolean}>(getFunctions(), 'removeAppLink')(data);
+    httpsCallable<typeof data>(getFunctions(), 'removeAppLink')(data);
 
 export const callUndoAppLink = (data: {token: string; password: string}) =>
     httpsCallable<typeof data, {appId: string; nameEn: string; nameCn: string; heldUntil: string | null}>(
@@ -641,7 +635,7 @@ export const callGetUserAppLinks = (data: {uid: string}) =>
     httpsCallable<typeof data, {apps: UserAppLink[]}>(getFunctions(), 'getUserAppLinks')(data);
 
 export const callClearAppLinkHold = (data: {targetUid: string; appId: string}) =>
-    httpsCallable<typeof data, {cleared: boolean}>(getFunctions(), 'clearAppLinkHold')(data);
+    httpsCallable<typeof data>(getFunctions(), 'clearAppLinkHold')(data);
 
 export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>
     httpsCallable<typeof data, {nameEn: string; nameCn: string; iconUrl: string; maintainerNames: string[]}>(
@@ -654,8 +648,7 @@ export const callUpdateEventEmailTemplate = (data: {
     eventId: string;
     subject: string;
     bodyHtml: string;
-}) => httpsCallable<typeof data, {saved: boolean}>(
-    getFunctions(), 'updateEventEmailTemplate')(data);
+}) => httpsCallable<typeof data>(getFunctions(), 'updateEventEmailTemplate')(data);
 
 export const callUpdateWalletPassSettings = (data: {
     eventId: string;
@@ -663,15 +656,14 @@ export const callUpdateWalletPassSettings = (data: {
     color: string;
     headerText: string;
     notes: {label: string; value: string}[];
-}) => httpsCallable<typeof data, {saved: boolean}>(
-    getFunctions(), 'updateWalletPassSettings')(data);
+}) => httpsCallable<typeof data>(getFunctions(), 'updateWalletPassSettings')(data);
 
 export const callAssignEventStaff = (data: {targetUid: string; eventId: string}) =>
     httpsCallable<typeof data, {added: boolean; attendeeRemoved: boolean}>(
         getFunctions(), 'assignEventStaff')(data);
 
 export const callRemoveEventStaff = (data: {targetUid: string; eventId: string}) =>
-    httpsCallable<typeof data, {removed: boolean}>(getFunctions(), 'removeEventStaff')(data);
+    httpsCallable<typeof data>(getFunctions(), 'removeEventStaff')(data);
 
 export const callGetEventStaff = (data: {eventId: string}) =>
     httpsCallable<typeof data, {
@@ -679,20 +671,20 @@ export const callGetEventStaff = (data: {eventId: string}) =>
     }>(getFunctions(), 'getEventStaff')(data);
 
 export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
-    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'savePolicy')(data);
+    httpsCallable<typeof data>(getFunctions(), 'savePolicy')(data);
 
 export const callSaveSiteConfig = (data: {
     contactEmail?: string;
     socialLinks?: SocialLinks;
     senderPrefix?: string;
 }) =>
-    httpsCallable<typeof data, {saved: boolean; socialLinks?: SocialLinks}>(getFunctions(), 'saveSiteConfig')(data);
+    httpsCallable<typeof data, {socialLinks?: SocialLinks}>(getFunctions(), 'saveSiteConfig')(data);
 
 export const callSaveConContent = (data: Partial<ConContent>) =>
-    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveConContent')(data);
+    httpsCallable<typeof data>(getFunctions(), 'saveConContent')(data);
 
 export const callSaveTeamMembers = (data: {teamMembers: TeamMemberConfig[]}) =>
-    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveTeamMembers')(data);
+    httpsCallable<typeof data>(getFunctions(), 'saveTeamMembers')(data);
 
 export const callGetPublicTeamMembers = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getPublicTeamMembers')({});
@@ -713,26 +705,26 @@ export const callSaveBadge = (data: {
 }) => httpsCallable<typeof data, {badgeId: string}>(getFunctions(), 'saveBadge')(data);
 
 export const callToggleAttendance = (data: {targetUid: string; eventId: string; grant: boolean}) =>
-    httpsCallable<typeof data, {granted: boolean}>(getFunctions(), 'toggleAttendance')(data);
+    httpsCallable<typeof data>(getFunctions(), 'toggleAttendance')(data);
 
 export const callToggleUserBadge = (data: {targetUid: string; badgeId: string; grant: boolean}) =>
-    httpsCallable<typeof data, {granted: boolean}>(getFunctions(), 'toggleUserBadge')(data);
+    httpsCallable<typeof data>(getFunctions(), 'toggleUserBadge')(data);
 
 export const callToggleClaimCodeActive = (data: {codeId: string; active: boolean}) =>
-    httpsCallable<typeof data, {active: boolean}>(getFunctions(), 'toggleClaimCodeActive')(data);
+    httpsCallable<typeof data>(getFunctions(), 'toggleClaimCodeActive')(data);
 
 export const callSaveClaimCodeTimeWindow = (data: {
     codeId: string;
     activeFrom?: string | null;
     activeUntil?: string | null
 }) =>
-    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveClaimCodeTimeWindow')(data);
+    httpsCallable<typeof data>(getFunctions(), 'saveClaimCodeTimeWindow')(data);
 
 export const callToggleBadgeCodeActive = (data: {codeId: string; active: boolean}) =>
-    httpsCallable<typeof data, {active: boolean}>(getFunctions(), 'toggleBadgeCodeActive')(data);
+    httpsCallable<typeof data>(getFunctions(), 'toggleBadgeCodeActive')(data);
 
 export const callDeleteBadgeActivationCode = (data: {codeId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteBadgeActivationCode')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deleteBadgeActivationCode')(data);
 
 export const callGenerateStaffCode = (data: {eventId: string}) =>
     httpsCallable<typeof data, {id: string; code: string}>(
@@ -740,10 +732,10 @@ export const callGenerateStaffCode = (data: {eventId: string}) =>
     )(data);
 
 export const callToggleStaffCodeActive = (data: {codeId: string; active: boolean}) =>
-    httpsCallable<typeof data, {active: boolean}>(getFunctions(), 'toggleStaffCodeActive')(data);
+    httpsCallable<typeof data>(getFunctions(), 'toggleStaffCodeActive')(data);
 
 export const callDeleteStaffCode = (data: {codeId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteStaffCode')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deleteStaffCode')(data);
 
 export const callSaveStaffCodeTimeWindow = (data: {
     codeId: string;
@@ -751,13 +743,13 @@ export const callSaveStaffCodeTimeWindow = (data: {
     activeUntil?: string | null;
     maxUses?: number;
 }) =>
-    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveStaffCodeTimeWindow')(data);
+    httpsCallable<typeof data>(getFunctions(), 'saveStaffCodeTimeWindow')(data);
 
 export const callSaveTag = (data: {tagId?: string; name: string; nameCn: string}) =>
-    httpsCallable<typeof data, {tagId: string}>(getFunctions(), 'saveTag')(data);
+    httpsCallable<typeof data>(getFunctions(), 'saveTag')(data);
 
 export const callDeleteTag = (data: {tagId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteTag')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deleteTag')(data);
 
 export const callSaveVenue = (data: {
     venueId?: string;
@@ -768,10 +760,7 @@ export const callSaveVenue = (data: {
     buildingCode: string;
     suggestedLots: Array<{code: string; noteEn: string; noteCn: string}>;
     rooms: Array<{id: string; nameEn: string; nameCn: string}>;
-}) => httpsCallable<typeof data, {
-    venueId: string;
-    eventsChanged: number;
-}>(getFunctions(), 'saveVenue')(data);
+}) => httpsCallable<typeof data, {eventsChanged: number}>(getFunctions(), 'saveVenue')(data);
 
 export interface UwBuildingLookup {
     building: {code: string; name: string; address: string; lat: number; lng: number; parkingTip: string};
@@ -791,7 +780,7 @@ export const callSyncUwParking = () =>
     }>(getFunctions(), 'syncUwParking', {timeout: 300_000})({});
 
 export const callDeleteVenue = (data: {venueId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteVenue')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deleteVenue')(data);
 
 export const callSaveQrCode = (data: {
     qrId?: string;
@@ -809,10 +798,10 @@ export const callSaveQrCode = (data: {
 }) => httpsCallable<typeof data, {qrId: string}>(getFunctions(), 'saveQrCode')(data);
 
 export const callSetQrSpot = (data: {qrId: string; lat: number; lng: number}) =>
-    httpsCallable<typeof data, {lat: number; lng: number}>(getFunctions(), 'setQrSpot')(data);
+    httpsCallable<typeof data>(getFunctions(), 'setQrSpot')(data);
 
 export const callDeleteQrCode = (data: {qrId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteQrCode')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deleteQrCode')(data);
 
 export const callRecordQrScan = (data: {id: string; p?: string}) =>
     httpsCallable<typeof data, {active: boolean; targetUrl: string}>(getFunctions(), 'recordQrScan')(data);
@@ -822,13 +811,13 @@ export const callSaveSocialPlatform = (data: {
     label: string;
     labelCn: string;
     order: number;
-}) => httpsCallable<typeof data, {id: string}>(getFunctions(), 'saveSocialPlatform')(data);
+}) => httpsCallable<typeof data>(getFunctions(), 'saveSocialPlatform')(data);
 
 export const callDeleteSocialPlatform = (data: {id: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteSocialPlatform')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deleteSocialPlatform')(data);
 
 export const callSeedSocialPlatforms = () =>
-    httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
+    httpsCallable<Record<string, never>>(getFunctions(), 'seedSocialPlatforms')({});
 
 export const callGeneratePassports = (data: {designId: string; count: number; note: string}) =>
     httpsCallable<typeof data, {
@@ -876,10 +865,10 @@ export const callGetMyPassports = () =>
     }>(getFunctions(), 'getMyPassports')({});
 
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
-    httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);
+    httpsCallable<typeof data>(getFunctions(), 'setPassportPrivacy')(data);
 
 export const callSetProfileVisibility = (data: {sections: Partial<ProfileVisibility>}) =>
-    httpsCallable<typeof data, {visibility: ProfileVisibility}>(getFunctions(), 'setProfileVisibility')(data);
+    httpsCallable<typeof data>(getFunctions(), 'setProfileVisibility')(data);
 
 export const callSavePassportDesign = (data: {
     designId?: string;
@@ -889,10 +878,10 @@ export const callSavePassportDesign = (data: {
     coverImageUrl: string;
     outerCoverImageUrl: string;
     termDays: number;
-}) => httpsCallable<typeof data, {designId: string}>(getFunctions(), 'savePassportDesign')(data);
+}) => httpsCallable<typeof data>(getFunctions(), 'savePassportDesign')(data);
 
 export const callDeletePassportDesign = (data: {designId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deletePassportDesign')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deletePassportDesign')(data);
 
 export const callEmailPassports = (data: {designId: string; emails: string[]; note: string}) =>
     httpsCallable<typeof data, {
@@ -903,7 +892,7 @@ export const callEmailPassports = (data: {designId: string; emails: string[]; no
     }>(getFunctions(), 'emailPassports')(data);
 
 export const callUpdatePassportEmailTemplate = (data: {subject: string; bodyHtml: string}) =>
-    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'updatePassportEmailTemplate')(data);
+    httpsCallable<typeof data>(getFunctions(), 'updatePassportEmailTemplate')(data);
 
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<typeof data, {
@@ -960,10 +949,10 @@ export const callDeleteAvatar = (data: {targetUid?: string} = {}) =>
     httpsCallable<typeof data, {photoURL: string}>(getFunctions(), 'deleteAvatar')(data);
 
 export const callRequestAccountDeletion = (data: {targetUid?: string; language?: Language} = {}) =>
-    httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestAccountDeletion')(data);
+    httpsCallable<typeof data>(getFunctions(), 'requestAccountDeletion')(data);
 
 export const callCancelAccountDeletion = (data: {targetUid?: string} = {}) =>
-    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelAccountDeletion')(data);
+    httpsCallable<typeof data>(getFunctions(), 'cancelAccountDeletion')(data);
 
 export const callUploadAvatar = (file: File, targetUid?: string): Promise<string> =>
     uploadFile('uploadAvatar', file, {targetUid});
@@ -971,7 +960,7 @@ export const callUploadAvatar = (file: File, targetUid?: string): Promise<string
 export const callUploadBanner = (file: File): Promise<string> => uploadFile('uploadBanner', file);
 
 export const callDeleteBanner = (data: {targetUid?: string} = {}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteBanner')(data);
+    httpsCallable<typeof data>(getFunctions(), 'deleteBanner')(data);
 
 export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
     if (err instanceof FirebaseError && "details" in err) {

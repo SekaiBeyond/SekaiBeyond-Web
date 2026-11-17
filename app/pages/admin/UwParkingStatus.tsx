@@ -7,12 +7,12 @@ import type { ShowToast } from './utils';
 
 interface UwParkingStatusProps {
     showToast: ShowToast;
-    readOnly?: boolean;
+    readOnly: boolean;
 }
 
 const WHEN: Intl.DateTimeFormatOptions = {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'};
 
-export const UwParkingStatus = ({showToast, readOnly = false}: UwParkingStatusProps) => {
+export const UwParkingStatus = ({showToast, readOnly}: UwParkingStatusProps) => {
     const {isEnglish} = useLanguage();
     const {parking, loading, failed, refresh} = useUwParking();
     const [syncing, setSyncing] = useState(false);

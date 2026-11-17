@@ -488,7 +488,7 @@ export function AttendeesSection({
                                         {a.tickets.map((t, i) => (
                                             <tr key={t.ticketId}>
                                                 <td className="admin-tickets-cell-index">{i + 1}</td>
-                                                <td className="admin-tickets-cell-id">
+                                                <td>
                                                     <button
                                                         type="button"
                                                         className="admin-tickets-ticket-id"
@@ -509,7 +509,7 @@ export function AttendeesSection({
                                                         )}
                                                     </button>
                                                 </td>
-                                                <td className="admin-tickets-cell-type">
+                                                <td>
                                                     {a.unlisted ? '—' : readOnly ? (
                                                         <span
                                                             className={`admin-tickets-tag ${ticketTypeClass(t.type)}`}>

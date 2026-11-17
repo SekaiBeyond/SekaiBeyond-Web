@@ -28,7 +28,7 @@ export const InPersonSales = () => {
     const skipsFee = tickets.some(tier => ticketFeeFor(tier.price, ticketFee) > 0);
 
     return (
-        <div className="sbc-callout sbc-inperson">
+        <div className="sbc-callout">
             <div>
                 <h3 className="sbc-callout-title">
                     {skipsFee

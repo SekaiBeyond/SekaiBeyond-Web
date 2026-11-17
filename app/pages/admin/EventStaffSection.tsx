@@ -10,8 +10,8 @@ import type { UserRecord } from './types';
 interface EventStaffSectionProps {
     eventId: string;
     showToast: ShowToast;
-    readOnly?: boolean;
-    onCountChange?: (count: number) => void;
+    readOnly: boolean;
+    onCountChange: (count: number) => void;
     onAttendeeRemoved?: () => void;
     onLookupUser?: (uid: string) => void;
 }
@@ -19,7 +19,7 @@ interface EventStaffSectionProps {
 export function EventStaffSection({
                                       eventId,
                                       showToast,
-                                      readOnly = false,
+                                      readOnly,
                                       onCountChange,
                                       onAttendeeRemoved,
                                       onLookupUser,
@@ -33,7 +33,7 @@ export function EventStaffSection({
     const [busyUid, setBusyUid] = useState<string | null>(null);
 
     useEffect(() => {
-        if (loaded) onCountChange?.(staffList.length);
+        if (loaded) onCountChange(staffList.length);
     }, [loaded, staffList.length, onCountChange]);
 
     useEffect(() => {

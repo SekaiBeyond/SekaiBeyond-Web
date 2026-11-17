@@ -139,7 +139,7 @@ export const MaidCafe = () => {
                     )}
 
                     {hasDetails && (
-                        <div className="sbc-cafe-details">
+                        <div>
                             {theme && (
                                 <>
                                     <p className="sbc-cafe-eyebrow">{t({en: "This year's theme", zh: '本届主题'})}</p>

@@ -18,7 +18,7 @@ const hometownTicketType = (label: string): TicketType => {
     return earlyBird ? 'early-bird' : 'normal';
 };
 
-export interface HometownTicketRow {
+interface HometownTicketRow {
     ticketId: string;
     name: string;
     email: string;
@@ -54,7 +54,7 @@ const HEADERS = {
 } as const;
 
 export const parseHometownFile = async (file: File, isEnglish: boolean): Promise<{
-    tickets: HometownTicketRow[];
+    rows: HometownTicketRow[];
     errors: ParseError[];
     warnings: ParseError[];
 }> => {
@@ -69,7 +69,7 @@ export const parseHometownFile = async (file: File, isEnglish: boolean): Promise
     };
     if (!cols.ticketId) {
         return {
-            tickets: [],
+            rows: [],
             errors: [{
                 row: 0,
                 message: isEnglish
@@ -126,10 +126,10 @@ export const parseHometownFile = async (file: File, isEnglish: boolean): Promise
         });
     });
 
-    return {tickets, errors, warnings};
+    return {rows: tickets, errors, warnings};
 };
 
-export interface HometownOrderRow {
+interface HometownOrderRow {
     orderId: string;
     orderedAt: string;
 }
@@ -174,7 +174,7 @@ const parseHometownOrderTime = (raw: string): string | null => {
 };
 
 export const parseHometownOrderFile = async (file: File, isEnglish: boolean): Promise<{
-    orders: HometownOrderRow[];
+    rows: HometownOrderRow[];
     errors: ParseError[];
     warnings: ParseError[];
 }> => {
@@ -182,7 +182,7 @@ export const parseHometownOrderFile = async (file: File, isEnglish: boolean): Pr
     const cols = {orderId: column(ORDER_HEADERS.orderId), time: column(ORDER_HEADERS.time)};
     if (column(HEADERS.ticketId) || !cols.orderId || !cols.time) {
         return {
-            orders: [],
+            rows: [],
             errors: [{
                 row: 0,
                 message: column(HEADERS.ticketId)
@@ -237,7 +237,7 @@ export const parseHometownOrderFile = async (file: File, isEnglish: boolean): Pr
         orders.push({orderId, orderedAt});
     });
 
-    return {orders, errors, warnings};
+    return {rows: orders, errors, warnings};
 };
 
 const RATE_LIMIT_RETRIES = 3;

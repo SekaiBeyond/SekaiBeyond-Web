@@ -18,7 +18,7 @@ interface PastEventDetailViewProps {
     event: PastEvent;
     tags: Tag[];
     venues: Venue[];
-    readOnly?: boolean;
+    readOnly: boolean;
     showToast: ShowToast;
     refreshEvents: () => Promise<void>;
     onBack: () => void;
@@ -56,7 +56,7 @@ export const PastEventDetailView = ({
                                         event,
                                         tags,
                                         venues,
-                                        readOnly = false,
+                                        readOnly,
                                         showToast,
                                         refreshEvents,
                                         onBack,
@@ -126,7 +126,7 @@ export const PastEventDetailView = ({
     }, [event.id, event.paid, showToast]);
 
     return (
-        <div className="admin-event-detail">
+        <div>
             <EventDetailHeader
                 image={event.icon}
                 title={localized(isEnglish, event.title, event.titleCn)}

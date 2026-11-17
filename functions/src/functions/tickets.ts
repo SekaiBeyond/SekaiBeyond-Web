@@ -345,7 +345,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
 
     await commitInChunks(ops);
 
-    return {added: addedCount, replaced: replacedCount, skipped: skippedCount, total: normalized.size};
+    return {added: addedCount, replaced: replacedCount, skipped: skippedCount};
 });
 
 export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
@@ -368,7 +368,7 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
     const notes = validateTicketNotes(input.notes);
     const checkIn = input.checkIn === true;
 
-    return db.runTransaction(async (txn) => {
+    await db.runTransaction(async (txn) => {
         const callerData = (await txn.get(db.collection("users").doc(uid))).data() ?? {};
         if (!worksEvent(callerData, eventId)) {
             throw new HttpsError("permission-denied", "Not authorized to add walk-ins for this event.",
@@ -424,8 +424,6 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
             ticketCount,
             checkedIn: checkIn,
         }));
-
-        return {attendeeId: attendeeRef.id, checkedIn: checkIn, userCheckedIn};
     });
 });
 
@@ -753,7 +751,7 @@ export const setHometownAdmitUnlisted = onCall({maxInstances: 10}, async (reques
     const eventId = validateDocId(input.eventId, "eventId");
     const enabled = validateBoolean(input.enabled, "enabled");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const eventRef = db.collection("upcomingEvents").doc(eventId);
         const eventSnap = await txn.get(eventRef);
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
@@ -769,7 +767,6 @@ export const setHometownAdmitUnlisted = onCall({maxInstances: 10}, async (reques
             eventTitle: eventSnap.data()?.title ?? eventId,
             enabled,
         }));
-        return {enabled};
     });
 });
 
@@ -1048,14 +1045,12 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                 updatedAt: FieldValue.serverTimestamp(),
             });
             return {
-                success: true,
                 hometown: true,
                 unlisted: true,
                 missingFromHometown: false,
                 attendeeName: "",
                 attendeeEmail: "",
                 eventTitle,
-                ticketIndex: 0,
                 ticketType: "normal",
                 notes: "",
                 userCheckedIn: false,
@@ -1078,12 +1073,16 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                 {code: "voided"});
         }
 
-        const attendeeEmail: string = attendeeData.email ?? "";
-        const attendeeName: string = attendeeData.name ?? "";
-        const source = {
+        const unlisted = attendeeData.unlisted === true;
+        const scanned = {
             hometown,
-            unlisted: attendeeData.unlisted === true,
+            unlisted,
             missingFromHometown: attendeeData.missingFromHometown === true,
+            attendeeName: (attendeeData.name ?? "") as string,
+            attendeeEmail: (attendeeData.email ?? "") as string,
+            eventTitle,
+            ticketType: ticket.type || "normal",
+            notes: ticket.notes ?? "",
         };
 
         if (ticket.redeemed) {
@@ -1093,34 +1092,21 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
 
             if (!isWithinGracePeriod || !isSameScanner) {
                 return {
+                    ...scanned,
                     alreadyRedeemed: true,
-                    ...source,
-                    attendeeName,
-                    attendeeEmail,
-                    eventTitle,
-                    ticketIndex: idx,
-                    ticketType: ticket.type || "normal",
-                    notes: ticket.notes ?? "",
                     redeemedBy: ticket.redeemedByName,
                     redeemedAt: isoOrNull(ticket.redeemedAt),
                 };
             }
 
             return {
-                success: true,
-                ...source,
-                attendeeName,
-                attendeeEmail,
-                eventTitle,
-                ticketIndex: idx,
-                ticketType: ticket.type || "normal",
-                notes: ticket.notes ?? "",
+                ...scanned,
                 userCheckedIn: ticket.checkedIn === true,
                 graceRemainingMs: Math.min(REDEEM_GRACE_PERIOD_MS, REDEEM_GRACE_PERIOD_MS - sinceRedeemedMs),
             };
         }
 
-        if (source.unlisted) await refuseUnlisted();
+        if (unlisted) await refuseUnlisted();
 
         const userCheckedIn = await creditAccountAttendance(
             txn, creditedEmail(attendeeData), eventId, attendeeData.createdAt);
@@ -1131,18 +1117,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return {
-            success: true,
-            ...source,
-            attendeeName,
-            attendeeEmail,
-            eventTitle,
-            ticketIndex: idx,
-            ticketType: ticket.type || "normal",
-            notes: ticket.notes ?? "",
-            userCheckedIn,
-            graceRemainingMs: REDEEM_GRACE_PERIOD_MS,
-        };
+        return {...scanned, userCheckedIn, graceRemainingMs: REDEEM_GRACE_PERIOD_MS};
     });
 });
 
@@ -1177,12 +1152,12 @@ function ticketTarget(raw: unknown): TicketTarget {
 }
 
 interface TicketEdit<R> {
-    reply: R;
+    reply?: R;
     ticket?: NewTicket;
     record?: RecordFields;
 }
 
-async function editTicket<R>(
+async function editTicket<R = void>(
     uid: string,
     {eventId, attendeeId, ticketId}: TicketTarget,
     recordType: RecordType,
@@ -1191,7 +1166,7 @@ async function editTicket<R>(
         data: FirebaseFirestore.DocumentData;
         callerName: string;
     }) => TicketEdit<R> | Promise<TicketEdit<R>>,
-): Promise<R> {
+): Promise<R | undefined> {
     return adminTransaction(uid, async (txn, callerSnap) => {
         const {ref, data, eventTitle} = await readAttendee(txn, eventId, attendeeId);
         const tickets = [...(data.tickets ?? [])] as NewTicket[];
@@ -1221,9 +1196,9 @@ export const voidTicket = onCall({maxInstances: 10, secrets: [WALLETWALLET_API_K
     const uid = await requireAuth(request, "staff");
     const target = ticketTarget(request.data);
     let walletPasses: unknown;
-    const reply = await editTicket(uid, target, "ticket-void", (ticket, {data}) => {
+    await editTicket(uid, target, "ticket-void", (ticket, {data}) => {
         walletPasses = data.walletPasses;
-        return {ticket: {...ticket, voided: true}, reply: {voided: true}};
+        return {ticket: {...ticket, voided: true}};
     });
     const [revoked] = await revokeWalletPasses(walletPasses, [target.ticketId]);
     if (revoked) {
@@ -1235,34 +1210,33 @@ export const voidTicket = onCall({maxInstances: 10, secrets: [WALLETWALLET_API_K
             countWalletPasses(eventRef, -1),
         ]);
     }
-    return reply;
 });
 export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
-    return editTicket(uid, ticketTarget(request.data), "ticket-unvoid",
-        ticket => ({ticket: {...ticket, voided: false}, reply: {unvoided: true}}));
+    await editTicket(uid, ticketTarget(request.data), "ticket-unvoid",
+        ticket => ({ticket: {...ticket, voided: false}}));
 });
 export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const target = ticketTarget(request.data);
-    return editTicket<{redeemed: boolean; alreadyRedeemed?: boolean}>(uid, target, "ticket-redeem",
+    return editTicket<{alreadyRedeemed: boolean}>(uid, target, "ticket-redeem",
         async (ticket, {txn, data, callerName}) => {
             if (ticket.voided) {
                 throw new HttpsError("failed-precondition", "This ticket has been voided.", {code: "voided"});
             }
-            if (ticket.redeemed) return {reply: {redeemed: false, alreadyRedeemed: true}};
+            if (ticket.redeemed) return {reply: {alreadyRedeemed: true}};
 
             const userCheckedIn = await creditAccountAttendance(
                 txn, creditedEmail(data), target.eventId, data.createdAt);
             return {
                 ticket: admitted(ticket, {uid, name: callerName}, Timestamp.now(), userCheckedIn),
-                reply: {redeemed: true},
+                reply: {alreadyRedeemed: false},
             };
         });
 });
 export const resetTicket = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
-    return editTicket(uid, ticketTarget(request.data), "ticket-reset", ticket => ({
+    await editTicket(uid, ticketTarget(request.data), "ticket-reset", ticket => ({
         ticket: {
             ...ticket,
             redeemed: false,
@@ -1272,7 +1246,6 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
             checkedIn: false,
             checkedInAt: null,
         },
-        reply: {reset: true},
     }));
 });
 export const updateEventAttendee = onCall({maxInstances: 10}, async (request) => {
@@ -1327,9 +1300,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
 
         if (!countChanged && !typeChanged) {
             const nameChanged = name !== data.name;
-            if (!nameChanged && !notesChanged) {
-                return {updated: false, regenerated: false};
-            }
+            if (!nameChanged && !notesChanged) return {regenerated: false};
             const update: Record<string, unknown> = {updatedAt: FieldValue.serverTimestamp()};
             if (nameChanged) update.name = name;
             if (notesChanged) update.tickets = prevTickets.map(t => ({...t, notes}));
@@ -1345,7 +1316,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
                     newName: name,
                 }));
             }
-            return {updated: true, regenerated: false, ...(notes !== undefined && {notes})};
+            return {regenerated: false, ...(notes !== undefined && {notes})};
         }
 
         const {tickets: freshTickets, ticketIds} = buildFreshTickets(ticketCount, type, notes);
@@ -1369,7 +1340,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             targetEmail: data.email ?? "",
             targetName: name,
         }));
-        return {updated: true, regenerated: true};
+        return {regenerated: true};
     });
 });
 export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
@@ -1377,10 +1348,9 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
     const target = ticketTarget(request.data);
     const type = validateTicketType((request.data as {type?: unknown}).type);
 
-    return editTicket(uid, target, "ticket-type-edit", ticket => {
+    await editTicket(uid, target, "ticket-type-edit", ticket => {
         const oldType = ticket.type || "normal";
-        if (oldType === type) return {reply: {updated: false}};
-        return {ticket: {...ticket, type}, record: {oldType, newType: type}, reply: {updated: true}};
+        return oldType === type ? {} : {ticket: {...ticket, type}, record: {oldType, newType: type}};
     });
 });
 export const updateTicketNotes = onCall({maxInstances: 10}, async (request) => {
@@ -1401,7 +1371,7 @@ export const deleteEventAttendee = onCall({maxInstances: 10, secrets: [WALLETWAL
     const attendeeId = validateDocId(input.attendeeId, "attendeeId");
 
     let walletPasses: unknown;
-    const reply = await adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const {ref: attendeeRef, data, eventTitle} = await readAttendee(txn, eventId, attendeeId);
         if (data.source === "hometown") {
             throw new HttpsError("failed-precondition", "HomeTown tickets can't be removed; void them instead.",
@@ -1420,13 +1390,11 @@ export const deleteEventAttendee = onCall({maxInstances: 10, secrets: [WALLETWAL
             targetName: attendeeRecordName(data),
         }));
         walletPasses = data.walletPasses;
-        return {deleted: true};
     });
     if (walletPasses && typeof walletPasses === "object") {
         const revoked = await revokeWalletPasses(walletPasses, Object.keys(walletPasses));
         await countWalletPasses(db.collection("upcomingEvents").doc(eventId), -revoked.length);
     }
-    return reply;
 });
 
 export const sendTicketEmails = onCall(
@@ -1731,7 +1699,7 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
 
     const bodyHtml = sanitizeHtml(rawBodyHtml, EMAIL_HTML_SANITIZE_OPTIONS);
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         txn.set(ticketTemplateRef(eventSnap.ref), {
@@ -1744,7 +1712,6 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
             eventId,
             eventTitle: eventSnap.data()?.title ?? eventId,
         }));
-        return {saved: true};
     });
 });
 
@@ -1773,7 +1740,7 @@ export const updateWalletPassSettings = onCall({maxInstances: 10}, async (reques
         value: validateStr((n as any)?.value, `notes[${i}].value`, 256, true).trim(),
     }));
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         txn.set(walletPassSettingsRef(eventSnap.ref), {
@@ -1786,6 +1753,5 @@ export const updateWalletPassSettings = onCall({maxInstances: 10}, async (reques
             eventId,
             eventTitle: eventSnap.data()?.title ?? eventId,
         }));
-        return {saved: true};
     });
 });

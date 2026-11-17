@@ -103,7 +103,7 @@ export function AttendeeModal({
     const submitWalkIn = async () => {
         setSaving(true);
         try {
-            const result = await callAddWalkInAttendee({
+            await callAddWalkInAttendee({
                 eventId,
                 email: trimmedEmail,
                 name: trimmedName,
@@ -113,7 +113,7 @@ export function AttendeeModal({
                 checkIn,
             });
             showToast(
-                result.data.checkedIn
+                checkIn
                     ? (isEnglish
                         ? `Added and checked in ${parsedCount} ticket${parsedCount === 1 ? '' : 's'}.`
                         : `已添加并签到 ${parsedCount} 张门票。`)

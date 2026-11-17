@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callEmailPassports, errorSuffix, functionsErrorCode } from '~/lib/firebase';
+import { Banner } from '../Banner';
 import { EmailQuotaBanner, TemplateUnsavedBanner, useEmailQuota } from '../EmailQuotaBanner';
 import { fetchPassportsByDesign, MAX_PASSPORT_EMAIL, type PassportDesign } from '~/lib/passports';
 import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
@@ -338,8 +339,7 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                 )}
 
                 {result && (
-                    <div className={`admin-tickets-send-banner ${
-                        result.left > 0 ? 'admin-tickets-send-banner-warning' : 'admin-tickets-send-banner-info'}`}>
+                    <Banner tone={result.left > 0 ? 'warning' : 'info'}>
                         <strong>
                             {isEnglish
                                 ? `Sent ${result.sent}${result.queued > 0 ? `, queued ${result.queued}` : ''}.`
@@ -359,7 +359,7 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                                     : `${result.left} 个未发送的地址已留在列表中，稍后再次发送即可从此处继续。`}
                             </p>
                         )}
-                    </div>
+                    </Banner>
                 )}
 
                 <div className="admin-btn-row">

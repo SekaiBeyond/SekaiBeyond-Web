@@ -429,7 +429,7 @@ const LotCard = ({view, pinned, onDetails, isNow, tx}: {
                 {!!lot.stalls.motorcycle && <span title={tx.t('s_motorcycle')}>🏍️ {lot.stalls.motorcycle}</span>}
             </div>
             {pinned && (
-                <button type="button" className="parking-cta parking-hc-more" onClick={onDetails}>
+                <button type="button" className="parking-cta" onClick={onDetails}>
                     {tx.t('details')} →
                 </button>
             )}

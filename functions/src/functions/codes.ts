@@ -106,13 +106,12 @@ const toggleCodeActive = (
     const codeId = validateDocId(input.codeId, "codeId");
     const active = validateBoolean(input.active, "active");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const {ref, data} = await readCode(txn, collection, codeId);
         const recorded = await fields(txn, data);
 
         txn.update(ref, {active});
         txn.set(recordRef(), recordDoc(active ? types.on : types.off, {...performer(uid, callerSnap), ...recorded}));
-        return {active};
     });
 });
 
@@ -314,14 +313,7 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
 export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {
-        eventId?: string;
-        activeFrom?: string;
-        activeUntil?: string;
-    };
-    const eventId = validateDocId(input.eventId, "eventId");
-    const activeFrom = validateInstant(input.activeFrom, "activeFrom");
-    const activeUntil = validateInstant(input.activeUntil, "activeUntil");
+    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
 
     return issueUniqueCode(uid, "event", "claimCodes", async (txn, callerSnap, code, codeRef) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
@@ -357,7 +349,6 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
             createdAt: FieldValue.serverTimestamp(),
             active: true,
             usedCount: 0,
-            ...windowFields(activeFrom, activeUntil),
         });
         txn.set(recordRef(), recordDoc("code-create", {...fields, code}));
     });
@@ -373,7 +364,7 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
     const activeFrom = validateInstant(input.activeFrom, "activeFrom");
     const activeUntil = validateInstant(input.activeUntil, "activeUntil");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const {ref, data} = await readCode(txn, "claimCodes", codeId);
         const event = await codeEventFields(txn, data, {pastToo: false});
 
@@ -383,7 +374,6 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
             ...event,
             code: data.code ?? "",
         }));
-        return {saved: true};
     });
 });
 export const toggleBadgeCodeActive = toggleCodeActive("badgeActivationCodes", codeBadgeFields,
@@ -393,7 +383,7 @@ export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (reque
 
     const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const {ref, data} = await readCode(txn, "badgeActivationCodes", codeId);
         const badge = await codeBadgeFields(txn, data);
 
@@ -402,17 +392,12 @@ export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (reque
             ...performer(uid, callerSnap),
             ...badge,
         }));
-        return {deleted: true};
     });
 });
 export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {eventId?: string; activeFrom?: string; activeUntil?: string; maxUses?: number};
-    const eventId = validateDocId(input.eventId, "eventId");
-    const activeFrom = validateInstant(input.activeFrom, "activeFrom");
-    const activeUntil = validateInstant(input.activeUntil, "activeUntil");
-    const maxUses = validateMaxUses(input.maxUses);
+    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
 
     return issueUniqueCode(uid, "staff", "staffClaimCodes", async (txn, callerSnap, code, codeRef) => {
         const {snap: eventSnap} = await getEventDoc(eventId, txn);
@@ -436,8 +421,6 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
             createdAt: FieldValue.serverTimestamp(),
             active: true,
             usedCount: 0,
-            maxUses,
-            ...windowFields(activeFrom, activeUntil),
         });
         txn.set(recordRef(), recordDoc("staff-code-create", fields));
     });
@@ -517,7 +500,7 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
     const activeUntil = validateInstant(input.activeUntil, "activeUntil");
     const maxUses = validateMaxUses(input.maxUses);
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const {ref, data} = await readCode(txn, "staffClaimCodes", codeId);
         const event = await codeEventFields(txn, data, {pastToo: true});
 
@@ -529,7 +512,6 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
             ...performer(uid, callerSnap),
             ...event,
         }));
-        return {saved: true};
     });
 });
 export const deleteStaffCode = onCall({maxInstances: 10}, async (request) => {
@@ -537,7 +519,7 @@ export const deleteStaffCode = onCall({maxInstances: 10}, async (request) => {
 
     const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const {ref, data} = await readCode(txn, "staffClaimCodes", codeId);
         if (data.active !== false) {
             throw new HttpsError("failed-precondition", "Disable the code before deleting it.", {code: "active"});
@@ -549,6 +531,5 @@ export const deleteStaffCode = onCall({maxInstances: 10}, async (request) => {
             ...performer(uid, callerSnap),
             ...event,
         }));
-        return {deleted: true};
     });
 });

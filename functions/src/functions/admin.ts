@@ -101,7 +101,7 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
     const nameLower = name.toLowerCase();
     const docId = tagId ?? db.collection("eventLabels").doc().id;
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         if (tagId) {
             const existing = await txn.get(db.collection("eventLabels").doc(tagId));
             if (!existing.exists) throw new HttpsError("not-found", "Tag not found.");
@@ -124,7 +124,6 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
             ...performer(uid, callerSnap),
             tagName: name,
         }));
-        return {tagId: docId};
     });
 });
 export const deleteTag = onCall({maxInstances: 10}, async (request) => {
@@ -132,7 +131,7 @@ export const deleteTag = onCall({maxInstances: 10}, async (request) => {
 
     const tagId = validateDocId((request.data as {tagId?: string})?.tagId, "tagId");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const tagRef = db.collection("eventLabels").doc(tagId);
         const tagSnap = await txn.get(tagRef);
         if (!tagSnap.exists) throw new HttpsError("not-found", "Tag not found.");
@@ -144,7 +143,6 @@ export const deleteTag = onCall({maxInstances: 10}, async (request) => {
             ...performer(uid, callerSnap),
             tagName: tagSnap.data()?.name ?? tagId,
         }));
-        return {deleted: true};
     });
 });
 export const savePolicy = onCall({maxInstances: 10}, async (request) => {
@@ -154,7 +152,7 @@ export const savePolicy = onCall({maxInstances: 10}, async (request) => {
     const contentEn = validateStr(input.contentEn, "contentEn", 20000);
     const contentCn = validateStr(input.contentCn, "contentCn", 20000);
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         txn.set(db.collection("policy").doc("main"), {
             contentEn,
             contentCn,
@@ -165,7 +163,6 @@ export const savePolicy = onCall({maxInstances: 10}, async (request) => {
         txn.set(recordRef(), recordDoc("policy-update", {
             ...performer(uid, callerSnap),
         }));
-        return {saved: true};
     });
 });
 
@@ -267,7 +264,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         }));
     });
 
-    return socialLinks ? {saved: true, socialLinks} : {saved: true};
+    return {socialLinks};
 });
 
 const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
@@ -699,8 +696,6 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
     await Promise.all(orphanedAssets.map(url =>
         deleteStorageFile(url, CON_ASSET_PREFIXES)
             .catch(logStorageCleanupError(`saveConContent ${url}`))));
-
-    return {saved: true};
 });
 
 const MAX_SUGGESTED_LOTS = 10;
@@ -806,7 +801,7 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
 
     await refreshVenueParking(docId, {lat, lng, buildingCode})
         .catch(err => console.error("saveVenue: parking data not refreshed for", docId, err));
-    return {venueId: docId, eventsChanged};
+    return {eventsChanged};
 });
 export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -836,7 +831,6 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
     });
     await dropVenueParking(venueId)
         .catch(err => console.error("deleteVenue: parking data not dropped for", venueId, err));
-    return {deleted: true};
 });
 export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -909,8 +903,6 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     await Promise.all(orphanedImages.map(url =>
         deleteStorageFile(url, ["team/"])
             .catch(logStorageCleanupError(`saveTeamMembers ${url}`))));
-
-    return {saved: true};
 });
 
 const GROUP_LABELS: Record<string, {en: string; zh: string}> = {

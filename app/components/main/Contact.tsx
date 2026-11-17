@@ -61,7 +61,7 @@ export const Contact = () => {
                     </div>
                 </div>
 
-                <div className="contact-card contact-card--support">
+                <div className="contact-card">
                     <h3 className="contact-card-title">
                         {isEnglish ? "Harassment & Safety Support" : "反骚扰与安全求助"}
                     </h3>

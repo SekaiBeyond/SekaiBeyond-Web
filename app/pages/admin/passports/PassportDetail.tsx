@@ -23,6 +23,7 @@ import {
     usePassportDesigns,
 } from '~/lib/passports';
 import { addSiteDays, formatSiteTime } from '~/lib/siteTime';
+import { CopyField } from '../CopyField';
 import { QrPreview } from '../tools/qr/qrExport';
 import type { UserRecord } from '../types';
 import { UserAvatar } from '../UserRow';
@@ -138,11 +139,6 @@ export const PassportDetail = ({
         })
         : (isEnglish ? 'Never' : '从未');
 
-    const copyLink = () => {
-        navigator.clipboard.writeText(scanValue)
-            .then(() => showToast(isEnglish ? 'Link copied.' : '链接已复制。', 'success'))
-            .catch(() => showToast(isEnglish ? 'Failed to copy.' : '复制失败。', 'error'));
-    };
 
     const deleteStock = async () => {
         if (!window.confirm(isEnglish
@@ -646,17 +642,7 @@ export const PassportDetail = ({
                         <QrPreview value={scanValue} size={QR_SIZE}/>
                         <p className="admin-passport-sticker-code">{passport.id}</p>
                     </div>
-                    <div className="admin-code-url">
-                        <input
-                            readOnly
-                            value={scanValue}
-                            onClick={e => (e.target as HTMLInputElement).select()}
-                            className="admin-code-input"
-                        />
-                        <button className="admin-btn admin-btn--purple" onClick={copyLink} type="button">
-                            {isEnglish ? 'Copy' : '复制'}
-                        </button>
-                    </div>
+                    <CopyField value={scanValue}/>
                     <button
                         className="admin-toggle-btn admin-toggle-save admin-btn-sm"
                         onClick={() => requestPng([passport.id], `passport-${passport.id}`)}

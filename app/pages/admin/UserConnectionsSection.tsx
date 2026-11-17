@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { APP_PLATFORM_NAMES, appNameIn } from '~/lib/appLinks';
 import { callClearAppLinkHold, callGetUserAppLinks, type UserAppLink } from '~/lib/firebase';
 import { formatSiteTime } from '~/lib/siteTime';
+import { useLoaded } from '~/lib/useLoaded';
 import { appBrand, ConnectionRow, type ConnectionStatus } from '~/pages/ProfileConnectionRow';
 import type { UserRecord } from './types';
 import type { UserSignIn } from './UserSignInSection';
 import type { ShowToast } from './utils';
+
+const fetchUserAppLinks = async (uid: string): Promise<UserAppLink[]> => (await callGetUserAppLinks({uid})).data.apps;
 
 export const UserConnectionsSection = ({user, signIn, canManage, showToast}: {
     user: UserRecord;
@@ -15,21 +18,8 @@ export const UserConnectionsSection = ({user, signIn, canManage, showToast}: {
     showToast: ShowToast;
 }) => {
     const {isEnglish} = useLanguage();
-    const [apps, setApps] = useState<UserAppLink[] | null>(null);
-    const [failed, setFailed] = useState(false);
+    const {data: apps, failed, setData: setApps} = useLoaded(user.uid, fetchUserAppLinks);
     const [busyApp, setBusyApp] = useState<string | null>(null);
-
-    useEffect(() => {
-        let stale = false;
-        setApps(null);
-        setFailed(false);
-        callGetUserAppLinks({uid: user.uid})
-            .then(result => !stale && setApps(result.data.apps))
-            .catch(() => !stale && setFailed(true));
-        return () => {
-            stale = true;
-        };
-    }, [user.uid]);
 
     const fmt = (iso: string) => formatSiteTime(new Date(iso), isEnglish, {
         year: 'numeric', month: 'long', day: 'numeric',

@@ -103,11 +103,11 @@ export interface ColumnMapping {
 export const validateRows = (
     columns: ColumnMapping,
     records: Record<string, string>[],
-    existingAttendees: AttendeeData[] | undefined,
+    existingAttendees: AttendeeData[],
     isEnglish: boolean,
 ): {rows: ParsedRow[]; errors: ParseError[]} => {
     const {email: emailKey, name: nameKey, count: countKey, type: typeKey, timestamp: timestampKey} = columns;
-    const existingEmails = new Map(existingAttendees?.map(a => [a.email.toLowerCase(), {
+    const existingEmails = new Map(existingAttendees.map(a => [a.email.toLowerCase(), {
         name: a.name,
         ticketCount: a.ticketCount,
         type: a.tickets[0]?.type || 'normal',

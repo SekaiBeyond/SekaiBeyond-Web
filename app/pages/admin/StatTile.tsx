@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react';
+
 export function StatTile({label, value, sub}: {
     label: string;
-    value: number | string;
+    value: ReactNode;
     sub?: string;
 }) {
     return (

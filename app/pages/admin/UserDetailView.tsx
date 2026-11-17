@@ -1,4 +1,4 @@
-import { type ChangeEvent, type KeyboardEvent, useEffect, useRef, useState, } from 'react';
+import { type KeyboardEvent, useEffect, useState } from 'react';
 import { FaExternalLinkAlt } from 'react-icons/fa';
 import { doc, onSnapshot } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
@@ -29,16 +29,15 @@ import {
 } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { toDate } from '~/lib/collectionCache';
-import { passportDateTime, usePassportDesigns } from '~/lib/passports';
+import { fetchPassportsByOwner, passportDateTime, usePassportDesigns } from '~/lib/passports';
 import type { PastEvent } from '~/lib/pastEvents';
-import { useUploadLimits } from '~/lib/uploadLimits';
-import { usePassportsByOwner } from '~/pages/PassportShelf';
+import { useLoaded } from '~/lib/useLoaded';
 import type { BadgeDef } from '~/lib/badges';
 import { localized } from '~/lib/localized';
 import type { UserRecord } from './types';
-import { type ShowToast, validateImageFile } from './utils';
+import type { ShowToast } from './utils';
 import { BanSection } from './BanSection';
-import { ImageCropModal } from './ImageCropModal';
+import { useImageEditor } from './ImageCropModal';
 import { MembershipSection } from './MembershipSection';
 import { PassportPageTag, PassportRow } from './passports/PassportSearch';
 import { UserAvatar } from './UserRow';
@@ -86,6 +85,8 @@ const GrantRow = ({image, name, detail, has, hasLabel, lacksLabel, readOnly, dis
 };
 
 type GoogleProfile = Awaited<ReturnType<typeof callGetGoogleProfile>>['data'];
+
+const fetchGoogleProfile = async (uid: string) => (await callGetGoogleProfile({uid})).data;
 
 export const PhotoSourceTag = ({photoURL}: {photoURL: string}) => {
     const {isEnglish} = useLanguage();
@@ -157,7 +158,7 @@ interface UserDetailViewProps {
     pastEvents: PastEvent[];
     badgeDefs: BadgeDef[];
     badgeDefsError: boolean;
-    readOnly?: boolean;
+    readOnly: boolean;
     onBack: () => void;
     onUpdateUser: (uid: string, changes: Partial<UserRecord>) => void;
     onOpenPassport: (passportId: string) => void;
@@ -171,16 +172,16 @@ export const UserDetailView = ({
                                    pastEvents,
                                    badgeDefs,
                                    badgeDefsError,
-                                   readOnly = false,
+                                   readOnly,
                                    onBack,
                                    onUpdateUser,
                                    onOpenPassport,
                                    showToast,
                                }: UserDetailViewProps) => {
     const {isEnglish} = useLanguage();
-    const {imageMb} = useUploadLimits();
     const {designs: passportDesigns} = usePassportDesigns();
-    const {passports, failed: passportsFailed} = usePassportsByOwner(userRecord.uid);
+    const {data: passports, failed: passportsFailed} = useLoaded(userRecord.uid, fetchPassportsByOwner);
+    const {data: googleProfile} = useLoaded(userRecord.uid, fetchGoogleProfile);
     const signIn = useUserSignInMethods(userRecord.uid);
 
     const [updating, setUpdating] = useState(false);
@@ -192,23 +193,31 @@ export const UserDetailView = ({
     const [editingName, setEditingName] = useState(false);
     const [nameInput, setNameInput] = useState('');
     const [nameBusy, setNameBusy] = useState(false);
-    const [photoBusy, setPhotoBusy] = useState(false);
-    const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [bannerBusy, setBannerBusy] = useState(false);
-    const [googleProfile, setGoogleProfile] = useState<GoogleProfile | null>(null);
-
-    useEffect(() => {
-        let stale = false;
-        setGoogleProfile(null);
-        callGetGoogleProfile({uid: userRecord.uid})
-            .then(result => !stale && setGoogleProfile(result.data))
-            .catch(() => {
-            });
-        return () => {
-            stale = true;
-        };
-    }, [userRecord.uid]);
+    const notPermitted = {
+        en: 'You may not have permission.',
+        zh: '你可能没有权限执行此操作。',
+    };
+    const photoEditor = useImageEditor({
+        showToast,
+        upload: {
+            send: async file => {
+                onUpdateUser(userRecord.uid, {photoURL: await callUploadAvatar(file, userRecord.uid)});
+            },
+            done: isEnglish ? 'Profile photo updated.' : '头像已更新。',
+            failed: isEnglish ? `Failed to upload photo. ${notPermitted.en}` : `上传头像失败。${notPermitted.zh}`,
+        },
+        removal: {
+            done: isEnglish ? 'Profile photo removed.' : '头像已删除。',
+            failed: isEnglish ? `Failed to remove photo. ${notPermitted.en}` : `删除头像失败。${notPermitted.zh}`,
+        },
+    });
+    const bannerEditor = useImageEditor({
+        showToast,
+        removal: {
+            done: isEnglish ? 'Profile banner removed.' : '主页横幅已删除。',
+            failed: isEnglish ? `Failed to remove banner. ${notPermitted.en}` : `删除横幅失败。${notPermitted.zh}`,
+        },
+    });
 
     useEffect(() => {
         setTitleInput(userRecord.title ?? '');
@@ -399,76 +408,25 @@ export const UserDetailView = ({
         if (e.key === 'Escape') setEditingName(false);
     };
 
-    const handlePhotoSelect = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        if (!file) return;
-        if (!validateImageFile(file, imageMb, isEnglish, showToast, true)) return;
-        setPendingPhoto(file);
-    };
-
-    const handlePhotoCropConfirm = async (cropped: File) => {
-        setPendingPhoto(null);
-        setPhotoBusy(true);
-        try {
-            const url = await callUploadAvatar(cropped, userRecord.uid);
-            onUpdateUser(userRecord.uid, {photoURL: url});
-            showToast(isEnglish ? 'Profile photo updated.' : '头像已更新。', 'success');
-        } catch {
-            showToast(
-                isEnglish
-                    ? 'Failed to upload photo. You may not have permission.'
-                    : '上传头像失败。你可能没有权限执行此操作。',
-                'error',
-            );
-        } finally {
-            setPhotoBusy(false);
-        }
-    };
-
-    const deletePhoto = async () => {
-        if (!confirm(isEnglish
+    const deletePhoto = () => photoEditor.remove(
+        isEnglish
             ? `Remove ${userRecord.displayName}'s profile photo? It goes back to their Google account photo if one is bound.`
-            : `删除 ${userRecord.displayName} 的头像？如已绑定 Google 账号，将恢复为其头像。`
-        )) return;
-        setPhotoBusy(true);
-        try {
+            : `删除 ${userRecord.displayName} 的头像？如已绑定 Google 账号，将恢复为其头像。`,
+        async () => {
             const result = await callDeleteAvatar({targetUid: userRecord.uid});
             onUpdateUser(userRecord.uid, {photoURL: result.data.photoURL});
-            showToast(isEnglish ? 'Profile photo removed.' : '头像已删除。', 'warning');
-        } catch {
-            showToast(
-                isEnglish
-                    ? 'Failed to remove photo. You may not have permission.'
-                    : '删除头像失败。你可能没有权限执行此操作。',
-                'error',
-            );
-        } finally {
-            setPhotoBusy(false);
-        }
-    };
+        },
+    );
 
-    const deleteBanner = async () => {
-        if (!confirm(isEnglish
+    const deleteBanner = () => bannerEditor.remove(
+        isEnglish
             ? `Remove ${userRecord.displayName}'s profile banner? Their profile will show the default banner.`
-            : `删除 ${userRecord.displayName} 的主页横幅？其个人主页将显示默认横幅。`
-        )) return;
-        setBannerBusy(true);
-        try {
+            : `删除 ${userRecord.displayName} 的主页横幅？其个人主页将显示默认横幅。`,
+        async () => {
             await callDeleteBanner({targetUid: userRecord.uid});
             onUpdateUser(userRecord.uid, {bannerURL: ''});
-            showToast(isEnglish ? 'Profile banner removed.' : '主页横幅已删除。', 'warning');
-        } catch {
-            showToast(
-                isEnglish
-                    ? 'Failed to remove banner. You may not have permission.'
-                    : '删除横幅失败。你可能没有权限执行此操作。',
-                'error',
-            );
-        } finally {
-            setBannerBusy(false);
-        }
-    };
+        },
+    );
 
     const setTitle = async () => {
         setTitleBusy(true);
@@ -508,30 +466,28 @@ export const UserDetailView = ({
     const hasCustomPhoto = isStorageUrl(userRecord.photoURL);
 
     return (
-        <div className="admin-user-detail">
+        <div>
             <button className="admin-btn admin-btn--link" onClick={onBack}>
                 &larr; {isEnglish ? 'Back to results' : '返回结果'}
             </button>
 
             <div className="admin-detail-header">
                 <div
-                    className={`admin-detail-avatar-wrapper${canEditProfile ? ' admin-detail-avatar-editable' : ''}${photoBusy ? ' admin-detail-avatar-saving' : ''}`}>
+                    className={`admin-detail-avatar-wrapper${canEditProfile ? ' admin-detail-avatar-editable' : ''}${photoEditor.busy ? ' admin-detail-avatar-saving' : ''}`}>
                     <UserAvatar
                         photoURL={userRecord.photoURL}
                         displayName={userRecord.displayName}
                         className="admin-detail-avatar"
-                        onClick={canEditProfile
-                            ? () => !photoBusy && fileInputRef.current?.click()
-                            : undefined}
+                        onClick={canEditProfile ? photoEditor.choose : undefined}
                     />
                     {canEditProfile && (
                         <>
                             <div
                                 className="admin-detail-avatar-overlay"
-                                onClick={() => !photoBusy && fileInputRef.current?.click()}
+                                onClick={photoEditor.choose}
                                 title={isEnglish ? 'Change profile photo' : '更换头像'}
                             >
-                                {photoBusy ? (
+                                {photoEditor.busy ? (
                                     <div className="profile-avatar-spinner"/>
                                 ) : (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -543,7 +499,7 @@ export const UserDetailView = ({
                                     </svg>
                                 )}
                             </div>
-                            {hasCustomPhoto && !photoBusy && (
+                            {hasCustomPhoto && !photoEditor.busy && (
                                 <button
                                     className="admin-detail-avatar-delete"
                                     onClick={deletePhoto}
@@ -558,13 +514,7 @@ export const UserDetailView = ({
                                     </svg>
                                 </button>
                             )}
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={handlePhotoSelect}
-                                hidden
-                            />
+                            {photoEditor.input}
                         </>
                     )}
                 </div>
@@ -655,9 +605,9 @@ export const UserDetailView = ({
                         <button
                             className="admin-banner-remove-btn"
                             onClick={deleteBanner}
-                            disabled={bannerBusy}
+                            disabled={bannerEditor.busy}
                         >
-                            {bannerBusy
+                            {bannerEditor.busy
                                 ? (isEnglish ? 'Removing...' : '删除中...')
                                 : (isEnglish ? 'Remove banner' : '删除横幅')}
                         </button>
@@ -935,15 +885,7 @@ export const UserDetailView = ({
                 ))}
             </div>
 
-            {pendingPhoto && (
-                <ImageCropModal
-                    imageSource={pendingPhoto}
-                    aspect={1}
-                    onConfirm={handlePhotoCropConfirm}
-                    onCancel={() => setPendingPhoto(null)}
-                    showToast={showToast}
-                />
-            )}
+            {photoEditor.cropModal}
         </div>
     );
 };

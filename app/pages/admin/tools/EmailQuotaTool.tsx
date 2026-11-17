@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetEmailQuotaStatus, type EmailQuotaStatus } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
-import { RefreshButton, ToolHeader, useToolLoader } from '../ToolHeader';
+import { Banner } from '../Banner';
+import { StatTile } from '../StatTile';
+import { useToolLoader } from '../ToolHeader';
+import { QuotaMeter, QuotaNotes, QuotaPage } from './QuotaParts';
 
 interface EmailQuotaToolProps {
     onBack: () => void;
@@ -76,40 +79,23 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
             : (isEnglish ? 'unavailable' : '无法读取');
 
     return (
-        <div className="admin-section">
-            <ToolHeader title={isEnglish ? 'Email Quota' : '邮件额度'} back={isEnglish ? 'Back to Tools' : '返回工具'}
-                        onBack={onBack}>
-                <RefreshButton className="admin-toggle-btn admin-toggle-edit admin-quota-refresh"
-                               onClick={() => load(true)} busy={loading}/>
-            </ToolHeader>
-
-            <p className="admin-helper-text admin-section-mb">
-                {isEnglish
-                    ? `Outbound email runs through ${providerName || 'the configured email provider'}, which allows a limited number of emails per day. Every to/cc/bcc address counts as one. Sends past the limit are queued and shipped automatically as headroom reopens.`
-                    : `所有外发邮件通过 ${providerName || '已配置的邮件服务'} 发送，每日发送量有限。每个收件人（含抄送、密送）各计一封。超出上限的邮件会进入队列，待额度恢复后自动发送。`}
-            </p>
-
-            {error && !status && (
-                <div className="admin-tickets-send-banner admin-tickets-send-banner-error">
-                    <span>
-                        {isEnglish
-                            ? 'Could not load email quota. Try refreshing.'
-                            : '无法加载邮件额度，请尝试刷新。'}
-                    </span>
-                </div>
-            )}
-
-            {!status && loading && (
-                <div className="spinner spinner-centered"/>
-            )}
-
+        <QuotaPage
+            title={isEnglish ? 'Email Quota' : '邮件额度'}
+            intro={isEnglish
+                ? `Outbound email runs through ${providerName || 'the configured email provider'}, which allows a limited number of emails per day. Every to/cc/bcc address counts as one. Sends past the limit are queued and shipped automatically as headroom reopens.`
+                : `所有外发邮件通过 ${providerName || '已配置的邮件服务'} 发送，每日发送量有限。每个收件人（含抄送、密送）各计一封。超出上限的邮件会进入队列，待额度恢复后自动发送。`}
+            failed={isEnglish ? 'Could not load email quota. Try refreshing.' : '无法加载邮件额度，请尝试刷新。'}
+            onBack={onBack}
+            loading={loading}
+            error={error}
+            load={load}
+        >
             {status && (
                 <>
-                    <div className={`admin-tickets-send-banner ${
-                        unavailable ? 'admin-tickets-send-banner-warning'
-                            : atCap && queueFull ? 'admin-tickets-send-banner-error'
-                                : (atCap || lowHeadroom || queueFull) ? 'admin-tickets-send-banner-warning'
-                                    : 'admin-tickets-send-banner-info'}`}>
+                    <Banner tone={unavailable ? 'warning'
+                        : atCap && queueFull ? 'error'
+                            : (atCap || lowHeadroom || queueFull) ? 'warning'
+                                : 'info'}>
                         <span>
                             {unavailable
                                 ? (isEnglish
@@ -135,136 +121,93 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
                                                     ? `${remainingToday} of ${status.dailyCap} emails still available.`
                                                     : `还有 ${remainingToday} / ${status.dailyCap} 封可发送。`)}
                         </span>
-                    </div>
+                    </Banner>
 
                     {!unavailable && (
-                        <div className="admin-quota-meter">
-                            <div className="admin-quota-meter-track">
-                                <div
-                                    className="admin-quota-meter-fill admin-quota-meter-fill--confirmed"
-                                    style={{width: `${confirmedPct}%`}}
-                                />
-                                <div
-                                    className="admin-quota-meter-fill admin-quota-meter-fill--reserved"
-                                    style={{width: `${reservedPct}%`}}
-                                />
-                            </div>
-                            <div className="admin-quota-meter-legend">
-                                <span className="admin-quota-legend-item">
-                                    <i className="admin-quota-swatch admin-quota-swatch--confirmed"/>
-                                    {isEnglish ? 'Counted by' : '已计入'} {providerName} ({status.confirmed})
-                                </span>
-                                <span className="admin-quota-legend-item">
-                                    <i className="admin-quota-swatch admin-quota-swatch--reserved"/>
-                                    {isEnglish ? 'In flight' : '发送中'} ({status.reserved})
-                                </span>
-                                <span className="admin-quota-legend-item">
-                                    <i className="admin-quota-swatch admin-quota-swatch--free"/>
-                                    {isEnglish ? 'Available' : '可用'} ({remainingToday})
-                                </span>
-                            </div>
-                        </div>
+                        <QuotaMeter parts={[
+                            {
+                                kind: 'confirmed',
+                                pct: confirmedPct,
+                                label: `${isEnglish ? 'Counted by' : '已计入'} ${providerName} (${status.confirmed})`,
+                            },
+                            {
+                                kind: 'reserved',
+                                pct: reservedPct,
+                                label: `${isEnglish ? 'In flight' : '发送中'} (${status.reserved})`,
+                            },
+                            {kind: 'free', label: `${isEnglish ? 'Available' : '可用'} (${remainingToday})`},
+                        ]}/>
                     )}
 
                     <div className="admin-stats-tiles admin-section-mb">
-                        <div className="admin-stats-tile">
-                            <div className="admin-stats-tile-label">
-                                {isEnglish ? `Used per ${providerName}` : `${providerName} 记录用量`}
-                            </div>
-                            <div className={`admin-stats-tile-value${
-                                status.providerReported === null ? ' admin-stats-tile-value--sm' : ''}`}>
-                                {status.providerReported === null
-                                    ? (isEnglish ? 'Unavailable' : '无法读取')
-                                    : `${status.usageTruncated ? '≥' : ''}${status.providerReported} / ${status.dailyCap}`}
-                            </div>
-                            <div className="admin-stats-tile-sub">{readingLabel}</div>
-                        </div>
-                        <div className="admin-stats-tile">
-                            <div className="admin-stats-tile-label">
-                                {isEnglish ? 'Available' : '可用额度'}
-                            </div>
-                            <div className="admin-stats-tile-value">
-                                {unavailable ? '—' : remainingToday}
-                            </div>
-                            <div className="admin-stats-tile-sub">
-                                {isEnglish ? 'before sends queue' : '超出后进入队列'}
-                            </div>
-                        </div>
-                        <div className="admin-stats-tile">
-                            <div className="admin-stats-tile-label">
-                                {isEnglish ? 'In flight' : '发送中'}
-                            </div>
-                            <div className="admin-stats-tile-value">{status.reserved}</div>
-                            <div className="admin-stats-tile-sub">
-                                {isEnglish
-                                    ? `not yet counted by ${providerName}`
-                                    : `${providerName} 尚未计入`}
-                            </div>
-                        </div>
-                        <div className="admin-stats-tile">
-                            <div className="admin-stats-tile-label">
-                                {isEnglish ? 'Queued' : '排队中'}
-                            </div>
-                            <div className="admin-stats-tile-value">
-                                {status.queuedCount} / {status.queueCap}
-                            </div>
-                            <div className="admin-stats-tile-sub">
-                                {status.queuedCount === 0
-                                    ? (isEnglish ? 'queue empty' : '队列为空')
-                                    : oldestQueuedAge
-                                        ? (isEnglish
-                                            ? `oldest queued ${oldestQueuedAge}`
-                                            : `最早入队于${oldestQueuedAge}`)
-                                        : (isEnglish ? 'waiting to send' : '等待发送')}
-                            </div>
-                        </div>
+                        <StatTile
+                            label={isEnglish ? `Used per ${providerName}` : `${providerName} 记录用量`}
+                            value={status.providerReported === null
+                                ? (isEnglish ? 'Unavailable' : '无法读取')
+                                : `${status.usageTruncated ? '≥' : ''}${status.providerReported} / ${status.dailyCap}`}
+                            sub={readingLabel}
+                        />
+                        <StatTile
+                            label={isEnglish ? 'Available' : '可用额度'}
+                            value={unavailable ? '—' : remainingToday}
+                            sub={isEnglish ? 'before sends queue' : '超出后进入队列'}
+                        />
+                        <StatTile
+                            label={isEnglish ? 'In flight' : '发送中'}
+                            value={status.reserved}
+                            sub={isEnglish ? `not yet counted by ${providerName}` : `${providerName} 尚未计入`}
+                        />
+                        <StatTile
+                            label={isEnglish ? 'Queued' : '排队中'}
+                            value={`${status.queuedCount} / ${status.queueCap}`}
+                            sub={status.queuedCount === 0
+                                ? (isEnglish ? 'queue empty' : '队列为空')
+                                : oldestQueuedAge
+                                    ? (isEnglish ? `oldest queued ${oldestQueuedAge}` : `最早入队于${oldestQueuedAge}`)
+                                    : (isEnglish ? 'waiting to send' : '等待发送')}
+                        />
                     </div>
 
-                    <div className="admin-stats-card">
-                        <div className="admin-stats-card-title">
-                            {isEnglish ? 'How this works' : '说明'}
-                        </div>
-                        <ul className="admin-quota-notes">
+                    <QuotaNotes>
+                        <li>
+                            {isEnglish
+                                ? `"Used per ${providerName}" is counted from ${providerName}'s own record of sent mail each time this page loads, so it should match their dashboard. It covers the whole account, including mail sent outside this admin panel.`
+                                : `"${providerName} 记录用量"在每次打开本页时，根据 ${providerName} 自身的发送记录统计，因此应与其控制台一致。该数字涵盖整个账号，包括在本管理面板之外发送的邮件。`}
+                        </li>
+                        {status.usageTruncated && (
                             <li>
                                 {isEnglish
-                                    ? `"Used per ${providerName}" is counted from ${providerName}'s own record of sent mail each time this page loads, so it should match their dashboard. It covers the whole account, including mail sent outside this admin panel.`
-                                    : `"${providerName} 记录用量"在每次打开本页时，根据 ${providerName} 自身的发送记录统计，因此应与其控制台一致。该数字涵盖整个账号，包括在本管理面板之外发送的邮件。`}
+                                    ? 'Sent volume in this window exceeded what this page counts in one pass, so the used figure is a lower bound.'
+                                    : '本窗口内的发送量超出本页单次统计上限，因此显示的用量为下限值。'}
                             </li>
-                            {status.usageTruncated && (
-                                <li>
-                                    {isEnglish
-                                        ? 'Sent volume in this window exceeded what this page counts in one pass, so the used figure is a lower bound.'
-                                        : '本窗口内的发送量超出本页单次统计上限，因此显示的用量为下限值。'}
-                                </li>
-                            )}
-                            <li>
-                                {isEnglish
-                                    ? `"In flight" covers sends already charged against the limit but not yet counted by ${providerName}. Sends are gated on used + in flight, so "Available" can be lower than ${providerName}'s number implies; it clears on its own.`
-                                    : `"发送中"指已占用额度但 ${providerName} 尚未计入的邮件。发送判断基于"已用 + 发送中"，因此"可用额度"可能低于 ${providerName} 数字所示，该部分会自动结算。`}
-                            </li>
-                            <li>
-                                {status.provider.windowKind === 'rolling24h'
-                                    ? (isEnglish
-                                        ? `${providerName} counts a rolling 24-hour window, not a calendar day — capacity returns gradually as older sends age out, not all at once.`
-                                        : `${providerName} 按滚动 24 小时窗口计算，而非自然日 — 额度随着早前邮件超过 24 小时逐步恢复，而非一次性重置。`)
-                                    : (isEnglish
-                                        ? `${providerName} resets the allowance on a calendar-day boundary.`
-                                        : `${providerName} 的额度按自然日重置。`)}
-                            </li>
-                            <li>
-                                {isEnglish
-                                    ? `The queue drains automatically every ${status.drainIntervalMinutes} minutes, sending as much as the remaining limit allows.`
-                                    : `队列每 ${status.drainIntervalMinutes} 分钟自动清空一次，按剩余额度尽可能发送。`}
-                            </li>
-                            <li>
-                                {isEnglish
-                                    ? `Sender address: ${status.provider.fromAddress}`
-                                    : `发件地址：${status.provider.fromAddress}`}
-                            </li>
-                        </ul>
-                    </div>
+                        )}
+                        <li>
+                            {isEnglish
+                                ? `"In flight" covers sends already charged against the limit but not yet counted by ${providerName}. Sends are gated on used + in flight, so "Available" can be lower than ${providerName}'s number implies; it clears on its own.`
+                                : `"发送中"指已占用额度但 ${providerName} 尚未计入的邮件。发送判断基于"已用 + 发送中"，因此"可用额度"可能低于 ${providerName} 数字所示，该部分会自动结算。`}
+                        </li>
+                        <li>
+                            {status.provider.windowKind === 'rolling24h'
+                                ? (isEnglish
+                                    ? `${providerName} counts a rolling 24-hour window, not a calendar day — capacity returns gradually as older sends age out, not all at once.`
+                                    : `${providerName} 按滚动 24 小时窗口计算，而非自然日 — 额度随着早前邮件超过 24 小时逐步恢复，而非一次性重置。`)
+                                : (isEnglish
+                                    ? `${providerName} resets the allowance on a calendar-day boundary.`
+                                    : `${providerName} 的额度按自然日重置。`)}
+                        </li>
+                        <li>
+                            {isEnglish
+                                ? `The queue drains automatically every ${status.drainIntervalMinutes} minutes, sending as much as the remaining limit allows.`
+                                : `队列每 ${status.drainIntervalMinutes} 分钟自动清空一次，按剩余额度尽可能发送。`}
+                        </li>
+                        <li>
+                            {isEnglish
+                                ? `Sender address: ${status.provider.fromAddress}`
+                                : `发件地址：${status.provider.fromAddress}`}
+                        </li>
+                    </QuotaNotes>
                 </>
             )}
-        </div>
+        </QuotaPage>
     );
 };

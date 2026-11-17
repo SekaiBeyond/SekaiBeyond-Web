@@ -1,10 +1,10 @@
-import { type ChangeEvent, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSyncHometownOrderTimes, errorSuffix } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
-import { ImportIssues } from './ImportIssues';
-import { type HometownOrderRow, parseHometownOrderFile, retryRateLimited } from './hometown';
-import type { AttendeeData, ParseError } from './types';
+import { ImportIssues, useParsedSheet } from './ImportIssues';
+import { parseHometownOrderFile, retryRateLimited } from './hometown';
+import type { AttendeeData } from './types';
 
 const SYNC_CHUNK = 500;
 const MAX_UNMATCHED = 20;
@@ -25,11 +25,8 @@ export function HometownOrdersSection({
                                           onSynced,
                                       }: HometownOrdersSectionProps) {
     const {isEnglish} = useLanguage();
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [orders, setOrders] = useState<HometownOrderRow[]>([]);
-    const [errors, setErrors] = useState<ParseError[]>([]);
-    const [warnings, setWarnings] = useState<ParseError[]>([]);
-    const [busy, setBusy] = useState(false);
+    const sheet = useParsedSheet(parseHometownOrderFile, 'HometownOrdersSection');
+    const {rows: orders, errors, busy, clear: clearForm} = sheet;
     const [syncing, setSyncing] = useState(false);
 
     const preview = useMemo(() => {
@@ -57,33 +54,6 @@ export function HometownOrdersSection({
             notInFile,
         };
     }, [attendees, orders]);
-
-    const clearForm = () => {
-        setOrders([]);
-        setErrors([]);
-        setWarnings([]);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-
-    const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setBusy(true);
-        setOrders([]);
-        setErrors([]);
-        setWarnings([]);
-        try {
-            const parsed = await parseHometownOrderFile(file, isEnglish);
-            setOrders(parsed.orders);
-            setErrors(parsed.errors);
-            setWarnings(parsed.warnings);
-        } catch (err) {
-            console.error('[HometownOrdersSection] parse error', err);
-            setErrors([{row: 0, message: isEnglish ? 'Failed to parse file.' : '解析文件失败。'}]);
-        } finally {
-            setBusy(false);
-        }
-    };
 
     const confirmSync = async () => {
         if (readOnly || orders.length === 0) return;
@@ -133,7 +103,6 @@ export function HometownOrdersSection({
         }
     };
 
-    const issues = [...errors, ...warnings];
     const unmatchedList = preview.unmatched.slice(0, MAX_UNMATCHED).map(id => `#${id}`).join(', ')
         + (preview.unmatched.length > MAX_UNMATCHED
             ? (isEnglish
@@ -150,17 +119,9 @@ export function HometownOrdersSection({
                     ? 'The guest list has no purchase times, so HomeTown tickets show when they were imported. Upload the order list exported from HomeTown (Order List) to give each ticket the time its order was placed, matched by order number, for the sales timeline in Stats, the attendee list and the CSV export. Import the guest list first, and sync again after importing a newer one, since newly added tickets start with the import\'s time.'
                     : '来宾名单不含购票时间，因此 HomeTown 门票显示的是导入时间。上传从 HomeTown 导出的订单列表（Order List），按订单号为每张门票设置下单时间，用于统计中的销售时间线、参加者列表和 CSV 导出。请先导入来宾名单；导入更新的名单后请再次同步，因为新添加的门票以导入时间开始。'}
             </p>
-            <div className="admin-tickets-import-file-row">
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    onChange={handleFile}
-                    disabled={readOnly || busy || syncing}
-                />
-            </div>
+            {sheet.input(readOnly || busy || syncing)}
 
-            <ImportIssues issues={issues}/>
+            <ImportIssues issues={sheet.issues}/>
 
             {orders.length > 0 && (
                 <>

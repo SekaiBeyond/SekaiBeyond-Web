@@ -394,7 +394,6 @@ export const setPassportPrivacy = onCall({maxInstances: 10}, async (request) => 
     const hide = validateBoolean((request.data as {hide?: unknown})?.hide, "hide");
 
     await db.collection("users").doc(uid).update({hidePassportPage: hide});
-    return {hidePassportPage: hide};
 });
 
 const shownNames = (design: {name?: unknown; nameCn?: unknown}): string[] => {
@@ -473,8 +472,6 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
     await Promise.all(orphanedImages.map(url =>
         deleteStorageFile(url, ["passports/"])
             .catch(logStorageCleanupError(`savePassportDesign ${ref.id}`))));
-
-    return {designId: ref.id};
 });
 
 export const deletePassportDesign = onCall({maxInstances: 10}, async (request) => {
@@ -505,6 +502,4 @@ export const deletePassportDesign = onCall({maxInstances: 10}, async (request) =
         passportDesignName: snap.data()?.name ?? "",
         passportYear: snap.data()?.year ?? null,
     }));
-
-    return {deleted: true};
 });

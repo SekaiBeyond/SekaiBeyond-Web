@@ -12,10 +12,10 @@ import { FaqSection } from './ConFaqSection';
 
 interface ConContentTabProps {
     showToast: ShowToast;
-    readOnly?: boolean;
+    readOnly: boolean;
 }
 
-export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps) => {
+export const ConContentTab = ({showToast, readOnly}: ConContentTabProps) => {
     const {isEnglish} = useLanguage();
     const {content, loading, failed} = useConDraft();
 

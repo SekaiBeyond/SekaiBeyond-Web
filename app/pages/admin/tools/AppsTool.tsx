@@ -22,6 +22,7 @@ import { localized } from '~/lib/localized';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { appBrand, ConnectionIcon } from '~/pages/ProfileConnectionRow';
+import { Banner } from '../Banner';
 import { BilingualFormField } from '../BilingualFormField';
 import { CreateSection } from '../CrudShell';
 import { ImageUploadField } from '../ImageUploadField';
@@ -495,7 +496,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
 
             <div ref={createdRef}/>
             {created && (
-                <div className="admin-tickets-send-banner admin-tickets-send-banner-warning admin-api-key-created">
+                <Banner tone="warning" className="admin-api-key-created">
                     <p>
                         {isEnglish
                             ? <>Here's the key <strong>{created.name}</strong> for <strong>{created.appName}</strong>.
@@ -520,7 +521,7 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                             {isEnglish ? 'Done' : '完成'}
                         </button>
                     </div>
-                </div>
+                </Banner>
             )}
 
             <div ref={formRef}/>
@@ -748,9 +749,9 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             </CreateSection>
 
             {error && !apps && (
-                <div className="admin-tickets-send-banner admin-tickets-send-banner-error">
+                <Banner tone="error">
                     <span>{isEnglish ? 'Could not load apps. Try refreshing.' : '无法加载应用，请尝试刷新。'}</span>
-                </div>
+                </Banner>
             )}
 
             {!apps && loading && <div className="spinner spinner-centered"/>}

@@ -122,7 +122,7 @@ export const revokeApiKey = onCall({maxInstances: 10}, async (request) => {
     const input = (request.data ?? {}) as {keyId?: unknown};
     const keyId = validateDocId(input.keyId, "keyId");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = apiKeysCol().doc(keyId);
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "API key not found.");
@@ -139,6 +139,5 @@ export const revokeApiKey = onCall({maxInstances: 10}, async (request) => {
             apiKeyName: data.name ?? "",
             apiKeyHint: data.hint ?? "",
         }));
-        return {revoked: true};
     });
 });

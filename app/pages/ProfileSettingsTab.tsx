@@ -8,7 +8,7 @@ import { ProfileAccountSection, useSignInMethods } from '~/pages/ProfileAccountS
 import { ProfileConnectionsSection } from '~/pages/ProfileConnectionsSection';
 import { ProfileDevicesSection } from '~/pages/ProfileDevicesSection';
 
-function usePrivacySettings(showToast: ShowToast): {
+export function usePrivacySettings(showToast: ShowToast, known: Partial<Record<PrivacyKey, boolean>> = {}): {
     values: Record<PrivacyKey, boolean>;
     saving: PrivacyKey | null;
     setVisible: (key: PrivacyKey, visible: boolean) => Promise<void>;
@@ -16,7 +16,7 @@ function usePrivacySettings(showToast: ShowToast): {
     const {isEnglish} = useLanguage();
     const {profile, refreshProfile} = useAuth();
     const [saving, setSaving] = useState<PrivacyKey | null>(null);
-    const [saved, setSaved] = useState<Partial<Record<PrivacyKey, boolean>>>({});
+    const [saved, setSaved] = useState(known);
 
     const values: Record<PrivacyKey, boolean> = {
         passportPage: !profile?.hidePassportPage,

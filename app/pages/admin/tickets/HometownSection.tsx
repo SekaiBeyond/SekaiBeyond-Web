@@ -1,10 +1,10 @@
-import { type ChangeEvent, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportHometownTickets, errorSuffix } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
-import { ImportIssues } from './ImportIssues';
-import { hometownAttendeeId, type HometownTicketRow, parseHometownFile, retryRateLimited } from './hometown';
-import { type AttendeeData, type ParseError, TICKET_TYPES, ticketTypeClass, ticketTypeLabel } from './types';
+import { ImportIssues, useParsedSheet } from './ImportIssues';
+import { hometownAttendeeId, parseHometownFile, retryRateLimited } from './hometown';
+import { type AttendeeData, TICKET_TYPES, ticketTypeClass, ticketTypeLabel } from './types';
 
 const IMPORT_CHUNK = 500;
 
@@ -27,11 +27,8 @@ export function HometownSection({
                                     onImported,
                                 }: HometownSectionProps) {
     const {isEnglish} = useLanguage();
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [tickets, setTickets] = useState<HometownTicketRow[]>([]);
-    const [errors, setErrors] = useState<ParseError[]>([]);
-    const [warnings, setWarnings] = useState<ParseError[]>([]);
-    const [busy, setBusy] = useState(false);
+    const sheet = useParsedSheet(parseHometownFile, 'HometownSection');
+    const {rows: tickets, errors, busy, clear: clearForm} = sheet;
     const [importing, setImporting] = useState(false);
     const [updateExisting, setUpdateExisting] = useState(false);
 
@@ -69,33 +66,6 @@ export function HometownSection({
             types: TICKET_TYPES.filter(tt => types.has(tt.value)).map(tt => [tt.value, types.get(tt.value)!] as const),
         };
     }, [attendees, tickets, updateExisting]);
-
-    const clearForm = () => {
-        setTickets([]);
-        setErrors([]);
-        setWarnings([]);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-
-    const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setBusy(true);
-        setTickets([]);
-        setErrors([]);
-        setWarnings([]);
-        try {
-            const parsed = await parseHometownFile(file, isEnglish);
-            setTickets(parsed.tickets);
-            setErrors(parsed.errors);
-            setWarnings(parsed.warnings);
-        } catch (err) {
-            console.error('[HometownSection] parse error', err);
-            setErrors([{row: 0, message: isEnglish ? 'Failed to parse file.' : '解析文件失败。'}]);
-        } finally {
-            setBusy(false);
-        }
-    };
 
     const confirmImport = async () => {
         if (readOnly || tickets.length === 0) return;
@@ -166,7 +136,6 @@ export function HometownSection({
         }
     };
 
-    const issues = [...errors, ...warnings];
     const rowErrors = errors.some(e => e.row > 0);
     const canImport = !readOnly && !busy && !importing && tickets.length > 0
         && !errors.some(e => e.row === 0) && !(updateExisting && rowErrors);
@@ -179,15 +148,7 @@ export function HometownSection({
                     ? 'Upload the guest list exported from HomeTown (Export Guest List). Each ticket is added once by its number and keeps it, so the QR on the HomeTown ticket scans here. Tickets already here are left as they are, so a newer export can be imported at any time, during the event too. HomeTown buyers aren\'t sent our ticket emails.'
                     : '上传从 HomeTown 导出的来宾名单（Export Guest List）。每张门票按门票号添加一次并沿用该号码，因此 HomeTown 门票上的二维码可在此扫描。已存在的门票保持不变，可随时（包括活动期间）导入更新的名单。HomeTown 购票者不会收到我们的门票邮件。'}
             </p>
-            <div className="admin-tickets-import-file-row">
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    onChange={handleFile}
-                    disabled={readOnly || busy || importing}
-                />
-            </div>
+            {sheet.input(readOnly || busy || importing)}
 
             <label className="admin-checkbox-label admin-tickets-hometown-update">
                 <input
@@ -204,7 +165,7 @@ export function HometownSection({
                     : '以此文件为 HomeTown 的最新数据，适用于活动结束后的最终导入：已有门票的姓名、邮箱、类型和订单号若有变化将被更新（覆盖在此所做的修改），签到和作废状态不受影响。文件中没有的已有门票将被标记为"不在最新导出中"，供你核查并作废，因此请使用完整的 Export Guest List。'}
             </p>
 
-            <ImportIssues issues={issues}/>
+            <ImportIssues issues={sheet.issues}/>
 
             {tickets.length > 0 && (
                 <>

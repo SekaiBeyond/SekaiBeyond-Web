@@ -9,10 +9,10 @@ import type { UserRecord } from './types';
 interface EventAttendeesListProps {
     loading: boolean;
     attendees: UserRecord[];
-    eventId?: string;
-    onReload?: () => void | Promise<void>;
-    showToast?: ShowToast;
-    readOnly?: boolean;
+    eventId: string;
+    onReload: () => void | Promise<void>;
+    showToast: ShowToast;
+    readOnly: boolean;
 }
 
 export function EventAttendeesList({
@@ -21,14 +21,12 @@ export function EventAttendeesList({
                                        eventId,
                                        onReload,
                                        showToast,
-                                       readOnly = false,
+                                       readOnly,
                                    }: EventAttendeesListProps) {
     const {isEnglish} = useLanguage();
     const [busyUid, setBusyUid] = useState<string | null>(null);
-    const canRemove = !readOnly && !!(eventId && onReload && showToast);
 
     const removeAttendee = async (user: UserRecord) => {
-        if (!eventId || !onReload || !showToast) return;
         if (!confirm(isEnglish
             ? `Remove ${user.displayName} from attendees?`
             : `将 ${user.displayName} 从参加者名单中移除？`
@@ -74,7 +72,7 @@ export function EventAttendeesList({
                     <span className="admin-user-group-tag" data-group={u.group}>
                         {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                     </span>
-                    {canRemove && (
+                    {!readOnly && (
                         <button
                             className="admin-toggle-btn admin-toggle-revoke"
                             onClick={(e) => {

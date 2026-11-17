@@ -25,7 +25,7 @@ interface UpcomingEventDetailViewProps {
     event: UpcomingEvent;
     venues: Venue[];
     tags: Tag[];
-    readOnly?: boolean;
+    readOnly: boolean;
     showToast: ShowToast;
     refreshEvents: () => Promise<void>;
     refreshPastEvents: () => Promise<void>;
@@ -38,7 +38,7 @@ export const UpcomingEventDetailView = ({
                                             event,
                                             venues,
                                             tags,
-                                            readOnly = false,
+                                            readOnly,
                                             showToast,
                                             refreshEvents,
                                             refreshPastEvents,
@@ -113,7 +113,7 @@ export const UpcomingEventDetailView = ({
             : eventSubTab;
 
     return (
-        <div className="admin-event-detail">
+        <div>
             <EventDetailHeader
                 image={event.poster}
                 title={localized(isEnglish, event.title, event.titleCn)}

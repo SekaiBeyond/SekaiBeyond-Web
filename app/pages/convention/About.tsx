@@ -90,7 +90,7 @@ export const About = () => {
 
             <div className="sbc-highlight-grid">
                 {HIGHLIGHTS.map(highlight => (
-                    <article key={highlight.label.en} className="sbc-highlight">
+                    <article key={highlight.label.en}>
                         <h3 className="sbc-highlight-label">
                             <span className="sbc-highlight-icon" aria-hidden="true">{highlight.icon}</span>
                             {t(highlight.label)}

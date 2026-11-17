@@ -31,14 +31,13 @@ import type { ShelfPassport } from '~/lib/passports';
 import { useTags } from '~/lib/tags';
 import { useNavigate, useSearchParams } from 'react-router';
 import { formatSiteTime } from '~/lib/siteTime';
-import { useUploadLimits } from '~/lib/uploadLimits';
 import { isValidHttpUrl } from '~/lib/urls';
-import { PassportShelf, useOwnPassports } from '~/pages/PassportShelf';
+import { fetchOwnPassports, PassportShelf } from '~/pages/PassportShelf';
 import { ProfileCard, ProfileCardNote, ProfileSection, ProfileWelcome, type SectionState, } from '~/pages/ProfileCards';
 import { ProfileSettingsTab } from '~/pages/ProfileSettingsTab';
-import { ProfileTickets, useHeldTickets } from '~/pages/ProfileTickets';
-import { ImageCropModal } from '~/pages/admin/ImageCropModal';
-import { validateImageFile } from "~/pages/admin/utils";
+import { fetchHeldTickets, ProfileTickets } from '~/pages/ProfileTickets';
+import { useLoaded } from '~/lib/useLoaded';
+import { useImageEditor } from '~/pages/admin/ImageCropModal';
 import { useModalEffects } from '~/lib/useModalEffects';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
 import { localized } from '~/lib/localized';
@@ -147,7 +146,6 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
 export const ProfilePage = () => {
     const {user, profile, isMember, loading, signIn, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
-    const {imageMb} = useUploadLimits();
     const {pastEvents, loading: eventsLoading} = usePastEvents();
     const {tags} = useTags();
     const tagMap = useMemo(() => new Map(tags.map(t => [t.id, t])), [tags]);
@@ -168,24 +166,45 @@ export const ProfilePage = () => {
     const [editingName, setEditingName] = useState(false);
     const [editName, setEditName] = useState('');
     const [savingName, setSavingName] = useState(false);
-    const [savingPhoto, setSavingPhoto] = useState(false);
-    const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
     const [avatarError, setAvatarError] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [savingBanner, setSavingBanner] = useState(false);
-    const [pendingBanner, setPendingBanner] = useState<File | null>(null);
     const [failedBanner, setFailedBanner] = useState<string | null>(null);
-    const bannerInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[] | null>(null);
     const [badgeLoadError, setBadgeLoadError] = useState(false);
     const [viewedLoadError, setViewedLoadError] = useState(false);
     const {toasts, showToast} = useToasts();
+    const photoEditor = useImageEditor({
+        showToast,
+        upload: {
+            send: file => updateProfile({photoFile: file}),
+            done: isEnglish ? 'Profile photo updated.' : '头像已更新。',
+            failed: isEnglish ? 'Failed to upload photo. Please try again.' : '上传头像失败，请重试。',
+        },
+        removal: {
+            done: isEnglish ? 'Profile photo removed.' : '头像已删除。',
+            failed: isEnglish ? 'Failed to remove photo. Please try again.' : '删除头像失败，请重试。',
+        },
+    });
+    const bannerEditor = useImageEditor({
+        aspect: BANNER_ASPECT,
+        outputWidth: BANNER_WIDTH,
+        showToast,
+        upload: {
+            send: file => updateProfile({bannerFile: file}),
+            done: isEnglish ? 'Banner updated.' : '横幅已更新。',
+            failed: isEnglish ? 'Failed to upload banner. Please try again.' : '上传横幅失败，请重试。',
+        },
+        removal: {
+            done: isEnglish ? 'Banner removed.' : '横幅已删除。',
+            failed: isEnglish ? 'Failed to remove banner. Please try again.' : '删除横幅失败，请重试。',
+        },
+    });
     const [selectedBadge, setSelectedBadge] = useState<BadgeDef | null>(null);
     const badgeModalRef = useRef<HTMLDivElement>(null);
     useModalEffects(!!selectedBadge, badgeModalRef, () => setSelectedBadge(null));
-    const {passports, failed: passportsFailed} = useOwnPassports(isViewingOther ? null : user?.uid ?? null);
-    const {ticketEvents, failed: ticketsFailed} = useHeldTickets(isViewingOther ? null : user?.uid ?? null);
+    const ownUid = isViewingOther ? null : user?.uid ?? null;
+    const {data: passports, failed: passportsFailed} = useLoaded(ownUid, fetchOwnPassports);
+    const {data: ticketEvents, failed: ticketsFailed} = useLoaded(ownUid, fetchHeldTickets);
 
     useEffect(() => {
         if (loading || isViewingOther) return;
@@ -301,87 +320,19 @@ export const ProfilePage = () => {
         setEditingName(false);
     };
 
-    const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        if (!file || !profile || !user) return;
-        if (!validateImageFile(file, imageMb, isEnglish, showToast, true)) return;
-        setPendingPhoto(file);
-    };
+    const handlePhotoDelete = () => photoEditor.remove(
+        isEnglish
+            ? 'Remove your profile photo? It goes back to your Google account photo if you have one bound.'
+            : '确定要删除头像吗？如已绑定 Google 账号，将恢复为其头像。',
+        () => updateProfile({deletePhoto: true}),
+    );
 
-    const handlePhotoCropConfirm = async (cropped: File) => {
-        setPendingPhoto(null);
-        if (!profile || !user) return;
-        setSavingPhoto(true);
-        try {
-            await updateProfile({photoFile: cropped});
-            showToast(isEnglish ? 'Profile photo updated.' : '头像已更新。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to upload photo. Please try again.' : '上传头像失败，请重试。', 'error');
-        } finally {
-            setSavingPhoto(false);
-        }
-    };
-
-    const handlePhotoDelete = async () => {
-        if (!profile || !user) return;
-        const confirmed = window.confirm(
-            isEnglish
-                ? 'Remove your profile photo? It goes back to your Google account photo if you have one bound.'
-                : '确定要删除头像吗？如已绑定 Google 账号，将恢复为其头像。',
-        );
-        if (!confirmed) return;
-        setSavingPhoto(true);
-        try {
-            await updateProfile({deletePhoto: true});
-            showToast(isEnglish ? 'Profile photo removed.' : '头像已删除。', 'warning');
-        } catch {
-            showToast(isEnglish ? 'Failed to remove photo. Please try again.' : '删除头像失败，请重试。', 'error');
-        } finally {
-            setSavingPhoto(false);
-        }
-    };
-
-    const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (bannerInputRef.current) bannerInputRef.current.value = '';
-        if (!file || !profile || !user) return;
-        if (!validateImageFile(file, imageMb, isEnglish, showToast, true)) return;
-        setPendingBanner(file);
-    };
-
-    const handleBannerCropConfirm = async (cropped: File) => {
-        setPendingBanner(null);
-        if (!profile || !user) return;
-        setSavingBanner(true);
-        try {
-            await updateProfile({bannerFile: cropped});
-            showToast(isEnglish ? 'Banner updated.' : '横幅已更新。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to upload banner. Please try again.' : '上传横幅失败，请重试。', 'error');
-        } finally {
-            setSavingBanner(false);
-        }
-    };
-
-    const handleBannerDelete = async () => {
-        if (!profile || !user) return;
-        const confirmed = window.confirm(
-            isEnglish
-                ? 'Remove your banner? Your profile will go back to the default one.'
-                : '确定要删除横幅吗？个人主页将恢复为默认横幅。',
-        );
-        if (!confirmed) return;
-        setSavingBanner(true);
-        try {
-            await updateProfile({deleteBanner: true});
-            showToast(isEnglish ? 'Banner removed.' : '横幅已删除。', 'warning');
-        } catch {
-            showToast(isEnglish ? 'Failed to remove banner. Please try again.' : '删除横幅失败，请重试。', 'error');
-        } finally {
-            setSavingBanner(false);
-        }
-    };
+    const handleBannerDelete = () => bannerEditor.remove(
+        isEnglish
+            ? 'Remove your banner? Your profile will go back to the default one.'
+            : '确定要删除横幅吗？个人主页将恢复为默认横幅。',
+        () => updateProfile({deleteBanner: true}),
+    );
 
     const handleSaveName = async () => {
         if (!profile || !editName.trim() || savingName || !editingName) return;
@@ -550,7 +501,7 @@ export const ProfilePage = () => {
 
                 <div className="profile-hero">
                     <div
-                        className={`profile-hero-banner${savingBanner ? ' profile-hero-banner--saving' : ''}`}>
+                        className={`profile-hero-banner${bannerEditor.busy ? ' profile-hero-banner--saving' : ''}`}>
                         {showBanner && (
                             <img
                                 src={bannerURL}
@@ -565,11 +516,11 @@ export const ProfilePage = () => {
                                     <button
                                         type="button"
                                         className="profile-banner-btn"
-                                        onClick={() => bannerInputRef.current?.click()}
-                                        disabled={savingBanner}
+                                        onClick={bannerEditor.choose}
+                                        disabled={bannerEditor.busy}
                                         aria-label={bannerLabel}
                                     >
-                                        {savingBanner
+                                        {bannerEditor.busy
                                             ? <span className="profile-avatar-spinner" aria-hidden="true"/>
                                             : <FiImage aria-hidden="true"/>}
                                         <span className="profile-banner-btn-label">{bannerLabel}</span>
@@ -582,7 +533,7 @@ export const ProfilePage = () => {
                                         </span>
                                     </span>
                                 )}
-                                {bannerURL && !savingBanner && (
+                                {bannerURL && !bannerEditor.busy && (
                                     <button
                                         type="button"
                                         className="profile-banner-btn profile-banner-btn--remove"
@@ -592,21 +543,13 @@ export const ProfilePage = () => {
                                         <FiTrash2 aria-hidden="true"/>
                                     </button>
                                 )}
-                                {canEdit && (
-                                    <input
-                                        ref={bannerInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleBannerSelect}
-                                        hidden
-                                    />
-                                )}
+                                {canEdit && bannerEditor.input}
                             </div>
                         )}
                     </div>
                     <div className="profile-hero-body">
                         <div
-                            className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : isOwnProfile ? 'profile-avatar-nonmember-hint' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
+                            className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : isOwnProfile ? 'profile-avatar-nonmember-hint' : ''} ${photoEditor.busy ? 'profile-avatar-saving' : ''}`}>
                             {!avatarError && displayedPhoto ? (
                                 <img
                                     src={displayedPhoto}
@@ -614,22 +557,22 @@ export const ProfilePage = () => {
                                     className="profile-avatar"
                                     referrerPolicy="no-referrer"
                                     onError={() => setAvatarError(true)}
-                                    onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
+                                    onClick={canEdit ? photoEditor.choose : undefined}
                                 />
                             ) : (
                                 <div
                                     className="profile-avatar profile-avatar-initials"
-                                    onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
+                                    onClick={canEdit ? photoEditor.choose : undefined}
                                 >
                                     {(dp.name?.[0] ?? '?').toUpperCase()}
                                 </div>
                             )}
-                            {(canEdit || savingPhoto) && (
+                            {(canEdit || photoEditor.busy) && (
                                 <div
                                     className="profile-avatar-overlay"
-                                    onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
+                                    onClick={canEdit ? photoEditor.choose : undefined}
                                 >
-                                    {savingPhoto ? (
+                                    {photoEditor.busy ? (
                                         <div className="profile-avatar-spinner"/>
                                     ) : (
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -642,7 +585,7 @@ export const ProfilePage = () => {
                                     )}
                                 </div>
                             )}
-                            {canRemovePhoto && !savingPhoto && (
+                            {canRemovePhoto && !photoEditor.busy && (
                                 <button
                                     className="profile-avatar-delete"
                                     onClick={handlePhotoDelete}
@@ -656,15 +599,7 @@ export const ProfilePage = () => {
                                     </svg>
                                 </button>
                             )}
-                            {canEdit && (
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handlePhotoSelect}
-                                    hidden
-                                />
-                            )}
+                            {canEdit && photoEditor.input}
                             {!canEdit && isOwnProfile && (
                                 <>
                                     <div className="profile-avatar-hint-overlay">
@@ -932,7 +867,7 @@ export const ProfilePage = () => {
                         <button className="badge-modal-close" onClick={() => setSelectedBadge(null)}
                                 aria-label={isEnglish ? 'Close' : '关闭'}>×
                         </button>
-                        <div className="badge-modal-header">
+                        <div>
                             <img src={selectedBadge.imageUrl}
                                  alt={localized(isEnglish, selectedBadge.name, selectedBadge.nameCn)}
                                  className="badge-modal-icon"/>
@@ -941,7 +876,7 @@ export const ProfilePage = () => {
                         <p className="badge-modal-desc">{localized(isEnglish, selectedBadge.description, selectedBadge.descriptionCn)}</p>
                         <div className="badge-modal-meta">
                             {earnedDates[selectedBadge.id] && (
-                                <p className="badge-modal-date">
+                                <p>
                                     <strong>{isEnglish ? 'Earned' : '获得于'}</strong>
                                     {earnedDates[selectedBadge.id].toLocaleDateString(
                                         isEnglish ? 'en-US' : 'zh-CN',
@@ -950,7 +885,7 @@ export const ProfilePage = () => {
                                 </p>
                             )}
                             {selectedBadge.createdByName && (
-                                <p className="badge-modal-creator">
+                                <p>
                                     <strong>{isEnglish ? 'Created by' : '创作者'}</strong>
                                     {selectedBadge.createdByUid ? (
                                         <a href={`/profile?uid=${selectedBadge.createdByUid}`}
@@ -970,25 +905,8 @@ export const ProfilePage = () => {
                     </div>
                 </div>
             )}
-            {pendingPhoto && (
-                <ImageCropModal
-                    imageSource={pendingPhoto}
-                    aspect={1}
-                    onConfirm={handlePhotoCropConfirm}
-                    onCancel={() => setPendingPhoto(null)}
-                    showToast={showToast}
-                />
-            )}
-            {pendingBanner && (
-                <ImageCropModal
-                    imageSource={pendingBanner}
-                    aspect={BANNER_ASPECT}
-                    outputWidth={BANNER_WIDTH}
-                    onConfirm={handleBannerCropConfirm}
-                    onCancel={() => setPendingBanner(null)}
-                    showToast={showToast}
-                />
-            )}
+            {photoEditor.cropModal}
+            {bannerEditor.cropModal}
         </>
     );
 };

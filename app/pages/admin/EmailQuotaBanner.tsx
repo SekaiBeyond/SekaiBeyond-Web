@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetTicketEmailQuota, type TicketEmailQuota } from '~/lib/firebase';
+import { Banner } from './Banner';
 
 export function useEmailQuota() {
     const [quota, setQuota] = useState<TicketEmailQuota | null>(null);
@@ -43,7 +44,7 @@ export function EmailQuotaBanner({state, describe}: {
             : remainingToday !== null && remainingToday <= 10 ? 'warning'
                 : 'info';
     return (
-        <div className={`admin-tickets-send-banner admin-tickets-send-banner-${tone}`}>
+        <Banner tone={tone}>
             <span>
                 {error
                     ? (isEnglish ? 'Could not load the Resend quota. Sending still works.' : '无法加载 Resend 额度。发送功能仍可使用。')
@@ -51,20 +52,20 @@ export function EmailQuotaBanner({state, describe}: {
                         ? describe(quota, remainingToday ?? 0)
                         : (isEnglish ? 'Loading quota...' : '加载额度中...')}
             </span>
-        </div>
+        </Banner>
     );
 }
 
 export function TemplateUnsavedBanner() {
     const {isEnglish} = useLanguage();
     return (
-        <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
+        <Banner tone="warning">
             <strong>{isEnglish ? 'Email template not saved.' : '邮件模板尚未保存。'}</strong>
             <p>
                 {isEnglish
                     ? 'Save the template below before sending. Emails go out with the saved version.'
                     : '发送前请先保存下方的模板。邮件将按已保存的版本发送。'}
             </p>
-        </div>
+        </Banner>
     );
 }

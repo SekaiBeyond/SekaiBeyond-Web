@@ -117,7 +117,7 @@ export const setQrSpot = onCall({maxInstances: 10}, async (request) => {
     const lat = validateCoordinate(input.lat, "lat", -90, 90);
     const lng = validateCoordinate(input.lng, "lng", -180, 180);
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = db.collection("qrCodes").doc(qrId);
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "QR code not found.");
@@ -130,7 +130,6 @@ export const setQrSpot = onCall({maxInstances: 10}, async (request) => {
             ...performer(uid, callerSnap),
             qrLabel: snap.data()?.label ?? qrId,
         }));
-        return {lat, lng};
     });
 });
 
@@ -151,7 +150,6 @@ export const deleteQrCode = onCall({maxInstances: 10}, async (request) => {
         ...performer(uid, callerSnap),
         qrLabel: snap.data()?.label ?? qrId,
     }));
-    return {deleted: true};
 });
 
 const EVENT_END_TTL_MS = 60_000;

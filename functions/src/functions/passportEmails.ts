@@ -204,7 +204,7 @@ export const updatePassportEmailTemplate = onCall({maxInstances: 10}, async (req
     const subject = validateStr(input.subject, "subject", 500, true);
     const bodyHtml = sanitizeHtml(validateStr(input.bodyHtml, "bodyHtml", 20000), EMAIL_HTML_SANITIZE_OPTIONS);
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         txn.set(templateRef(), {
             subject, bodyHtml,
             updatedAt: FieldValue.serverTimestamp(),
@@ -213,6 +213,5 @@ export const updatePassportEmailTemplate = onCall({maxInstances: 10}, async (req
         txn.set(recordRef(), recordDoc("passport-email-template-update", {
             ...performer(uid, callerSnap),
         }));
-        return {saved: true};
     });
 });

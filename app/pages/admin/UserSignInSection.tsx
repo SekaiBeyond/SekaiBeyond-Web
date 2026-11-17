@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { accountErrorMessage } from '~/lib/accountErrors';
 import { callAdminChangeEmail, callGetSignInMethods, type SignInMethods } from '~/lib/firebase';
+import { useLoaded } from '~/lib/useLoaded';
 import type { UserRecord } from './types';
 import type { ShowToast } from './utils';
 
@@ -10,22 +11,10 @@ export interface UserSignIn {
     failed: boolean;
 }
 
+const fetchSignInMethods = async (uid: string) => (await callGetSignInMethods({uid})).data;
+
 export function useUserSignInMethods(uid: string): UserSignIn {
-    const [methods, setMethods] = useState<SignInMethods | null>(null);
-    const [failed, setFailed] = useState(false);
-
-    useEffect(() => {
-        let stale = false;
-        setMethods(null);
-        setFailed(false);
-        callGetSignInMethods({uid})
-            .then(result => !stale && setMethods(result.data))
-            .catch(() => !stale && setFailed(true));
-        return () => {
-            stale = true;
-        };
-    }, [uid]);
-
+    const {data: methods, failed} = useLoaded(uid, fetchSignInMethods);
     return {methods, failed};
 }
 

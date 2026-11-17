@@ -141,7 +141,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     };
     const docId = eventId ?? db.collection("pastEvents").doc().id;
 
-    const {result, oldIcon} = await adminTransaction(uid, async (txn, callerSnap) => {
+    const oldIcon = await adminTransaction(uid, async (txn, callerSnap) => {
         let prevIcon = "";
         if (eventId) {
             const existing = await txn.get(db.collection("pastEvents").doc(eventId));
@@ -165,29 +165,27 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
             eventTitle: title,
             eventId: docId,
         }));
-        return {result: {eventId: docId}, oldIcon: prevIcon};
+        return prevIcon;
     });
 
     if (oldIcon && oldIcon !== icon) {
         await deleteStorageFile(oldIcon, ["events/", "upcoming-events/"])
             .catch(logStorageCleanupError(`savePastEvent ${docId}`));
     }
-
-    return result;
 });
 
 async function setEventPublished(
     request: CallableRequest,
     collection: "pastEvents" | "upcomingEvents",
     recordTypes: {publish: RecordType; unpublish: RecordType},
-): Promise<{published: boolean}> {
+): Promise<void> {
     const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; published?: unknown};
     const eventId = validateDocId(input.eventId, "eventId");
     const published = validateBoolean(input.published, "published");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = db.collection(collection).doc(eventId);
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "Event not found.");
@@ -197,7 +195,6 @@ async function setEventPublished(
             eventTitle: snap.data()?.title ?? eventId,
             eventId,
         }));
-        return {published};
     });
 }
 
@@ -248,7 +245,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     };
     const docId = eventId ?? db.collection("upcomingEvents").doc().id;
 
-    const {result, oldPoster, oldEmailHeaderBg} = await adminTransaction(uid, async (txn, callerSnap) => {
+    const {oldPoster, oldEmailHeaderBg} = await adminTransaction(uid, async (txn, callerSnap) => {
         let prevPoster = "";
         let prevEmailHeaderBg = "";
         let wasPublished = false;
@@ -299,7 +296,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             eventTitle: title,
             eventId: docId,
         }));
-        return {result: {eventId: docId}, oldPoster: prevPoster, oldEmailHeaderBg: prevEmailHeaderBg};
+        return {oldPoster: prevPoster, oldEmailHeaderBg: prevEmailHeaderBg};
     });
 
     if (oldPoster && oldPoster !== poster) {
@@ -310,8 +307,6 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         await deleteStorageFile(oldEmailHeaderBg, ["upcoming-events/headers/"])
             .catch(logStorageCleanupError(`saveUpcomingEvent ${docId} header`));
     }
-
-    return result;
 });
 export const setUpcomingEventPublished = onCall({maxInstances: 10}, request =>
     setEventPublished(request, "upcomingEvents", {
@@ -454,7 +449,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
 
     if (copyOps.length > 0) await commitInChunks(copyOps);
 
-    const {pastEventId} = await adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const [eventSnap, pastCollisionSnap] = await Promise.all([
             txn.get(db.collection("upcomingEvents").doc(eventId)),
             txn.get(newDocRef),
@@ -492,7 +487,6 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             eventTitle: eventData.title ?? eventId,
             eventId: newDocRef.id,
         }));
-        return {pastEventId: newDocRef.id};
     });
 
     const [liveAttendees, liveTemplate, liveSettings] = await Promise.all([
@@ -506,8 +500,6 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         ...deleteOps(liveSettings.docs),
     ];
     if (moveOps.length > 0) await commitInChunks(moveOps);
-
-    return {pastEventId};
 });
 export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -517,7 +509,7 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
     const eventId = validateDocId(input.eventId, "eventId");
     const grant = validateBoolean(input.grant, "grant");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const [targetSnap, {snap: eventSnap, archived}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
             getEventDoc(eventId, txn),
@@ -556,7 +548,6 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
             eventTitle: eventSnap.data()!.title ?? eventId,
             eventId,
         }));
-        return {granted: grant};
     });
 });
 export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
@@ -654,7 +645,7 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const eventId = validateDocId(input.eventId, "eventId");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const [targetSnap, {snap: eventSnap}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
             getEventDoc(eventId, txn),
@@ -662,9 +653,7 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const targetData = targetSnap.data()!;
         const existing: string[] = targetData.eventStaffEvents ?? [];
-        if (!existing.includes(eventId)) {
-            return {removed: false};
-        }
+        if (!existing.includes(eventId)) return;
 
         const eventTitle: string = eventSnap.data()?.title ?? eventId;
 
@@ -678,6 +667,5 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
         }));
-        return {removed: true};
     });
 });

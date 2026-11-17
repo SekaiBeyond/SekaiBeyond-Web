@@ -81,8 +81,7 @@ const readRequestId = (raw: unknown): string => {
     return raw;
 };
 
-export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
-    const uid = await requireAuth(request, "account");
+async function appsAndLinks(uid: string) {
     const [appsSnap, linksSnap] = await Promise.all([
         appsCol().orderBy("createdAt").get(),
         accountLinksQuery(uid).get(),
@@ -91,18 +90,26 @@ export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
         const link = doc.data() as AppLinkDoc;
         return [link.appId, link];
     }));
-    const apps = appsSnap.docs.map(doc => readApp(doc)!)
-        .filter(app => app.accountLinking || links.has(app.id));
+    return {apps: appsSnap.docs.map(doc => readApp(doc)!), links};
+}
+
+const appSummary = (app: RegisteredApp) => ({
+    appId: app.id,
+    nameEn: app.nameEn,
+    nameCn: app.nameCn,
+    platform: app.platform,
+    iconUrl: app.iconUrl,
+    accountLinking: app.accountLinking,
+});
+
+export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
+    const uid = await requireAuth(request, "account");
+    const {apps, links} = await appsAndLinks(uid);
     return {
-        apps: apps.map(app => {
+        apps: apps.filter(app => app.accountLinking || links.has(app.id)).map(app => {
             const link = links.get(app.id);
             return {
-                appId: app.id,
-                nameEn: app.nameEn,
-                nameCn: app.nameCn,
-                platform: app.platform,
-                iconUrl: app.iconUrl,
-                accountLinking: app.accountLinking,
+                ...appSummary(app),
                 link: link ? {
                     appUserName: appLinkUserName(link.appUserName),
                     linkedAt: isoOrNull(link.linkedAt),
@@ -248,7 +255,6 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
         await sendNotice(await appLinkChangedMail(
             linked.email, linked.appName, linked.appUserName, "linked", language, linkUndoUrl(undoToken)));
     }
-    return {linked: true};
 });
 
 export const cancelAppLink = onCall({maxInstances: 10}, async (request) => {
@@ -260,7 +266,6 @@ export const cancelAppLink = onCall({maxInstances: 10}, async (request) => {
         const status = linkRequestStatus(req);
         if (status === "waiting" || status === "claimed") txn.update(ref, {status: "cancelled"});
     });
-    return {cancelled: true};
 });
 
 export const removeAppLink = onCall(LINK_CALL, async (request) => {
@@ -268,7 +273,7 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
     const input = (request.data ?? {}) as {appId?: unknown; language?: unknown};
     const appId = validateAppId(input.appId);
     const language = readMailLanguage(input.language);
-    if ((await accountLinkInAppQuery(appId, uid).get()).empty) return {unlinked: false};
+    if ((await accountLinkInAppQuery(appId, uid).get()).empty) return;
     await limitNoticedChange(uid, "appLink");
 
     const unlinked = await db.runTransaction(async (txn) => {
@@ -303,7 +308,6 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
         await sendNotice(await appLinkChangedMail(
             unlinked.email, unlinked.appName, appLinkUserName(unlinked.appUserName), "unlinked", language));
     }
-    return {unlinked: !!unlinked};
 });
 
 export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
@@ -363,15 +367,7 @@ export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
     await requireStaff(uid);
     const targetUid = validateDocId((request.data as {uid?: unknown} | null)?.uid, "uid");
 
-    const [appsSnap, linksSnap] = await Promise.all([
-        appsCol().orderBy("createdAt").get(),
-        accountLinksQuery(targetUid).get(),
-    ]);
-    const links = new Map(linksSnap.docs.map(doc => {
-        const link = doc.data() as AppLinkDoc;
-        return [link.appId, link];
-    }));
-    const apps = appsSnap.docs.map(doc => readApp(doc)!);
+    const {apps, links} = await appsAndLinks(targetUid);
     const holds = await Promise.all(apps.map(app => readAccountHold(app.id, targetUid)));
     return {
         apps: apps.flatMap((app, i) => {
@@ -379,12 +375,7 @@ export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
             const hold = holds[i];
             if (!link && !hold && !app.accountLinking) return [];
             return [{
-                appId: app.id,
-                nameEn: app.nameEn,
-                nameCn: app.nameCn,
-                platform: app.platform,
-                iconUrl: app.iconUrl,
-                accountLinking: app.accountLinking,
+                ...appSummary(app),
                 link: link ? {
                     appUserId: link.appUserId,
                     appUserName: appLinkUserName(link.appUserName),
@@ -403,14 +394,14 @@ export const clearAppLinkHold = onCall({maxInstances: 10}, async (request) => {
     const appId = validateAppId(input.appId);
     if (targetUid === uid) throw new HttpsError("permission-denied", "Cannot lift your own hold.");
 
-    const cleared = await adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const [target, appSnap] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
             txn.get(appsCol().doc(appId)),
         ]);
         if (!target.exists) throw new HttpsError("not-found", "Target user not found.");
         requireCanManage(callerSnap.data()!.group, target.get("group"));
-        if (!await clearAccountHoldInTxn(txn, appId, targetUid)) return false;
+        if (!await clearAccountHoldInTxn(txn, appId, targetUid)) return;
         txn.set(recordRef(), recordDoc("account-app-hold-clear", {
             performedBy: uid,
             performedByName: callerSnap.get("displayName") ?? "",
@@ -419,7 +410,5 @@ export const clearAppLinkHold = onCall({maxInstances: 10}, async (request) => {
             appId,
             appName: appRecordName(readApp(appSnap), appId),
         }));
-        return true;
     });
-    return {cleared};
 });

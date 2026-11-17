@@ -224,7 +224,7 @@ export async function clearAccountHoldInTxn(
     return (hold.get("expiresAt") as Timestamp).toMillis() > Date.now();
 }
 
-export type LinkRequestStatus = "waiting" | "claimed" | "linked" | "cancelled" | "expired";
+type LinkRequestStatus = "waiting" | "claimed" | "linked" | "cancelled" | "expired";
 
 export interface AppLinkRequestDoc {
     appId: string;
@@ -240,7 +240,7 @@ export interface AppLinkRequestDoc {
     expiresAt: Timestamp;
 }
 
-export interface LinkRefusal {
+interface LinkRefusal {
     code: string;
     side?: string;
     until?: string;

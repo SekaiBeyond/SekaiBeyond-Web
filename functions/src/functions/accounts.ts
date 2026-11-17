@@ -243,7 +243,6 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
     } else {
         throw new HttpsError("invalid-argument", "Invalid purpose.");
     }
-    return {sent: true};
 });
 
 const toBinding = (google: GoogleIdentity): GoogleBinding => ({
@@ -491,7 +490,6 @@ export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const google = await verifyGoogleToken(input.idToken);
     await limitNoticedChange(uid, "google");
     await bindGoogleTo(uid, google, readMailLanguage(input.language));
-    return {bound: true};
 });
 
 export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
@@ -530,7 +528,6 @@ export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
     if (unbound?.email) {
         await sendNotice(await googleChangedMail(unbound.email, unbound.googleEmail, false, language));
     }
-    return {unbound: true};
 });
 
 export const getSignInMethods = onCall({maxInstances: 20}, async (request) => {
@@ -658,7 +655,6 @@ export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
     const by = {uid, name: user.get("displayName") ?? ""};
     await moveEmail(uid, email, by, {oldEmail, undoToken});
     await creditMovedEmail(uid, email);
-    return {email};
 });
 
 export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {

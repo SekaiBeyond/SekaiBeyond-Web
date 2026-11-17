@@ -464,7 +464,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                     onLookupUser={onLookupUser}
                 />
             ) : (
-                <div className="admin-event-detail">
+                <div>
                     <button
                         className="admin-btn admin-btn--link"
                         onClick={() => setSelectedEvent(null)}
