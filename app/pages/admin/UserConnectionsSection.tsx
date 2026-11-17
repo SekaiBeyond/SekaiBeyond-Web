@@ -8,18 +8,9 @@ import type { UserRecord } from './types';
 import type { UserSignIn } from './UserSignInSection';
 import type { ShowToast } from './utils';
 
-/**
- * The accounts elsewhere connected to an account, as its owner sees them in
- * Settings: Google, then each app it's linked in or could link in, such as the
- * WeChat mini program, with any hold keeping it from linking another there. A
- * hold lasts 30 days after a link is undone, so a membership can't be passed
- * round a group's app accounts; core-staff can lift one early for someone who
- * linked the wrong account of their own. Lifting it is on the Records tab.
- */
 export const UserConnectionsSection = ({user, signIn, canManage, showToast}: {
     user: UserRecord;
     signIn: UserSignIn;
-    /** Core-staff+ acting on someone below them, not themselves. Everyone else sees the links only. */
     canManage: boolean;
     showToast: ShowToast;
 }) => {
@@ -52,7 +43,6 @@ export const UserConnectionsSection = ({user, signIn, canManage, showToast}: {
         setBusyApp(app.appId);
         try {
             await callClearAppLinkHold({targetUid: user.uid, appId: app.appId});
-            // Still listed while it's linked there or could link there; gone if the hold was all there was.
             setApps(prev => prev?.flatMap(a => a.appId !== app.appId
                 ? [a]
                 : a.link || a.accountLinking ? [{...a, hold: null}] : []) ?? null);

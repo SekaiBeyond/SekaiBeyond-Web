@@ -6,9 +6,7 @@ import { ImportIssues } from './ImportIssues';
 import { type HometownOrderRow, parseHometownOrderFile, retryRateLimited } from './hometown';
 import type { AttendeeData, ParseError } from './types';
 
-/** Orders per sync call, well under the server's row cap. */
 const SYNC_CHUNK = 500;
-/** Order numbers with no ticket here named before the rest are summed up. */
 const MAX_UNMATCHED = 20;
 
 interface HometownOrdersSectionProps {
@@ -19,11 +17,6 @@ interface HometownOrdersSectionProps {
     onSynced: () => void;
 }
 
-/**
- * When each HomeTown ticket was bought, from HomeTown's order list export: the
- * guest list has no times, so imported tickets otherwise carry the import's.
- * Matched to tickets by HomeTown order number.
- */
 export function HometownOrdersSection({
                                           eventId,
                                           attendees,
@@ -39,8 +32,6 @@ export function HometownOrdersSection({
     const [busy, setBusy] = useState(false);
     const [syncing, setSyncing] = useState(false);
 
-    // What the sync will do, by the list as last loaded; the server decides
-    // again from what's there when it runs.
     const preview = useMemo(() => {
         const times = new Map(orders.map(o => [o.orderId, Date.parse(o.orderedAt)]));
         const matchedOrders = new Set<string>();
@@ -51,7 +42,6 @@ export function HometownOrdersSection({
             if (!a.hometown) continue;
             const ms = times.get(a.hometownOrderId);
             if (ms === undefined) {
-                // An unlisted ticket has no order number to look up.
                 if (!a.unlisted) notInFile++;
                 continue;
             }
@@ -133,7 +123,6 @@ export function HometownOrdersSection({
             clearForm();
         } catch (err) {
             console.error('[HometownOrdersSection] sync failed', err);
-            // Earlier chunks may have landed; syncing the file again finishes it.
             showToast(isEnglish
                     ? `Purchase time sync failed partway${errorSuffix(err, true)}. Sync the same file again to finish it.`
                     : `购票时间同步中途失败${errorSuffix(err, false)}。请再次同步同一文件以完成。`,

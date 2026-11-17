@@ -1,7 +1,5 @@
 import { setGlobalOptions } from "firebase-functions/v2";
 
-// Off in the emulator only: the site skips App Check there, and a callable
-// enforcing it refuses a request with no token even when emulated.
 setGlobalOptions({enforceAppCheck: process.env.FUNCTIONS_EMULATOR !== "true"});
 
 export * from "./functions/accounts";

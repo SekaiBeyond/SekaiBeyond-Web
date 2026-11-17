@@ -141,8 +141,6 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             showToast(isEnglish ? 'End time must be after start time.' : '结束时间必须晚于开始时间。', 'error');
             return;
         }
-        // What a wallet pass shows of the event. One already made can't be
-        // updated, so say how many will keep the old details.
         if (editingEvent?.paid && (
             form.title !== editingEvent.title || form.titleCn !== editingEvent.titleCn
             || form.venueId !== editingEvent.venueId || form.roomIds.join() !== editingEvent.roomIds.join()
@@ -412,7 +410,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             {showPosterCropModal && (posterImage || posterPreview) && (
                                 <ImageCropModal
                                     imageSource={posterImage || posterPreview!}
-                                    aspect={4} // 600x150
+                                    aspect={4}
                                     onConfirm={(cropped) => {
                                         setEmailHeaderBgImage(cropped);
                                         setEmailHeaderBgPreview(URL.createObjectURL(cropped));

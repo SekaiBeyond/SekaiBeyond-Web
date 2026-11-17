@@ -23,6 +23,7 @@ import { decodeQrImage, type QrCorners, type QrRect, type QrSnapshot, snapshotAr
 import { useQrScanner } from '~/lib/useQrScanner';
 import type { ShowToast } from '../../utils';
 import { parseQrContent, type QrContentKind, type QrFieldKey } from './qrContent';
+import { ToolHeader } from '../../ToolHeader';
 
 interface QrScannerProps {
     onBack: () => void;
@@ -32,7 +33,6 @@ interface QrScannerProps {
 type Bilingual = {en: string; cn: string};
 type Icon = ComponentType<{'aria-hidden'?: boolean}>;
 
-// Matches --qrs-frame in admin.css, so a snapshot's filled-in edges blend into the frame.
 const FRAME_BACKDROP = '#2a1d2e';
 
 const KINDS: Record<QrContentKind, Bilingual & {icon: Icon}> = {
@@ -75,11 +75,6 @@ interface ScanResult {
     snapshot: QrSnapshot | null;
 }
 
-/**
- * Reads any QR code, from the camera or a photo, and lays out what's in it so a
- * link can be checked before opening. Decoded in the browser; nothing is
- * uploaded.
- */
 export const QrScanner = ({onBack, showToast}: QrScannerProps) => {
     const {isEnglish} = useLanguage();
     const t = (label: Bilingual) => (isEnglish ? label.en : label.cn);
@@ -108,7 +103,7 @@ export const QrScanner = ({onBack, showToast}: QrScannerProps) => {
 
     const onPhotoChosen = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        e.target.value = ''; // so choosing the same photo again still fires
+        e.target.value = '';
         if (!file) return;
         if (!file.type.startsWith('image/')) {
             showToast(isEnglish ? 'Choose an image file.' : '请选择图片文件。', 'error');
@@ -147,7 +142,6 @@ export const QrScanner = ({onBack, showToast}: QrScannerProps) => {
 
     const stage = result ? 'result' : readingPhoto ? 'reading' : scanner.cameraActive ? 'live' : 'idle';
 
-    // What the frame says when it isn't showing the camera or a result.
     const notice: {icon: Icon; title: string; body?: string; problem?: boolean} | null =
         stage !== 'idle' ? null
             : photoUnreadable ? {
@@ -176,12 +170,8 @@ export const QrScanner = ({onBack, showToast}: QrScannerProps) => {
 
     return (
         <div className="admin-section qrs">
-            <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
-                    {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
-                </button>
-                <h3 className="admin-tools-title">{isEnglish ? 'QR Scanner' : '扫码识别'}</h3>
-            </div>
+            <ToolHeader title={isEnglish ? 'QR Scanner' : '扫码识别'}
+                        back={isEnglish ? 'Back to QR Codes' : '返回二维码列表'} onBack={onBack}/>
 
             <p className="admin-helper-text">
                 {isEnglish ? 'See what a QR code holds before you open it.' : '在打开之前，先看看二维码里有什么。'}
@@ -191,7 +181,6 @@ export const QrScanner = ({onBack, showToast}: QrScannerProps) => {
                 className={`qrs-frame qrs-frame--${stage}`}
                 style={result?.snapshot ? {aspectRatio: `${result.snapshot.width} / ${result.snapshot.height}`} : undefined}
             >
-                {/* Mounted in every stage so the camera can always restart into it. */}
                 <video ref={scanner.videoRef} playsInline muted className="qrs-video"/>
                 <canvas ref={scanner.canvasRef} hidden/>
 
@@ -343,16 +332,13 @@ function snapshot(frame: HTMLCanvasElement, corners: QrCorners, bounds?: QrRect)
     try {
         return snapshotAround(frame, corners, FRAME_BACKDROP, bounds);
     } catch (err) {
-        // A missing snapshot only costs the picture; the result still shows.
         console.error('[QrScanner] snapshot', err);
         return null;
     }
 }
 
-/** The frame the code was read from, with everything but the code dimmed. */
 function Snapshot({snapshot, label}: {snapshot: QrSnapshot; label: string}) {
     const {url, width, height, corners} = snapshot;
-    // Push the outline a little past the code so it doesn't sit on its edge modules.
     const cx = corners.reduce((sum, p) => sum + p.x, 0) / 4;
     const cy = corners.reduce((sum, p) => sum + p.y, 0) / 4;
     const points = corners

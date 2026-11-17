@@ -1,18 +1,12 @@
 import type { SocialLinkKey, SocialLinks } from '~/lib/siteConfig';
 
 interface SocialLinkFormat {
-    /** What the field asks for, as its placeholder. */
     placeholder: {en: string; zh: string};
-    /** One account's ID, as a regex source. */
     id: string;
-    /** Each host its links are on (less any www. or m.), with the path up to the ID. */
     paths: Record<string, string>;
-    /** The account's link, in the one form the server accepts. */
     link: (id: string) => string;
 }
 
-// Mirrors SOCIAL_LINK_PATTERNS in functions/src/functions/admin.ts, which accepts
-// exactly these links.
 const SOCIAL_LINK_FORMATS: Record<SocialLinkKey, SocialLinkFormat> = {
     discord: {
         placeholder: {en: 'Invite code or link', zh: '邀请码或链接'},
@@ -52,8 +46,6 @@ const SOCIAL_LINK_FORMATS: Record<SocialLinkKey, SocialLinkFormat> = {
     },
 };
 
-// Xiaohongshu shares profiles as redirecting short links with no ID in them, so
-// one is saved as is for the server to follow.
 const XIAOHONGSHU_SHARE_HOSTS = ['xhslink.cn', 'xhslink.com'];
 
 export const socialLinkPlaceholder = (key: SocialLinkKey) => SOCIAL_LINK_FORMATS[key].placeholder;
@@ -78,10 +70,6 @@ export const isXiaohongshuShareLink = (link: string): boolean => {
     return !!url && XIAOHONGSHU_SHARE_HOSTS.includes(url.hostname);
 };
 
-/**
- * The link to save for what was typed: an ID, @ID or any link to the account,
- * rebuilt in its one form. '' when blank, null when it's none of those.
- */
 export function toSocialLink(key: SocialLinkKey, input: string): string | null {
     const value = input.trim().replace(/^@/, '');
     if (!value) return '';
@@ -97,7 +85,6 @@ export function toSocialLink(key: SocialLinkKey, input: string): string | null {
     return id ? format.link(id) : null;
 }
 
-/** What each field shows for the saved links: the ID, or the whole link when it has none to show. */
 export function socialLinkInputs(links: SocialLinks): SocialLinks {
     const inputs = {...links};
     for (const key of Object.keys(SOCIAL_LINK_FORMATS) as SocialLinkKey[]) {

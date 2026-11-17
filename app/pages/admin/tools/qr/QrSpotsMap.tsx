@@ -12,10 +12,6 @@ interface QrSpotsMapProps {
     height?: number;
 }
 
-/**
- * Every QR code with a pinned spot, with a count marker coloured by scan
- * volume.
- */
 export const QrSpotsMap = ({codes, onSelect, height = 340}: QrSpotsMapProps) => {
     const {isEnglish} = useLanguage();
     const spotted = codes.filter(qrHasSpot);
@@ -59,7 +55,6 @@ const SpotsMap = ({spotted, maxCount, onSelect, height}: {
         };
     }, []);
 
-    // Enclose every pinned spot, again whenever the spots change.
     const spotsKey = spotted.map(c => `${c.id}@${c.lng},${c.lat}`).join(';');
     useEffect(() => {
         if (!map) return;

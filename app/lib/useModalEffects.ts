@@ -2,12 +2,6 @@ import { useEffect, useRef } from 'react';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-/**
- * A modal's accessibility: traps Tab focus inside, locks body scroll, and closes on
- * Escape when `onClose` is given (guard inside it to stay open, e.g. while saving). A
- * no-op while `open` is false. `containerRef` is the modal's root, containing every
- * focusable element.
- */
 export function useModalEffects(
     open: boolean,
     containerRef: React.RefObject<HTMLElement | null>,
@@ -15,8 +9,6 @@ export function useModalEffects(
 ) {
     const previouslyFocused = useRef<HTMLElement | null>(null);
 
-    // So a new closure each render doesn't re-run the effect, which would re-lock
-    // scroll and pull focus back.
     const onCloseRef = useRef(onClose);
     onCloseRef.current = onClose;
 
@@ -36,7 +28,6 @@ export function useModalEffects(
             if (focusable.length > 0) focusable[0].focus();
         };
 
-        // Try focusing the first element; slight delay so the DOM is ready
         const timerId = setTimeout(focusFirst, 0);
 
         const handleKeyDown = (e: KeyboardEvent) => {

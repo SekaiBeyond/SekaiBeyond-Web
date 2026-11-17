@@ -1,10 +1,8 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ParseError } from './types';
 
-/** Issues listed before the rest are summed up. */
 const MAX_ISSUES = 20;
 
-/** What reading an import file turned up, by row where it has one. */
 export function ImportIssues({issues}: {issues: ParseError[]}) {
     const {isEnglish} = useLanguage();
     if (issues.length === 0) return null;

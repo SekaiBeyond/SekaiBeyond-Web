@@ -3,14 +3,9 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 interface ConEditionFieldProps {
     value: boolean;
     onChange: (next: boolean) => void;
-    /** The event's date, `YYYY-MM-DD…`, or '' before one is set. */
     date: string;
 }
 
-/**
- * The event form's "this is that year's Sekai Beyond Con" box. There's one a
- * year, so the server takes the year from the date; this only says which.
- */
 export const ConEditionField = ({value, onChange, date}: ConEditionFieldProps) => {
     const {isEnglish} = useLanguage();
     const year = /^\d{4}-/.test(date) ? date.slice(0, 4) : null;

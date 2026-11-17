@@ -16,24 +16,15 @@ import {
     useSectionEditor,
 } from './conContentShared';
 
-/* US Letter portrait, the shape the posters are drawn and printed at, so none is
-   trimmed. */
 const POSTER_ASPECT = 17 / 22;
-/* About twice the poster viewer's width on a laptop, so the small print stays
-   readable. */
 const POSTER_WIDTH = 1020;
 
-/** What an upload in flight is for: the café's own poster, or a maid's by position. */
 type PosterTarget = 'cafe' | number;
 
 export const CafeSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('cafe', content.cafe, loading, showToast);
     const {draft, setDraft} = editor;
-    /**
-     * The in-flight upload's preview, held apart from the draft: the server
-     * rejects `blob:` URLs, so a mid-upload save would fail the section.
-     */
     const [preview, setPreview] = useState<{target: PosterTarget; url: string} | null>(null);
 
     const updateMaid = (index: number, next: Maid) =>
@@ -43,18 +34,14 @@ export const CafeSection = ({content, loading, showToast, readOnly}: SectionProp
         setPreview({target, url: previewUrl});
         try {
             showToast(isEnglish ? 'Uploading poster...' : '正在上传海报...', 'warning');
-            // Time-stamped, not indexed, so reordering can't point a maid at
-            // another's poster.
             const url = await callUploadAdminImage(file, `con/cafe-${Date.now().toString(36)}.webp`);
             setDraft(prev => (target === 'cafe'
                 ? {...prev, poster: url}
                 : {...prev, maids: replaceAt(prev.maids, target, {...prev.maids[target], poster: url})}));
             showToast(isEnglish ? 'Poster uploaded.' : '海报已上传。', 'success');
         } catch (e) {
-            // Nothing to roll back — the draft never held the preview.
             showToast(errorMessage(e, isEnglish ? 'Poster upload failed.' : '海报上传失败。'), 'error');
         } finally {
-            // Safe now: the <img> swaps to the stored URL in the same commit.
             URL.revokeObjectURL(previewUrl);
             setPreview(null);
         }
@@ -172,8 +159,6 @@ export const CafeSection = ({content, loading, showToast, readOnly}: SectionProp
                                     </span>
                                 )}
                             </span>
-                            {/* The poster lands by position, so the line-up holds
-                                still until it has. */}
                             <RowActions
                                 index={index}
                                 count={draft.maids.length}

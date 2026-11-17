@@ -1,7 +1,6 @@
 import { errorCode, functionsErrorDetails } from '~/lib/firebase';
 import { formatSiteTime } from '~/lib/siteTime';
 
-/** A banned account's refusal, saying until when if the ban runs out. */
 function bannedMessage(err: unknown, isEnglish: boolean): string {
     const raw = functionsErrorDetails<{until?: unknown}>(err)?.until;
     const until = typeof raw === 'string' ? new Date(raw) : null;
@@ -18,7 +17,6 @@ function bannedMessage(err: unknown, isEnglish: boolean): string {
         : '此账号已被封禁。如您认为有误，请联系我们。';
 }
 
-/** A link refused while one side waits out the 30 days after an earlier one was undone. */
 function linkHoldMessage(details: {side?: unknown; until?: unknown} | null, isEnglish: boolean): string {
     const until = typeof details?.until === 'string' ? new Date(details.until) : null;
     const when = until && !Number.isNaN(until.getTime())
@@ -45,10 +43,6 @@ const deletionPendingMessage = (isEnglish: boolean) =>
         ? 'Your account is due to be deleted, so this can’t be done unless the deletion is cancelled.'
         : '您的账号即将被删除，取消删除前无法进行此操作。';
 
-/**
- * Why the app's claim on a link request was refused, as the request keeps it
- * for Settings to show (LinkRefusal in functions/src/utils/appLinks.ts).
- */
 export function linkRefusalMessage(refusal: {code: string; side?: string; until?: string}, isEnglish: boolean): string {
     switch (refusal.code) {
         case 'link-on-hold':
@@ -64,11 +58,9 @@ export function linkRefusalMessage(refusal: {code: string; side?: string; until?
     }
 }
 
-/** What went wrong with an account call, in the visitor's language. */
 export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
     switch (errorCode(err)) {
         case 'account-banned':
-        // Firebase's own refusal of a disabled account, should a sign-in get that far.
         case 'auth/user-disabled':
             return bannedMessage(err, isEnglish);
         case 'wrong-credentials':
@@ -94,7 +86,6 @@ export function accountErrorMessage(err: unknown, isEnglish: boolean): string {
         case 'email-change-locked':
             return isEnglish ? 'Your email can only change once a month.' : '邮箱每月只能更改一次。';
         case 'deletion-pending':
-            // Changing the email and linking an app both refuse with it.
             return deletionPendingMessage(isEnglish);
         case 'weak-password':
             return isEnglish ? 'Passwords need at least 8 characters.' : '密码至少需要 8 个字符。';

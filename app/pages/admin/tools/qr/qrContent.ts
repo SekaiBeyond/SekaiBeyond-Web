@@ -1,29 +1,14 @@
-/**
- * Reads what a scanned QR code holds. A code is only a string; links, Wi-Fi
- * logins, contact cards and so on are formats inside it, recognised so the
- * scanner can lay them out.
- */
-
 export type QrContentKind = 'url' | 'email' | 'phone' | 'sms' | 'geo' | 'wifi' | 'contact' | 'text';
 
-// `security` is empty for an open network and `hidden` has no value; the
-// scanner words both.
 export type QrFieldKey =
     | 'subject' | 'message' | 'label' | 'security' | 'password' | 'hidden'
     | 'org' | 'title' | 'phone' | 'email' | 'website' | 'address' | 'note';
 
 interface QrContent {
     kind: QrContentKind;
-    /** The one-line gist: a link's site, a network's name, a contact's name. */
     headline: string;
-    /** A line under the headline: a link's full address. */
     detail?: string;
     fields: {key: QrFieldKey; value: string}[];
-    /**
-     * The primary action: only an http(s) link or a mailto:/tel: built from
-     * parsed parts, never the scanned string, so `javascript:` can't reach an
-     * href.
-     */
     href?: string;
 }
 
@@ -54,7 +39,6 @@ export function parseQrContent(raw: string): QrContent {
             if (/^BEGIN:VCARD/i.test(text)) return parseVcard(text);
             break;
     }
-    // Some generators drop the scheme from a web address.
     if (/^www\.\S+$/i.test(text)) return parseWebLink(`https://${text}`) ?? plainText(raw);
     return plainText(raw);
 }
@@ -71,7 +55,6 @@ function parseWebLink(text: string): QrContent | null {
         return null;
     }
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    // The hostname is in punycode, so a lookalike domain shows as xn--….
     return {kind: 'url', headline: url.hostname, detail: text, fields: [], href: url.href};
 }
 
@@ -83,16 +66,11 @@ function decodeSafe(value: string): string {
     }
 }
 
-/** `a?b` → [a, b], splitting at the first `sep` only. */
 function splitOnce(value: string, sep: string): [string, string] {
     const at = value.indexOf(sep);
     return at === -1 ? [value, ''] : [value.slice(0, at), value.slice(at + 1)];
 }
 
-/**
- * A URI's query, percent-decoded, leaving `+` alone: in mailto: and sms: bodies
- * it's a literal plus.
- */
 function queryParams(query: string): Map<string, string> {
     const params = new Map<string, string>();
     for (const pair of query.split('&')) {
@@ -119,14 +97,12 @@ function email(to: string, subject?: string, body?: string): QrContent {
     return {kind: 'email', headline: to, fields, href};
 }
 
-// mailto:someone@example.com?subject=Hi&body=…
 function parseMailto(text: string): QrContent {
     const [address, query] = splitOnce(text.slice('mailto:'.length), '?');
     const params = queryParams(query);
     return email(decodeSafe(address), params.get('subject'), params.get('body'));
 }
 
-// MATMSG:TO:someone@example.com;SUB:Hi;BODY:…;;
 function parseMatmsg(text: string): QrContent {
     const f = parseKeyValueFields(text.slice('matmsg:'.length));
     return email(f.get('TO')?.[0] ?? '', f.get('SUB')?.[0], f.get('BODY')?.[0]);
@@ -137,7 +113,6 @@ function phone(number: string): QrContent {
     return {kind: 'phone', headline: number, fields: [], href: dialable ? `tel:${dialable}` : undefined};
 }
 
-// sms:+15551234567?body=…   SMSTO:+15551234567:…
 function parseSms(text: string, scheme: string): QrContent {
     const rest = text.slice(scheme.length + 1);
     let number: string;
@@ -152,7 +127,6 @@ function parseSms(text: string, scheme: string): QrContent {
     return {kind: 'sms', headline: number, fields: body ? [{key: 'message', value: body}] : []};
 }
 
-// geo:35.6595,139.7005?q=Shibuya   geo:35.6595,139.7005;u=35
 function parseGeo(text: string): QrContent | null {
     const [coords, query] = splitOnce(text.slice('geo:'.length), '?');
     const [lat, lng] = coords.split(';')[0].split(',').map(Number);
@@ -168,20 +142,17 @@ function parseGeo(text: string): QrContent | null {
     };
 }
 
-// WIFI:T:WPA;S:network;P:password;H:false;;
 function parseWifi(text: string): QrContent {
     const f = parseKeyValueFields(text.slice('wifi:'.length));
     const security = f.get('T')?.[0];
     const password = f.get('P')?.[0];
     const fields: QrContent['fields'] = [];
-    // An open network may still name itself with T:nopass, or leave T out.
     fields.push({key: 'security', value: !security || /^nopass$/i.test(security) ? '' : security});
     if (password) fields.push({key: 'password', value: password});
     if (/^true$/i.test(f.get('H')?.[0] ?? '')) fields.push({key: 'hidden', value: ''});
     return {kind: 'wifi', headline: f.get('S')?.[0] ?? '', fields};
 }
 
-// MECARD:N:Doe,Jane;TEL:+15551234567;EMAIL:jane@example.com;;
 function parseMecard(text: string): QrContent {
     const f = parseKeyValueFields(text.slice('mecard:'.length));
     const [last = '', first = ''] = (f.get('N')?.[0] ?? '').split(',');
@@ -198,11 +169,9 @@ function parseMecard(text: string): QrContent {
 
 function parseVcard(text: string): QrContent {
     const props = new Map<string, string[]>();
-    // Long lines are folded by starting the continuation with a space or tab.
     for (const line of text.replace(/\r?\n[ \t]/g, '').split(/\r?\n/)) {
         const colon = line.indexOf(':');
         if (colon === -1) continue;
-        // `item1.TEL;TYPE=CELL` → TEL
         const name = line.slice(0, colon).split(';')[0].split('.').pop()!.toUpperCase();
         const values = props.get(name) ?? [];
         values.push(line.slice(colon + 1));
@@ -210,7 +179,6 @@ function parseVcard(text: string): QrContent {
     }
     const first = (name: string) => props.get(name)?.[0];
     const all = (name: string) => (props.get(name) ?? []).map(unescapeVcard).filter(Boolean);
-    // N is family;given;additional;prefix;suffix — only used when FN is missing.
     const n = splitUnescaped(first('N') ?? '', ';').map(unescapeVcard);
     const nameFromN = [n[3], n[1], n[2], n[0], n[4]].filter(Boolean).join(' ');
     return contact({
@@ -220,7 +188,6 @@ function parseVcard(text: string): QrContent {
         phones: all('TEL'),
         emails: all('EMAIL'),
         websites: all('URL'),
-        // ADR is pobox;extended;street;city;region;postcode;country.
         address: splitUnescaped(first('ADR') ?? '', ';').map(unescapeVcard).filter(Boolean).join(', '),
         note: unescapeVcard(first('NOTE') ?? ''),
     });
@@ -242,7 +209,6 @@ function contact(c: ContactParts): QrContent {
     const add = (key: QrFieldKey, value: string | undefined) => {
         if (value) fields.push({key, value});
     };
-    // Without a name the organisation becomes the headline, so not a field too.
     if (c.name) add('org', c.org);
     add('title', c.title);
     c.phones.forEach(v => add('phone', v));
@@ -253,16 +219,9 @@ function contact(c: ContactParts): QrContent {
     return {kind: 'contact', headline: c.name || c.org || '', fields};
 }
 
-/**
- * Splits the `KEY:value;KEY:value;;` body of Wi-Fi, MECARD and MATMSG codes.
- * Values escape `\ ; , :` with a backslash; keys can repeat, so each maps to a
- * list.
- */
 function parseKeyValueFields(body: string): Map<string, string[]> {
     const fields = new Map<string, string[]>();
     for (const part of splitUnescaped(body, ';')) {
-        // Keys have no colon, so the first ends the key even if a value has an
-        // unescaped one.
         const colon = part.indexOf(':');
         if (colon === -1) continue;
         const key = part.slice(0, colon).toUpperCase();
@@ -273,7 +232,6 @@ function parseKeyValueFields(body: string): Map<string, string[]> {
     return fields;
 }
 
-/** Splits on `sep` wherever it isn't backslash-escaped, keeping the escapes in each piece. */
 function splitUnescaped(value: string, sep: string): string[] {
     const parts: string[] = [];
     let current = '';

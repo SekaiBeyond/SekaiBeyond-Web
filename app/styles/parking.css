@@ -1,6 +1,4 @@
 :root {
-    /* What the pins, pills and legend encode: parking during the event, or right now.
-       Global, since the admin maps reuse the pins. */
     --parking-free: #4ecb71;
     --parking-free-ink: #23914a;
     --parking-free-soft: rgba(78, 203, 113, 0.14);
@@ -17,7 +15,6 @@
     --parking-event: #e05555;
     --parking-event-ink: #c93a3a;
     --parking-event-soft: rgba(224, 85, 85, 0.12);
-    /* Accessible parking, in the blue of the wheelchair symbol. */
     --parking-accessible: #1f6fd1;
     --parking-accessible-soft: rgba(31, 111, 209, 0.1);
     --parking-badge-font: 'Fredoka', 'Quicksand', 'Noto Sans SC', sans-serif;
@@ -79,7 +76,6 @@
     text-align: center;
     padding: 30px 40px 10px;
     position: relative;
-    /* Lift the header (and the venue switcher's dropdown) above the map below. */
     z-index: 5;
 }
 
@@ -134,7 +130,6 @@
     margin-top: 10px;
 }
 
-/* Eyebrow label above the picker — signals the venue is a changeable value. */
 .parking-venue-label {
     font-family: var(--font-body);
     font-size: 12px;
@@ -181,7 +176,6 @@
     text-overflow: ellipsis;
 }
 
-/* Circular chevron badge — a clear "open the picker" affordance. */
 .parking-venue-switcher-chevron-badge {
     flex-shrink: 0;
     width: 28px;
@@ -312,9 +306,7 @@
     color: var(--color-text-secondary);
 }
 
-/* The map (left, wide) beside a column of cards that scrolls on its own. */
 .parking-content {
-    /* Above the fixed decorative blobs, below the header's venue dropdown. */
     position: relative;
     z-index: 1;
     display: grid;
@@ -336,7 +328,6 @@
     border: 2px solid rgba(255, 150, 200, 0.15);
 }
 
-/* Two classes, to win over MapLibre's own .maplibregl-map { position: relative }. */
 .parking-map-container .parking-map {
     position: absolute;
     inset: 0;
@@ -354,9 +345,6 @@
     font-weight: 600;
 }
 
-/* Legend over the map, frosted so markers behind stay visible, and
-   click-through so they stay clickable. Above every pin (ParkingMap stacks
-   them 1–7) and under the hover card. */
 .parking-map-legend {
     position: absolute;
     left: 14px;
@@ -443,7 +431,6 @@
     box-shadow: 0 0 0 1.5px rgba(255, 150, 200, 0.55);
 }
 
-/* Status colors, shared by the pins, the list badges and the legend. */
 .parking-k-free {
     background: var(--parking-free);
 }
@@ -591,7 +578,6 @@
     cursor: pointer;
 }
 
-/* Which of its days an event's guide shows. */
 .parking-when {
     display: flex;
     flex-wrap: wrap;
@@ -618,7 +604,6 @@
     border-color: var(--color-primary);
 }
 
-/* On an event's guide, that its prices are the event's, not this minute's. */
 .parking-event-note {
     margin-top: 6px;
     padding: 8px 10px;
@@ -663,7 +648,6 @@
     color: var(--color-text-secondary);
 }
 
-/* Suggested lot cards */
 .parking-pick {
     width: 100%;
     text-align: left;
@@ -755,7 +739,6 @@
     --dot: var(--parking-event);
 }
 
-/* All-lots search, filters and list */
 .parking-lot-search-field {
     display: flex;
     align-items: center;
@@ -901,7 +884,6 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* Detail view */
 .parking-detail-back {
     align-self: flex-start;
     padding: 7px 16px;
@@ -967,7 +949,6 @@
     color: var(--color-text-secondary);
 }
 
-/* The day an event's prices are for, so it stands out from the heading. */
 .parking-detail-head h3 strong {
     font-weight: 900;
     color: var(--color-text);
@@ -1051,7 +1032,6 @@
     cursor: pointer;
 }
 
-/* A link styled as a button, rather than the panel's underlined link. */
 .parking-info-panel a.parking-ghost:hover {
     color: var(--color-primary);
     text-decoration: none;
@@ -1088,7 +1068,6 @@
     color: var(--color-text-secondary);
 }
 
-/* Which hours a rate is for, when a lot has both daytime and evening rates. */
 .parking-rate small {
     font-size: 11px;
     font-weight: 600;
@@ -1161,7 +1140,6 @@
     background: var(--parking-accessible);
 }
 
-/* The placard and payment note under the stalls of a lot with accessible ones. */
 .parking-ada-note {
     background: var(--parking-accessible-soft);
 }
@@ -1200,9 +1178,7 @@ button.parking-tag {
     color: var(--color-primary);
 }
 
-/* The lot data's credit, under the map and the panel. */
 .parking-footer {
-    /* Above the fixed decorative blobs, like the content. */
     position: relative;
     z-index: 1;
     max-width: 1700px;
@@ -1228,8 +1204,6 @@ button.parking-tag {
     text-decoration: underline;
 }
 
-/* Map pins. MapLibre positions the bare .map-marker wrapper; everything is drawn
-   inside it, leaving its classes and transform alone. */
 .parking-pin-wrap {
     display: flex;
     flex-direction: column;
@@ -1266,7 +1240,6 @@ button.parking-tag {
     outline-offset: 2px;
 }
 
-/* The ♿ on the corner of a lot's icon (pin, list badge or suggested card) when it has accessible stalls. */
 .parking-ada-badge {
     position: absolute;
     top: -8px;
@@ -1277,7 +1250,6 @@ button.parking-tag {
     filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 
-/* Tucked in on the list's badges, so it stays clear of the lot code beside them. */
 .parking-lot-badge .parking-ada-badge {
     top: -6px;
     right: -6px;
@@ -1311,9 +1283,7 @@ button.parking-tag {
     display: block;
 }
 
-/* Suggested lots: bigger pin, white + brand ring and a soft pulse, gradient label. */
 .parking-pin-wrap.is-pick {
-    /* The scaled-up pin + ring overflow their layout box, so add room before the label. */
     gap: 14px;
 }
 
@@ -1346,7 +1316,6 @@ button.parking-tag {
     animation: none !important;
 }
 
-/* Venue stars: the current venue pulses; the others switch the guide when clicked. */
 .parking-vpin {
     display: flex;
     flex-direction: column;
@@ -1424,7 +1393,6 @@ button.parking-tag {
     box-shadow: 0 3px 12px rgba(255, 107, 157, 0.45);
 }
 
-/* The quick card a lot shows on hover, focus or a first tap (a MapLibre popup). */
 .parking-page .maplibregl-popup {
     z-index: 10;
 }
@@ -1538,7 +1506,6 @@ button.parking-tag {
     }
 }
 
-/* Parking Guide button (on home page event card) */
 .parking-guide-link-icon {
     font-size: 18px;
 }
@@ -1626,7 +1593,6 @@ button.parking-tag {
     .parking-info-panel {
         overflow: visible;
         padding: 0;
-        /* Keep the details clear of the top edge when scrolled into view. */
         scroll-margin-top: 12px;
     }
 

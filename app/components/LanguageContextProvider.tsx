@@ -2,9 +2,6 @@ import { createContext, type FC, type ReactNode, useContext, useEffect, useState
 
 export type Language = 'en' | 'zh';
 
-/**
- * The languages the switcher offers, in its order, each named in itself.
- */
 export const LANGUAGES: readonly {code: Language; name: string}[] = [
     {code: 'en', name: 'English'},
     {code: 'zh', name: '中文'},

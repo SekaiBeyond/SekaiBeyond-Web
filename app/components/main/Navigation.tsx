@@ -13,7 +13,6 @@ export const Navigation = () => {
     const {hasActive, activeEvents, loading: upcomingLoading} = useUpcomingEvents();
     const {content: conContent} = useConContent();
     const conPublished = conContent.settings.published;
-    // Shown while loading, as there usually is something, so the links don't shift.
     const upcomingHidden = !upcomingLoading && !hasActive;
     const [mobileOpen, setMobileOpen] = useState(false);
     const singleUpcoming = activeEvents.length === 1;

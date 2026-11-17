@@ -11,7 +11,7 @@ import type { UserRecord } from './types';
 import type { ShowToast } from './utils';
 
 interface MemberEditModalProps {
-    member: TeamMemberConfig | null; // null for adding new
+    member: TeamMemberConfig | null;
     onClose: () => void;
     onSave: (member: TeamMemberConfig) => void;
     showToast: ShowToast;
@@ -33,13 +33,10 @@ const seedFormData = (member: TeamMemberConfig | null): TeamMemberConfig => ({
 export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEditModalProps) => {
     const {isEnglish} = useLanguage();
 
-    // The member as saved, normalized like the form, for per-field compare and
-    // revert.
     const [saved] = useState<TeamMemberConfig>(() => seedFormData(member));
     const [formData, setFormData] = useState<TeamMemberConfig>(saved);
 
     const [uploading, setUploading] = useState(false);
-    // The linked account's live values, so followed fields preview what visitors see.
     const [account, setAccount] = useState<{
         title: string;
         titleCn: string;
@@ -69,7 +66,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                 photoURL: (d.photoURL as string) ?? '',
             };
             setAccount(acc);
-            // Followed fields track the account, so unticking later shows its current value.
             const accTitle = accountEffectiveTitle(acc.group, acc.title, acc.titleCn);
             setFormData(prev => ({
                 ...prev,
@@ -87,8 +83,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
 
     const handleUserSelect = (user: UserRecord | null) => {
         if (user) {
-            // Linking defaults role and photo to following, with their current values as the
-            // stored fallback. The name never follows; the account's only fills a blank one.
             const accTitle = accountEffectiveTitle(user.group, user.title, user.titleCn);
             setFormData(prev => ({
                 ...prev,
@@ -116,13 +110,10 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         setFormData(prev => ({...prev, imageUrl: previewUrl}));
         try {
             showToast(isEnglish ? 'Uploading image...' : '正在上传图片...', 'warning');
-            // A fresh path per upload: overwriting the member's image before saving would break
-            // it on cancel. saveTeamMembers deletes whatever team/ image the save orphans.
             const url = await callUploadAdminImage(file, `team/${crypto.randomUUID()}.webp`);
             setFormData(prev => ({...prev, imageUrl: url}));
             showToast(isEnglish ? 'Image uploaded.' : '图片已上传。', 'success');
         } catch {
-            // The preview is a local blob the server won't accept on Save.
             setFormData(prev => ({...prev, imageUrl: previous}));
             showToast(isEnglish ? 'Image upload failed.' : '图片上传失败。', 'error');
         } finally {
@@ -131,12 +122,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     };
 
     const accountLinked = !!formData.uid;
-    // Role and photo can each follow the account, and then aren't shown or required. Names are
-    // always custom; the English one is required.
     const roleFromAccount = accountLinked && !!formData.useAccountRole;
     const photoFromAccount = accountLinked && !!formData.useAccountPhoto;
-    // Followed fields show the account's live value (role: its title or group label), else the
-    // stored one.
     const accTitle = account ? accountEffectiveTitle(account.group, account.title, account.titleCn) : null;
     const accountRole = accTitle?.en || formData.role;
     const accountRoleCn = accTitle?.zh || formData.roleCn;
@@ -145,9 +132,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         && formData.name.trim() !== ''
         && (roleFromAccount || formData.role.trim() !== '');
 
-    // Per-field revert to the saved member. A followed field's stored value is an invisible
-    // fallback, so its drifting isn't an edit; restoring one re-reads the account. A new
-    // member has nothing to revert to.
     const isEditing = !!member;
     const revertField = (patch: Partial<TeamMemberConfig>) => setFormData(prev => ({...prev, ...patch}));
     const accountEdited = isEditing && formData.uid !== saved.uid;
@@ -160,7 +144,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     const photoEdited = isEditing && (formData.useAccountPhoto !== saved.useAccountPhoto
         || (!formData.useAccountPhoto && formData.imageUrl !== saved.imageUrl));
 
-    // Undoes the account pick; the uid change refreshes followed fields.
     const revertAccount = () => revertField({
         uid: saved.uid,
         useAccountRole: saved.useAccountRole,
@@ -180,7 +163,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         imageUrl: saved.useAccountPhoto ? (account?.photoURL || saved.imageUrl) : saved.imageUrl,
     });
 
-    // Only rendered once a field differs from the saved member, so it is never a no-op.
     const revertButton = (edited: boolean, onRevert: () => void, titleEn: string, titleCn: string) => (
         edited ? (
             <button
@@ -194,14 +176,12 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         ) : null
     );
 
-    // Field label on the left, its "From account" / revert controls on the right.
     const fieldHeaderStyle: React.CSSProperties = {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: '8px',
     };
-    // Small "From account" checkbox shown alongside each account-backed field.
     const fromAccountToggleStyle: React.CSSProperties = {
         display: 'flex',
         alignItems: 'center',
@@ -212,7 +192,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         color: 'var(--color-text-secondary)',
         cursor: 'pointer',
     };
-    // Read-only presentation for a field whose value follows the linked account.
     const fromAccountValueStyle: React.CSSProperties = {
         opacity: 0.7,
         display: 'flex',
@@ -310,7 +289,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                         {isEnglish ? 'From account' : '来自账户'}
                                     </label>
                                 )}
-                                {/* One toggle governs both languages, so the pair reverts together. */}
                                 {revertButton(
                                     roleEdited,
                                     revertRole,
@@ -349,7 +327,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                     )}
                 </div>
 
-                {/* The revert button sits outside the label so clicking it cannot toggle the box. */}
                 <div style={fieldHeaderStyle}>
                     <label className="admin-tickets-template-field"
                            style={{flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
@@ -370,8 +347,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                     )}
                 </div>
 
-                {/* Labelled like every field; the checkbox only says where the photo comes
-                    from. */}
                 <div className="admin-tickets-template-field" style={{marginTop: '8px'}}>
                         <span style={fieldHeaderStyle}>
                             <span>{isEnglish ? 'Member Avatar' : '成员头像'}</span>
@@ -407,8 +382,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                 referrerPolicy="no-referrer"
                             />
                             <div className="admin-avatar-actions">
-                                {/* What accountPhoto resolves to: the account's photo, the stored image,
-                                    or the site default. */}
                                 <p className="admin-helper-text admin-avatar-helper">
                                     {account?.photoURL
                                         ? (isEnglish

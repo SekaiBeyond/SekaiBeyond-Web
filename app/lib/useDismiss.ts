@@ -1,15 +1,10 @@
 import { type RefObject, useEffect, useRef } from 'react';
 
-/**
- * While `open`, calls `onDismiss` when a click lands outside `ref`'s element or
- * Escape is pressed, saying which, so a menu or popover can close.
- */
 export function useDismiss(
     open: boolean,
     ref: RefObject<HTMLElement | null>,
     onDismiss: (byEscape: boolean) => void,
 ): void {
-    // So a new closure each render doesn't re-attach the listeners.
     const onDismissRef = useRef(onDismiss);
     onDismissRef.current = onDismiss;
 

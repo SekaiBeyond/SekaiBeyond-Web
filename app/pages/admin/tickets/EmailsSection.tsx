@@ -18,17 +18,9 @@ interface EmailsSectionProps {
     onTemplateSavedChange: (saved: boolean) => void;
 }
 
-/**
- * Ticket emails on one page: sending them, what you come back for, above the
- * template they're sent from and the wallet pass their button makes.
- */
 export function EmailsSection({event, totals, readOnly, showToast, onSent, onTemplateSavedChange}: EmailsSectionProps) {
-    // Edits a send wouldn't carry, since sendTicketEmails reads the saved
-    // template.
     const [templateUnsaved, setTemplateUnsaved] = useState(false);
 
-    // The stored wallet pass settings, which the template's preview follows
-    // too: the button is in it while they're on.
     const [walletSettings, setWalletSettings] = useState<WalletPassSettings | null>(null);
     const [walletPassCount, setWalletPassCount] = useState(0);
     const [walletLoadFailed, setWalletLoadFailed] = useState(false);

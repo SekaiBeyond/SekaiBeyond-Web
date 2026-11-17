@@ -21,15 +21,8 @@ import type { ShowToast } from '~/lib/useToasts';
 
 export const WEBP_QUALITY = 0.95;
 
-// Re-exported so the admin panel imports it from here; defined in
-// ~/lib/useToasts.
 export type { ShowToast };
 
-/**
- * The re-read after an admin write. Its failure is a stale screen, so it warns and
- * never throws: inside the write's try it would read as "Failed to save", and a
- * retry would duplicate the write.
- */
 export async function refreshAfterSave(
     refresh: () => Promise<unknown>,
     showToast: ShowToast,
@@ -77,17 +70,9 @@ const toUserBan = (data: DocumentData): UserBan | null => {
     };
 };
 
-/**
- * Users by uid, for screens holding uids rather than a query. Chunked for `in`'s
- * 30-id limit. A uid with no document (a deleted account) is missing from the
- * result, which callers read as deleted.
- */
 export const fetchUsersByUids = async (uids: string[]): Promise<Map<string, UserRecord>> =>
     new Map((await getDocsByIds('users', uids)).map(d => [d.id, docToUserRecord(d)]));
 
-// The browsable user list, filtered by role and/or active membership. Members-only
-// orders by membershipExpiresAt, since Firestore's first orderBy must match the
-// inequality field.
 export const buildUserListQuery = (opts: {
     group: UserGroup | '';
     membersOnly: boolean;
@@ -110,12 +95,6 @@ export const buildUserListQuery = (opts: {
 
 const USER_SEARCH_LIMIT = 10;
 
-// How every admin surface looks a user up: displayName and email as prefixes, via a [p, p +
-// \uf8ff] range, since Firestore has no substring search.
-//
-// Emails are stored lowercase. Names are mixed case and ranges are case-sensitive, so the
-// name query runs with the first letter in each case. An "@" means an email and skips the
-// name queries.
 export const searchUsers = async (
     rawQuery: string,
     group: UserGroup | '' = '',
@@ -145,8 +124,6 @@ export const searchUsers = async (
     }
 
     const snaps = await Promise.all(searches);
-    // Filtered here, since combining either filter with a prefix range would need
-    // a composite index.
     const deduped = new Map<string, UserRecord>();
     snaps.forEach(s => s.docs.forEach(d => {
         const r = docToUserRecord(d);
@@ -163,12 +140,6 @@ const usersListing = async (field: 'attendedEvents' | 'eventStaffEvents', eventI
 
 export const fetchEventAttendees = (eventId: string) => usersListing('attendedEvents', eventId);
 
-/**
- * An event's staff. Staff and above (`viewer` 'staff') read the accounts
- * themselves. The event's own staff can't, so they're given what getEventStaff
- * shows of each, a public profile's worth: the rest of each record is blank,
- * its address above all.
- */
 export const fetchEventStaff = async (
     eventId: string,
     viewer: 'staff' | 'event-staff' = 'staff',
@@ -182,7 +153,6 @@ export const getClaimUrl = (code: string): string => {
     return `${window.location.origin}/claim?code=${code}`;
 };
 
-/** `maxMb` is the server's image cap, from useUploadLimits. */
 export function validateImageFile(f: File, maxMb: number, isEnglish: boolean, showToast: ShowToast, allowAnyImage: boolean = false): boolean {
     if (allowAnyImage) {
         if (!f.type.startsWith('image/')) {
@@ -200,12 +170,6 @@ export function validateImageFile(f: File, maxMb: number, isEnglish: boolean, sh
     return true;
 }
 
-/**
- * The con hero's clip must be WebM: it's stored as .webm and served as a WebM
- * source, so anything else plays nowhere. The browser reports the container, not
- * the codecs, so an AV1 WebM still passes here, which is why the helper text
- * names VP9. `maxMb` is the server's video cap.
- */
 export function validateVideoFile(f: File, maxMb: number, isEnglish: boolean, showToast: ShowToast): boolean {
     if (f.type !== 'video/webm') {
         showToast(

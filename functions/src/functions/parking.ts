@@ -5,7 +5,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { requireAdmin, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
-import { recordDoc, recordRef } from "../utils/records";
+import { performer, recordDoc, recordRef } from "../utils/records";
 import { SITE_TIME_ZONE, siteDay } from "../utils/siteTime";
 import {
     fetchUwBuilding,
@@ -21,10 +21,7 @@ import {
     type WalkingTime,
 } from "../utils/uwParking";
 
-// The guide's synced copy of UW's data. Publicly readable: it holds only what UW
-// publishes and walking times from public venues.
 const PARKING_DOC = db.collection("uwParking").doc("current");
-// Pause between walking-router calls, to stay well inside FOSSGIS's fair use.
 const ROUTER_PAUSE_MS = 1_000;
 
 interface ParkingSyncSummary {
@@ -35,38 +32,27 @@ interface ParkingSyncSummary {
 }
 
 interface VenueWalking {
-    /** The venue location these times were measured from. */
     lat: number;
     lng: number;
-    /** The lots they were measured to, as lotsKey gives them. */
     lotsKey: string;
     lots: Record<string, WalkingTime>;
 }
 
-/** A short fingerprint of the lots' codes and locations, which changes when UW adds, drops or moves a lot. */
 const lotsKey = (lots: UwLot[]) => createHash("sha256")
     .update(lots.map(l => `${l.code}@${l.lat.toFixed(6)},${l.lng.toFixed(6)}`).join(";"))
     .digest("hex").slice(0, 16);
 
-/** Whether walking times were measured from this spot to these lots, so measuring again would give the same. */
 const measuredFrom = (walking: VenueWalking | undefined, lat: number, lng: number, key: string) =>
     walking?.lat === lat && walking?.lng === lng && walking.lotsKey === key;
 
 const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
-// How many walking-nearest lots a building lookup suggests.
 const NEAREST_LOT_COUNT = 8;
 
-/** The synced visitor lots, or none before the first sync. */
 async function syncedLots(): Promise<UwLot[]> {
     const lots = (await PARKING_DOC.get()).data()?.lots;
     return Array.isArray(lots) ? lots : [];
 }
 
-/**
- * Brings a saved venue's walking times and outline up to date, unless they're
- * already from this spot, to these lots, for this building. Does nothing before
- * the first sync.
- */
 export async function refreshVenueParking(
     venueId: string,
     venue: {lat: number; lng: number; buildingCode: string},
@@ -100,13 +86,11 @@ export async function refreshVenueParking(
         const [[field, value], ...rest] = updates;
         await PARKING_DOC.update(field, value, ...rest.flat());
     }
-    // Whatever did refresh is saved; a failed source waits for the nightly sync.
     for (const result of [walkingResult, outlineResult]) {
         if (result.status === "rejected") throw result.reason;
     }
 }
 
-/** Drops a deleted venue's walking times and building outline. */
 export async function dropVenueParking(venueId: string): Promise<void> {
     const data = (await PARKING_DOC.get()).data();
     const updates = (["walking", "outlines"] as const)
@@ -117,11 +101,6 @@ export async function dropVenueParking(venueId: string): Promise<void> {
     await PARKING_DOC.update(field, value, ...rest.flat());
 }
 
-/**
- * Refreshes uwParking/current. A source that fails keeps its last good copy and
- * is named in lastRunErrors, so a UW outage leaves yesterday's data rather than
- * none.
- */
 async function runUwParkingSync(): Promise<ParkingSyncSummary> {
     const previous = (await PARKING_DOC.get()).data() ?? {};
     const now = Timestamp.now();
@@ -146,9 +125,6 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
         errors.push(`Event pricing: ${errorMessage(err)}`);
     }
 
-    // Measured only when a venue's spot or the lots have changed, to keep the sync short
-    // and the router's load light. A failed call keeps the last times; deleted venues drop
-    // out.
     const venues = await db.collection("venues").get();
     const previousWalking = (previous.walking ?? {}) as Record<string, VenueWalking>;
     const walking: Record<string, VenueWalking> = {};
@@ -173,8 +149,6 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
         update.walking = walking;
     }
 
-    // Building footprints for the venue highlight. A failed lookup keeps the last
-    // outline for the same building.
     const previousOutlines = (previous.outlines ?? {}) as Record<string, UwBuildingOutline>;
     const outlines: Record<string, UwBuildingOutline> = {};
     await Promise.all(venues.docs.map(async venue => {
@@ -191,15 +165,11 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
     update.outlines = outlines;
 
     Object.assign(update, {lastRunAt: now, lastRunErrors: errors});
-    // mergeFields writes each field whole, so deleted venues drop out of `walking` and
-    // `outlines`, and a failed source's fields are left as they were.
     await PARKING_DOC.set(update, {mergeFields: Object.keys(update)});
 
     return {lotCount: lots.length, pricingDayCount, walkingVenueCount: Object.keys(walking).length, errors};
 }
 
-// Daily, after UW regenerates its lot file (about 23:00 UTC, mid-afternoon in Seattle).
-// Every source keeps its last good copy on failure, so a retry is always safe.
 export const uwParkingNightlySync = onSchedule({
     schedule: "30 17 * * *",
     timeZone: SITE_TIME_ZONE,
@@ -213,24 +183,17 @@ export const uwParkingNightlySync = onSchedule({
     if (summary.errors.length > 0) console.warn("uwParkingNightlySync: kept the last good copy of", summary.errors);
 });
 
-// The same sync on demand, e.g. right after a UW change the nightly run has not picked up yet.
 export const syncUwParking = onCall({maxInstances: 2, timeoutSeconds: 300}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
     const summary = await runUwParkingSync();
     await recordRef().set(recordDoc("parking-sync", {
-        performedBy: uid,
-        performedByName: callerSnap.data()?.displayName ?? "",
+        ...performer(uid, callerSnap),
         lotCount: summary.lotCount,
     }));
     return summary;
 });
 
-/**
- * What the venue editor needs to set a venue up from a UW building code: where
- * the building is, UW's own parking note for it, the visitor lots that note
- * names, and the visitor lots nearest on foot.
- */
 export const lookUpUwBuilding = onCall({maxInstances: 5, timeoutSeconds: 60}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
@@ -261,7 +224,6 @@ export const lookUpUwBuilding = onCall({maxInstances: 5, timeoutSeconds: 60}, as
                 .sort((a, b) => a.seconds - b.seconds)
                 .slice(0, NEAREST_LOT_COUNT);
         } catch (err) {
-            // The building itself was found; the editor can still be filled in by hand.
             console.warn("lookUpUwBuilding: walking times failed for", code, err);
         }
     }

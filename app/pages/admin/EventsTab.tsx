@@ -29,7 +29,6 @@ export interface EventsTabHandle {
     selectManagedEvent: (eventId: string) => void;
 }
 
-/** Past events come in two lists: each year's Sekai Beyond Con, and the rest. */
 type Section = 'con' | 'past';
 
 const emptyForm = () => ({
@@ -56,7 +55,6 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         onDetailChange?.(managedEvent !== null);
     }, [managedEvent, onDetailChange]);
 
-    // The section the open form sits in, or null when it's closed.
     const [formSection, setFormSection] = useState<Section | null>(null);
     const [editingEvent, setEditingEvent] = useState<PastEvent | null>(null);
     const [eventForm, setEventForm] = useState(emptyForm);
@@ -64,8 +62,6 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [eventImage, setEventImage] = useState<File | null>(null);
     const [eventImagePreview, setEventImagePreview] = useState<string | null>(null);
     const formRef = useRef<HTMLDivElement>(null);
-    // An edit opened from an event's page lands on the list, maybe below the
-    // fold in Past Events, so it scrolls to the form.
     const [scrollToForm, setScrollToForm] = useState(false);
 
     useImperativeHandle(forwardedRef, () => ({selectManagedEvent: setManagedEvent}));
@@ -182,7 +178,6 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                     placeholder={isEnglish ? 'Event title' : '活动标题'}
                     placeholderCn={isEnglish ? 'Event title in Chinese' : '活动中文标题'}
                 />
-                {/* A Con has no tags: the Con mark is its label. */}
                 {!eventForm.isCon && (
                     <TagMultiSelect
                         tags={tags}

@@ -14,7 +14,6 @@ export const Tickets = () => {
     const now = useNowAcross(content.tickets.flatMap(tier => tier.earlyBird ? [tier.earlyBird.endsAt] : []));
     const ended = useConEnded();
 
-    // Nothing left to buy once the con is over; its nav links drop out with it.
     if (ended) return null;
 
     return (
@@ -28,8 +27,6 @@ export const Tickets = () => {
             />
 
             <div className="sbc-ticket-grid">
-                {/* By position: tier ids are generated and perk text free-form, so
-                    neither is unique. */}
                 {content.tickets.map((tier, i) => {
                     const earlyBird = activeEarlyBird(tier, now);
                     const fee = ticketFeeFor(earlyBird ? earlyBird.price : tier.price, content.ticketFee);

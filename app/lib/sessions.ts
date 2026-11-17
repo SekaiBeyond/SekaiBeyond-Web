@@ -10,14 +10,8 @@ import {
     getFirebaseDb,
 } from '~/lib/firebase';
 
-/**
- * The devices signed in to an account, one doc each in users/{uid}/sessions,
- * named by the sign-in's auth_time (see functions/src/utils/sessions.ts).
- */
-
 export interface DeviceSession {
     id: string;
-    /** "" when its user agent didn't say. */
     browser: string;
     os: string;
     device: 'mobile' | 'tablet' | 'desktop';
@@ -25,23 +19,15 @@ export interface DeviceSession {
     lastActiveAt: Date | null;
 }
 
-/** How old this device's last-active time may get before it's brought up to date. */
 const TOUCH_INTERVAL_MS = 15 * 60_000;
 
-/** How long after a failed touch the next one waits, doubling each time up to the longest. */
 const TOUCH_RETRY_MS = 2_000;
 const TOUCH_RETRY_MAX_MS = 60_000;
 
-/**
- * How long a tab whose sign-in has been ended waits for the one that replaced it
- * to arrive from another tab. Firebase looks for one every 800ms.
- */
 const REPLACED_SIGN_IN_WAIT_MS = 2_000;
 
-/** This sign-in's session ID, or null when its token can't be read. */
 export async function currentSessionId(user: User): Promise<string | null> {
     try {
-        // A number on the wire, whatever the SDK's type says.
         const authTime: unknown = (await user.getIdTokenResult()).claims.auth_time;
         return authTime ? String(authTime) : null;
     } catch {
@@ -49,14 +35,6 @@ export async function currentSessionId(user: User): Promise<string | null> {
     }
 }
 
-/**
- * Whether this browser has moved on from the sign-in `endedId`: another tab has
- * replaced it with a new one and ended it, as a password change does
- * (replaceSession in AuthProvider). Tabs share one sign-in, so signing out over
- * the ended one would sign that tab out too. The new one reaches this tab within
- * a second, with no auth state change since the account is the same, so this
- * waits that long for its token. Says no once signed out, or on waiting it out.
- */
 export function signInMovedOn(endedId: string): Promise<boolean> {
     return new Promise(resolve => {
         let settled = false;
@@ -84,12 +62,6 @@ export function signInMovedOn(endedId: string): Promise<boolean> {
     });
 }
 
-/**
- * Whether the server has refused this sign-in for good: signed out from another
- * device, or never listed in time. firestore.rules refuses its reads too, and
- * touchSession tells that apart from anything else going wrong, listing it
- * instead if it can be.
- */
 export async function sessionEnded(): Promise<boolean> {
     try {
         await callTouchSession();
@@ -99,20 +71,7 @@ export async function sessionEnded(): Promise<boolean> {
     }
 }
 
-/**
- * Keeps this device in its account's device list while it's signed in: adds
- * it, marks it active on load and when its tab comes back after a while, and
- * calls `onEnded` once it has been signed out from another device. Returns a
- * stop function, safe to call twice.
- *
- * A touch that fails is tried again, sooner at first. The server refuses a
- * sign-in that hasn't listed itself within its first minutes
- * (UNLISTED_GRACE_SECONDS in functions/src/utils/sessions.ts), and a first
- * touch can fail on nothing worse than the rate limit it shares with every
- * other call, or a dropped connection.
- */
 export function watchOwnSession(uid: string, sessionId: string, onEnded: () => void): () => void {
-    // When the doc says it was last active; null before it exists.
     let lastActive: number | null = null;
     let touching = false;
     let stopped = false;
@@ -125,7 +84,6 @@ export function watchOwnSession(uid: string, sessionId: string, onEnded: () => v
         onEnded();
     };
 
-    // `waitMs` is how long the server said to wait, when it was a rate limit.
     const retryLater = (waitMs = 0) => {
         if (stopped || retryTimer !== null) return;
         const delay = Math.min(Math.max(retryDelay, waitMs), TOUCH_RETRY_MAX_MS);
@@ -142,8 +100,6 @@ export function watchOwnSession(uid: string, sessionId: string, onEnded: () => v
         touching = true;
         callTouchSession()
             .then(() => {
-                // Without waiting for the doc, so a doc that can't be read
-                // isn't touched on every return to the tab.
                 lastActive = Date.now();
                 retryDelay = TOUCH_RETRY_MS;
             })
@@ -170,7 +126,6 @@ export function watchOwnSession(uid: string, sessionId: string, onEnded: () => v
             lastActive = toDate(data?.lastActiveAt)?.getTime() ?? lastActive;
             touchIfStale();
         },
-        // Still listed when the doc can't be watched; touchSession says if it ended.
         () => touchIfStale(),
     );
 
@@ -204,10 +159,6 @@ function toDeviceSession(snap: QueryDocumentSnapshot): DeviceSession {
     };
 }
 
-/**
- * The devices signed in to `uid`'s account, most recently active first, kept
- * up to date as devices sign in and out. Null while loading.
- */
 export function useDeviceSessions(uid: string | null): {sessions: DeviceSession[] | null; failed: boolean} {
     const [sessions, setSessions] = useState<DeviceSession[] | null>(null);
     const [failed, setFailed] = useState(false);
@@ -231,7 +182,6 @@ export function useDeviceSessions(uid: string | null): {sessions: DeviceSession[
     return {sessions, failed};
 }
 
-/** "Chrome on macOS", or whichever half is known. */
 export function deviceName(session: DeviceSession, isEnglish: boolean): string {
     const {browser, os} = session;
     if (browser && os) return isEnglish ? `${browser} on ${os}` : `${os} 上的 ${browser}`;

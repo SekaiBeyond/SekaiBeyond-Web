@@ -11,13 +11,6 @@ import { computeEmailQuotaDetail, computeEmailQuotaInTxn, reserveQuotaInTxn, rol
 import { type ResendEnvelope, ResendSendError, sendEmails } from "./resendClient";
 import { SITE_TIME_ZONE } from "./siteTime";
 
-/**
- * The emails an account gets. Fixed here rather than saved in the admin panel
- * like ticket emails: they're the same for everyone, and a broken template
- * would stop people signing in. Both languages are written out, and which one
- * goes is the language the site was in when it was asked for.
- */
-
 export type MailLanguage = "en" | "zh";
 
 export const readMailLanguage = (raw: unknown): MailLanguage => raw === "zh" ? "zh" : "en";
@@ -27,28 +20,15 @@ const SEND_TIMEOUT_MS = 8_000;
 const mailUnavailable = () =>
     new HttpsError("unavailable", "Couldn't send the email. Please try again later.", {code: "mail-unavailable"});
 
-/**
- * A code, or what's sent in place of one, which anyone can ask for; or a notice
- * of something that has happened to an account, which only that account's
- * changes send.
- */
 type AccountMailKind = "code" | "notice";
 
 const HOUR_MS = 60 * 60_000;
 
-// Every code email the site sends, in rateLimits like any other budget.
 const CODE_MAIL_BUDGET = "codeMail";
 
-/** How much of Resend's day mail of `kind` may take: codes leave NOTICE_MAIL_RESERVE for notices. */
 const dailyLimit = (kind: AccountMailKind): number =>
     kind === "code" ? RESEND_DAILY_CAP - NOTICE_MAIL_RESERVE : RESEND_DAILY_CAP;
 
-/**
- * Sends one email straight away, skipping the overflow queue: it's no use to
- * someone waiting on a code half an hour later. A notice may use the whole
- * daily cap, so the reserve kept from bulk mail is what's left when a big send
- * has run; codes stop short of it, and at CODE_MAIL_HOURLY_CAP an hour.
- */
 export async function sendAccountMail(envelope: ResendEnvelope, kind: AccountMailKind): Promise<void> {
     if (kind === "code" && !(await chargeRateLimit(CODE_MAIL_BUDGET, CODE_MAIL_HOURLY_CAP, HOUR_MS)).allowed) {
         throw mailUnavailable();
@@ -65,17 +45,11 @@ export async function sendAccountMail(envelope: ResendEnvelope, kind: AccountMai
         await sendEmails([envelope], SEND_TIMEOUT_MS);
     } catch (err) {
         console.error("sendAccountMail: send failed", err);
-        // Unless a quota header came back, which resendClient has already recorded.
         if (!(err instanceof ResendSendError && err.dailyConsumed !== null)) await rollbackQuotaReservation(1);
         throw mailUnavailable();
     }
 }
 
-/**
- * Refuses as sending a code would when none could go out now, without sending
- * or using up anything: for a request that sends nothing, which has to be
- * refused alike or the difference gives away why it sent nothing.
- */
 export async function requireCodeMailRoom(): Promise<void> {
     const [{sentToday}, roomThisHour] = await Promise.all([
         computeEmailQuotaDetail(),
@@ -84,17 +58,11 @@ export async function requireCodeMailRoom(): Promise<void> {
     if (sentToday >= dailyLimit("code") || !roomThisHour) throw mailUnavailable();
 }
 
-/**
- * Refuses as a notice would when none could go out today: for a change whose
- * notice has to arrive, checked before anything that can't be taken back, such
- * as using up the caller's code.
- */
 export async function requireNoticeMailRoom(): Promise<void> {
     const {sentToday} = await computeEmailQuotaDetail();
     if (sentToday >= dailyLimit("notice")) throw mailUnavailable();
 }
 
-/** For a heads-up after the fact: what it's about has happened, so a failure stops at the log. */
 export async function sendNotice(envelope: ResendEnvelope): Promise<void> {
     try {
         await sendAccountMail(envelope, "notice");
@@ -105,21 +73,9 @@ export async function sendNotice(envelope: ResendEnvelope): Promise<void> {
 
 const DAY_MS = 24 * HOUR_MS;
 
-/**
- * Changes that each email the account a notice, and how many of each one account
- * may make a day. A notice may use all of the day's mail, the reserve kept from
- * codes included, so without these one account looping a change (binding and
- * unbinding Google, asking for deletion and cancelling) could spend the lot in
- * minutes, and the next change to anyone's account would go unannounced.
- */
 const NOTICED_CHANGES_PER_DAY = {google: 6, appLink: 6, password: 5, deletion: 3} as const;
 type NoticedChange = keyof typeof NOTICED_CHANGES_PER_DAY;
 
-/**
- * Counts a change against its account's day, refusing it once over: refused,
- * never made without its notice. Goes after whatever proves the caller may make
- * the change, so nobody else can use up an account's allowance.
- */
 export async function limitNoticedChange(uid: string, change: NoticedChange): Promise<void> {
     const {allowed, retryAfterMs} = await chargeRateLimit(
         `notice_${change}_${uid}`,
@@ -144,7 +100,6 @@ function page(heading: string, paragraphs: string[]): string {
 </div>`;
 }
 
-/** A moment as a notice states it: in its language, on the site's clock, escaped. */
 const mailTime = (date: Date, language: MailLanguage): string => escapeHtml(date.toLocaleString(
     language === "zh" ? "zh-CN" : "en-US",
     {dateStyle: "long", timeStyle: "short", timeZone: SITE_TIME_ZONE},
@@ -168,8 +123,6 @@ const CODE_LEADS: Record<CodePurpose, Record<MailLanguage, string>> = {
     },
 };
 
-// The code leads the subject, so it can be read off a notification. The
-// emulator logs subjects, which is how a local sign-up gets its code.
 export function codeMail(to: string, purpose: CodePurpose, code: string, language: MailLanguage): ResendEnvelope {
     return language === "zh" ? {
         to,
@@ -190,7 +143,6 @@ export function codeMail(to: string, purpose: CodePurpose, code: string, languag
     };
 }
 
-/** Sent in place of a code when the address already has an account, so the form gives nothing away. */
 export function addressTakenMail(to: string, language: MailLanguage): ResendEnvelope {
     const site = escapeHtml(PUBLIC_ORIGIN);
     return language === "zh" ? {
@@ -210,12 +162,6 @@ export function addressTakenMail(to: string, language: MailLanguage): ResendEnve
     };
 }
 
-/**
- * Sent in place of a code, or of nothing for Forgot Password, when the address is
- * held for an account that has just moved off it (addressHeldForUndo). Whoever
- * asked may be that account's owner, locked out of it, and the link is their way
- * back; a new account on the address would leave the link dead.
- */
 export function addressHeldMail(to: string, until: Date, language: MailLanguage): ResendEnvelope {
     const when = mailTime(until, language);
     return language === "zh" ? {
@@ -237,7 +183,6 @@ export function addressHeldMail(to: string, until: Date, language: MailLanguage)
     };
 }
 
-/** "contact us at …", or the site, without a Contact Email in Site Config. */
 async function contactLine(language: MailLanguage): Promise<string> {
     const saved: unknown = (await db.collection("config").doc("main").get()).get("contactEmail");
     const contact = typeof saved === "string" ? escapeHtml(saved) : "";
@@ -247,11 +192,6 @@ async function contactLine(language: MailLanguage): Promise<string> {
     return contact ? `If this wasn't you, contact ${contact} right away.` : "If this wasn't you, contact us right away.";
 }
 
-/**
- * To the address an account has just left, which is how someone whose session
- * was stolen finds out. `undoUrl` is their way back without staff, on a change
- * the account's owner made; a change staff made has none.
- */
 export async function emailChangedMail(
     to: string,
     newEmail: string,
@@ -280,7 +220,6 @@ export async function emailChangedMail(
     };
 }
 
-/** To the address an undone change had moved to, which no longer signs in. */
 export async function emailChangeUndoneMail(to: string, language: MailLanguage): Promise<ResendEnvelope> {
     const contact = await contactLine(language);
     return language === "zh" ? {
@@ -300,7 +239,6 @@ export async function emailChangeUndoneMail(to: string, language: MailLanguage):
     };
 }
 
-/** To the address staff have just put an account on, which can sign in to it from now on. */
 export async function emailSetByStaffMail(to: string, language: MailLanguage): Promise<ResendEnvelope> {
     const contact = await contactLine(language);
     return language === "zh" ? {
@@ -317,10 +255,6 @@ export async function emailSetByStaffMail(to: string, language: MailLanguage): P
     };
 }
 
-/**
- * Whenever a Google account goes on or comes off an account. Being bound is a
- * way in that outlasts a password reset, so its owner has to hear about it.
- */
 export async function googleChangedMail(
     to: string,
     googleEmail: string,
@@ -353,15 +287,6 @@ export async function googleChangedMail(
     };
 }
 
-/**
- * To an account's address when an app's account is linked to it or unlinked
- * (utils/appLinks.ts), by either side: a link shows the app what the account
- * is here, so someone who got in briefly could otherwise keep watching.
- * `undoUrl`, on a link, is the "This wasn't me" link (undoAppLink): unlinking
- * in Settings would keep the owner from linking their own app account for
- * LINK_HOLD_DAYS, and this doesn't, once in that time. What the app can see
- * is LINK_SHARED_FIELDS, as Settings says before the link is made.
- */
 export async function appLinkChangedMail(
     to: string,
     appName: string,
@@ -405,11 +330,6 @@ export async function appLinkChangedMail(
     };
 }
 
-/**
- * When an account asks for itself to be deleted, which anyone signed in to it can
- * do: its owner has until `deleteAt` to stop it from Settings. A deletion staff
- * asked for sends none, and only staff can cancel it.
- */
 export async function accountDeletionMail(
     to: string,
     deleteAt: Date,
@@ -437,12 +357,6 @@ export async function accountDeletionMail(
     };
 }
 
-/**
- * To the address an account moved off, while the link that undoes the move
- * still works, when that account asks to be deleted. Someone who took it over
- * may be deleting it, and its owner can no longer sign in to cancel: the link
- * cancels the deletion too, and the deletion waits until the link has expired.
- */
 export async function accountDeletionAfterMoveMail(
     to: string,
     deleteAt: Date,

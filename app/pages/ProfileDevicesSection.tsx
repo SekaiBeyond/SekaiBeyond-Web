@@ -13,17 +13,10 @@ const DEVICE_ICONS: Record<DeviceSession['device'], IconType> = {
     desktop: FiMonitor,
 };
 
-/**
- * /profile's Settings tab: the devices signed in to the account, each with a
- * button to sign it out. Another device is signed out at once if it's open,
- * or the next time it is; this one signs out as the menu's Sign Out does.
- * Under the list, buttons sign out every other device, or every one.
- */
 export const ProfileDevicesSection = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const {user, sessionId, signOut, signOutEverywhere} = useAuth();
     const {sessions, failed} = useDeviceSessions(user?.uid ?? null);
-    // A session ID, 'others' for the sign-out-everywhere-else button, or 'all' for sign-out-everywhere.
     const [busy, setBusy] = useState<string | null>(null);
 
     const locale = isEnglish ? 'en-US' : 'zh-CN';
@@ -32,7 +25,6 @@ export const ProfileDevicesSection = ({showToast}: {showToast: ShowToast}) => {
         year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
     });
 
-    // This device first, then the rest by when they were last used.
     const ordered = sessions && [
         ...sessions.filter(s => s.id === sessionId),
         ...sessions.filter(s => s.id !== sessionId),
@@ -88,7 +80,6 @@ export const ProfileDevicesSection = ({showToast}: {showToast: ShowToast}) => {
         if (!confirmed) return;
         setBusy('all');
         try {
-            // Signed out on success, which takes this page with it.
             await signOutEverywhere();
         } catch {
             showToast(isEnglish ? 'Failed to sign out of all devices. Please try again.' : '退出所有设备失败，请重试。', 'error');
@@ -160,7 +151,6 @@ export const ProfileDevicesSection = ({showToast}: {showToast: ShowToast}) => {
                 </div>
             )}
 
-            {/* With nothing else signed in, the other-devices button stays, disabled, so it's there to find. */}
             {!failed && ordered && ordered.length > 0 && (
                 <div className="settings-devices-footer">
                     <button

@@ -2,11 +2,6 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { LoginButton } from '~/components/LoginButton';
 
-/**
- * The bar across the top of the pages off the landing page: a link home, the
- * page's title if it has one, the account menu unless `account` is off, and the
- * language switch.
- */
 export const PageNav = ({title, account = true}: {title?: string; account?: boolean}) => {
     const {isEnglish} = useLanguage();
     return (

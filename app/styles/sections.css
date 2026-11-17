@@ -48,10 +48,6 @@
     align-items: center;
 }
 
-/* ==========================================================================
-   Left Column: Interactive Dimensional Realm Explorer
-   ========================================================================== */
-
 .about-explorer {
     display: flex;
     flex-direction: column;
@@ -176,10 +172,6 @@
     margin: 0;
 }
 
-/* ==========================================================================
-   Right Column: 3D Flipping Mascot Dossier / Washi-taped Polaroid
-   ========================================================================== */
-
 .about-image {
     display: flex;
     justify-content: center;
@@ -192,7 +184,6 @@
     perspective: 1200px;
 }
 
-/* Strip of translucent yellow washi tape pinning Mika's card up */
 .mika-dossier::before {
     content: '';
     position: absolute;
@@ -360,7 +351,6 @@
     transform: scale(1.05);
 }
 
-/* Back face: Anime Character Sheet (設定資料) */
 .mika-face--back {
     display: flex;
     flex-direction: column;
@@ -840,20 +830,13 @@
     gap: 24px;
 }
 
-/* The header sits right on top of the years, so the badges' strings run up to
-   the subtitle. */
 .section-header.con-header--badges {
     margin-bottom: 0;
 }
 
-/* The Con's years as convention badges strung from the subtitle, newest to
-   oldest. The chosen badge drops lower and hangs straight; the rest tilt on
-   their clips. Selection is styled off aria-selected so the look and the
-   announced state can't drift. */
 .con-years {
     overflow-x: auto;
     scrollbar-width: none;
-    /* Room for the dropped badge and its shadow, which the scroll box clips. */
     padding-bottom: 26px;
 }
 
@@ -957,7 +940,6 @@
     outline-offset: 3px;
 }
 
-/* The punched slot the clip goes through. */
 .con-badge-slot {
     width: 24px;
     height: 5px;
@@ -1005,7 +987,6 @@
     background-clip: text;
 }
 
-/* Stuck on the corner of a Con still to come. */
 .con-badge-sticker {
     position: absolute;
     top: 16px;
@@ -1028,7 +1009,6 @@
     color: #1d7a3c;
 }
 
-/* The banner slides in from the side the chosen year hangs on. */
 .con-edition-panel {
     overflow: hidden;
 }
@@ -1066,7 +1046,6 @@
 }
 
 @media (max-width: 600px) {
-    /* Faded at both ends, so badges running off the edge read as scrollable. */
     .con-years {
         -webkit-mask-image: linear-gradient(to right, transparent, black 18px, black calc(100% - 18px), transparent);
         mask-image: linear-gradient(to right, transparent, black 18px, black calc(100% - 18px), transparent);
@@ -1107,9 +1086,6 @@
     }
 }
 
-/* One year of the Con: its poster taped up like a flyer beside the year's
-   details, which stand alone and centered when there's no poster. Stacked, poster
-   first, on a narrow screen. */
 .convention-banner.con-edition-panel {
     padding: 56px;
 }
@@ -1143,7 +1119,6 @@
     transform: rotate(0deg) translateY(-4px);
 }
 
-/* A strip of washi tape holding it up. */
 .con-edition-poster::before {
     content: '';
     position: absolute;
@@ -1198,7 +1173,6 @@
     background-clip: text;
 }
 
-/* Date and place, like the stub of a ticket. */
 .con-edition-facts {
     display: grid;
     margin: 0;
@@ -1269,7 +1243,6 @@
     font-size: 15px;
 }
 
-/* Through to /con for the Con to come, or a past year's recap. */
 .con-edition-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1447,10 +1420,6 @@
     color: var(--color-text-secondary);
     font-weight: 500;
 }
-
-/* ==========================================================================
-   Bottom Perforated Ticket Strip: Social Portals
-   ========================================================================== */
 
 .about-follow {
     margin-top: 52px;

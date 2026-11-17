@@ -66,8 +66,6 @@
     text-decoration: underline;
 }
 
-/* Sign in with Sekai Beyond (/authorize): what the app will see, and switching account. */
-/* The app's own icon, over its name on the sign-in page, as its tile is in Settings. */
 .authorize-app-icon {
     display: block;
     width: 64px;
@@ -105,7 +103,6 @@
     cursor: pointer;
 }
 
-/* Continue while it waits on the server: lit, with a spinner, and no longer lifting to a pointer. */
 .profile-sign-in-btn[aria-disabled="true"],
 .profile-sign-in-btn[aria-disabled="true"]:hover {
     transform: none;
@@ -228,12 +225,6 @@
     text-decoration: none;
 }
 
-/* ==========================================================================
-   /profile — a member card on top (banner, photo, name, counts, tabs), then a
-   card per collection. A collection with nothing to show shrinks to a single
-   note, and a brand-new account gets one welcome card instead of all three.
-   ========================================================================== */
-
 .profile-page {
     --profile-rule: rgba(255, 107, 157, 0.12);
     --profile-rule-strong: rgba(255, 107, 157, 0.28);
@@ -244,8 +235,6 @@
     padding: 100px 20px 60px;
 }
 
-/* --- Header: the member card ---------------------------------------------- */
-
 .profile-hero {
     background: rgba(255, 255, 255, 0.9);
     border: 1px solid var(--profile-rule);
@@ -253,10 +242,6 @@
     box-shadow: var(--shadow-card);
 }
 
-/* Rounds its own corners rather than the card clipping, so the photo's tooltip
-   can spill out. Same height with or without an image: on the widest card it
-   matches BANNER_ASPECT in profile.tsx, and narrower screens trim the sides.
-   The gradient shows while an image loads. */
 .profile-hero-banner {
     position: relative;
     height: 96px;
@@ -274,8 +259,6 @@
     border-radius: inherit;
 }
 
-/* Wait for a hover, like the photo's camera; a phone has none, so there they
-   stay out. */
 .profile-banner-actions {
     position: absolute;
     top: 12px;
@@ -355,7 +338,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     padding: 14px 32px 24px;
 }
 
-/* The photo sits half on the banner. */
 .profile-hero-body .profile-avatar-wrapper {
     margin-top: -70px;
 }
@@ -372,7 +354,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     flex-shrink: 0;
 }
 
-/* Opaque, so the banner doesn't show through the half that overlaps it. */
 .profile-avatar-initials {
     display: flex;
     align-items: center;
@@ -427,7 +408,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     overflow-wrap: anywhere;
 }
 
-/* The counts, across the foot of the card. */
 .profile-stats {
     display: grid;
     grid-auto-flow: column;
@@ -467,7 +447,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: var(--color-text-muted);
 }
 
-/* Profile / Settings, as tabs along the bottom edge of the card. */
 .profile-tabs {
     display: flex;
     gap: 4px;
@@ -563,7 +542,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     text-align: center;
 }
 
-/* A redeemed passport's cover, in the usual 3/4. */
 .redeem-passport-cover {
     display: flex;
     align-items: center;
@@ -584,7 +562,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     object-fit: cover;
 }
 
-/* What the slip was worth, at the size of a payoff. */
 .redeem-grant {
     display: flex;
     flex-direction: column;
@@ -614,8 +591,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     margin: 12px 0 0;
 }
 
-/* An emailed passport about to go on an account with another address: both
-   addresses, why it matters, and a tick before it can go ahead. */
 .redeem-mismatch-lead {
     margin-bottom: 14px;
     overflow-wrap: anywhere;
@@ -658,9 +633,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     accent-color: var(--color-purple);
 }
 
-/* --- Collections ----------------------------------------------------------- */
-
-/* The tickets card and the collections stack here as siblings. */
 .profile-tab-body {
     display: flex;
     flex-direction: column;
@@ -714,8 +686,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     text-align: center;
 }
 
-/* A section's single line instead of its grid: icon, words, and a button when
-   there's something to do. */
 .profile-card-note {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -747,7 +717,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     font-size: 20px;
 }
 
-/* Private, failed, or someone else's empty section — nothing for the viewer to do. */
 .profile-icon-tile--muted {
     background: rgba(160, 168, 184, 0.14);
     color: var(--color-text-light);
@@ -758,7 +727,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     align-items: center;
     justify-content: center;
     padding: 8px 18px;
-    /* The fallback for outside .profile-page, as on an account's Connected Accounts in the admin panel. */
     border: 2px solid var(--profile-rule-strong, rgba(255, 107, 157, 0.28));
     border-radius: 999px;
     background: white;
@@ -783,8 +751,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     outline-offset: 2px;
 }
 
-/* --- Welcome: a brand-new account's three ways in -------------------------- */
-
 .profile-welcome {
     position: relative;
     overflow: hidden;
@@ -795,8 +761,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     box-shadow: var(--shadow-card);
 }
 
-/* Faint rings from the top corner, the passport data page's security-print
-   motif. */
 .profile-welcome::before {
     content: '';
     position: absolute;
@@ -836,7 +800,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     list-style: none;
 }
 
-/* Dashed, like a slot waiting to be filled in. */
 .profile-welcome-step {
     display: flex;
     flex-direction: column;
@@ -869,7 +832,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     margin-top: 6px;
 }
 
-/* Too narrow for three across: stack the steps, each with its icon beside it. */
 @media (max-width: 760px) {
     .profile-welcome-steps {
         grid-template-columns: minmax(0, 1fr);
@@ -892,8 +854,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         justify-self: start;
     }
 }
-
-/* --- Badges ---------------------------------------------------------------- */
 
 .badge-grid {
     display: flex;
@@ -951,7 +911,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     outline-offset: 3px;
 }
 
-/* Names get two lines before they're cut; the tooltip and modal show the rest. */
 .badge-label {
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -1123,15 +1082,12 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     text-decoration: underline;
 }
 
-/* --- Events ---------------------------------------------------------------- */
-
 .profile-event-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 14px;
 }
 
-/* Outlined rather than shadowed — it already sits on a card. */
 .profile-event-card {
     position: relative;
     display: flex;
@@ -1212,8 +1168,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     visibility: hidden;
 }
 
-/* A year's Sekai Beyond Con: the brand gradient for its edge and year chip,
-   over a faint warm wash. */
 .profile-event-card--con {
     border-color: transparent;
     background: linear-gradient(135deg, rgba(255, 107, 157, 0.06), rgba(255, 142, 83, 0.06)) padding-box,
@@ -1230,7 +1184,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: #fff;
 }
 
-/* Two lines, then an ellipsis; `anywhere` breaks an over-long word. */
 .profile-event-title {
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -1245,7 +1198,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     margin-bottom: 2px;
 }
 
-/* Inline, so it counts toward the two-line clamp. */
 .profile-event-title-link {
     display: inline;
     color: inherit;
@@ -1263,15 +1215,12 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: var(--color-text-light);
 }
 
-/* --- Tickets ---------------------------------------------------------------- */
-
 .profile-ticket-events {
     display: flex;
     flex-direction: column;
     gap: 22px;
 }
 
-/* One event's worth of stubs, ruled off from the next. */
 .profile-ticket-event + .profile-ticket-event {
     padding-top: 22px;
     border-top: 1px dashed var(--profile-rule-strong);
@@ -1324,8 +1273,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     gap: 10px;
 }
 
-/* A row, not a card: the code is behind a tap. Inert by default, since a
-   scanned ticket has nothing to open; the pressable look is on the modifier. */
 .profile-ticket {
     display: flex;
     align-items: center;
@@ -1339,7 +1286,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     text-align: left;
 }
 
-/* Carries a code worth opening. */
 .profile-ticket--tappable {
     cursor: pointer;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
@@ -1360,7 +1306,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     border-style: dashed;
 }
 
-/* The one piece the row and the opened ticket share. */
 .profile-ticket-type {
     flex-shrink: 0;
     padding: 3px 12px;
@@ -1389,7 +1334,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: var(--color-error);
 }
 
-/* "There is a code behind this", or on a spent row, what became of it. */
 .profile-ticket-open {
     display: flex;
     flex-shrink: 0;
@@ -1416,9 +1360,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: var(--color-text-light);
 }
 
-/* --- One ticket, opened to be scanned -------------------------------------- */
-
-/* On the shared .modal-overlay; white, as the code's quiet zone. */
 .profile-ticket-modal {
     position: relative;
     display: flex;
@@ -1436,14 +1377,12 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     text-align: center;
 }
 
-/* The page's own ring: it's focused first, so always on show. */
 .profile-ticket-modal .modal-close:focus-visible {
     outline: 3px solid rgba(255, 107, 157, 0.45);
     outline-offset: 2px;
     border-radius: 6px;
 }
 
-/* Clear of the close button in the corner. */
 .profile-ticket-modal-event {
     max-width: 100%;
     padding: 0 26px;
@@ -1454,7 +1393,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     overflow-wrap: anywhere;
 }
 
-/* As large as the screen allows; the code includes its 4-module quiet zone. */
 .profile-ticket-modal-qr {
     position: relative;
     width: min(84vw, 366px);
@@ -1467,14 +1405,11 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     height: auto;
 }
 
-/* A voided code stays visible (staff read out the id under it) but stamped and
-   faded so it can't pass for valid. */
 .profile-ticket-modal--void .profile-ticket-modal-qr > svg {
     opacity: 0.18;
     filter: grayscale(1);
 }
 
-/* Solid enough to read across a crowded doorway. */
 .profile-ticket-stamp {
     position: absolute;
     top: 50%;
@@ -1511,8 +1446,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: var(--color-error);
 }
 
-/* --- Group chip and membership --------------------------------------------- */
-
 .profile-group-tag {
     display: inline-block;
     padding: 4px 14px;
@@ -1522,10 +1455,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     letter-spacing: 0.3px;
 }
 
-/* Group tag colors are in components.css */
-
-/* Blue, like the admin member tag and unlike any group tint, so it never reads
-   as a group. */
 .profile-member-chip {
     display: inline-flex;
     align-items: center;
@@ -1547,8 +1476,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: #1e88e5;
 }
 
-/* --- Photo and name editing ------------------------------------------------ */
-
 .profile-avatar-wrapper {
     position: relative;
     flex-shrink: 0;
@@ -1558,8 +1485,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     cursor: pointer;
 }
 
-/* Square to the photo, not the wrapper, which grows on a phone when the hint
-   drops in. */
 .profile-avatar-overlay,
 .profile-avatar-hint-overlay {
     position: absolute;
@@ -1618,7 +1543,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     stroke: #fff;
 }
 
-/* The button only renders when the photo is removable, so any wrapper hover reveals it. */
 .profile-avatar-wrapper:hover .profile-avatar-delete,
 .profile-avatar-delete:focus-visible {
     opacity: 1;
@@ -1782,7 +1706,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         overflow-x: hidden;
     }
 
-    /* The member card stands on end: photo, then name, centred. */
     .profile-hero {
         border-radius: 20px;
     }
@@ -1808,7 +1731,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         display: none;
     }
 
-    /* The hint under the photo already says a banner needs a membership. */
     .profile-banner-btn--locked {
         display: none;
     }
@@ -1880,7 +1802,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         gap: 16px;
     }
 
-    /* One ticket per row on a phone, where they're opened. */
     .profile-ticket-grid {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -1909,7 +1830,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         padding: 16px 18px;
     }
 
-    /* The button drops under the words, lined up with them. */
     .profile-card-note {
         grid-template-columns: auto minmax(0, 1fr);
     }
@@ -1942,7 +1862,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         height: 64px;
     }
 
-    /* A tap opens the badge's modal; there is no hover to preview it with. */
     .badge-tooltip {
         display: none !important;
     }
@@ -1955,7 +1874,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         opacity: 1;
     }
 
-    /* No hover, so the camera stays out as a small button on the photo's edge. */
     .profile-avatar-overlay {
         inset: auto 0 2px auto;
         width: 34px;
@@ -1981,7 +1899,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         display: none;
     }
 
-    /* No hover, so the hint shows under the photo, overflowing it evenly. */
     .profile-avatar-nonmember-hint {
         display: flex;
         flex-direction: column;
@@ -2002,7 +1919,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         pointer-events: auto;
     }
 }
-
 
 .policy-page {
     padding-top: 80px;
@@ -2142,7 +2058,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-/* Only where the column sets no alignment, or this would override it. */
 .policy-text th:not([align]) {
     text-align: left;
 }

@@ -1,4 +1,3 @@
-/** One figure in an `admin-stats-tiles` row. */
 export function StatTile({label, value, sub}: {
     label: string;
     value: number | string;

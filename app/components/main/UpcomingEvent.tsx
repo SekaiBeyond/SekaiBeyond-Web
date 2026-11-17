@@ -21,7 +21,6 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
     const [isInProgress, setIsInProgress] = useState(false);
 
     useEffect(() => {
-        // To the start, then while it's on, to the end.
         const calculateTimeLeft = () => {
             const now = Date.now();
             const startTime = event.startAt.getTime();

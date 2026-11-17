@@ -5,10 +5,6 @@ import { QrPreview, useQrDownload } from './qrExport';
 
 const QR_SIZE = 280;
 
-/**
- * A throwaway generator: a URL straight into a QR, with no record and no
- * tracking. Use a tracked code for date windows or scan counts.
- */
 export const QuickQrGenerator = () => {
     const {isEnglish} = useLanguage();
     const [url, setUrl] = useState('');

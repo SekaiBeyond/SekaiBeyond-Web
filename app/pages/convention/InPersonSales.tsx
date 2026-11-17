@@ -5,11 +5,6 @@ import { useNowAcross } from '~/pages/convention/hooks';
 import { useT } from '~/pages/convention/i18n';
 import { formatClockTime, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/convention/utils';
 
-/**
- * The in-person ticket table under the ticket cards: another way to buy, so no
- * nav link. Each session drops off once it closes, and the block with the last,
- * live on an open page.
- */
 export const InPersonSales = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
@@ -27,12 +22,9 @@ export const InPersonSales = () => {
     });
     const now = useNowAcross(timed.flatMap(entry => entry.iso));
 
-    // An unparseable time reads as closed.
     const upcoming = timed.filter(({closes}) => Number.isFinite(closes) && now < closes);
     if (upcoming.length === 0) return null;
 
-    // With no online fee on any tier's regular price, there's nothing to save in
-    // person.
     const skipsFee = tickets.some(tier => ticketFeeFor(tier.price, ticketFee) > 0);
 
     return (

@@ -15,7 +15,6 @@ const SOUNDS: Record<ScanOutcome, Tone[]> = {
         {freq: 880, at: 0, length: 0.09, wave: 'sine', volume: 0.6},
         {freq: 1320, at: 0.11, length: 0.15, wave: 'sine', volume: 0.6},
     ],
-    // Square wave so phone speakers carry the 220 Hz low double buzz via overtones.
     issue: [
         {freq: 220, at: 0, length: 0.18, wave: 'square', volume: 0.3},
         {freq: 220, at: 0.24, length: 0.18, wave: 'square', volume: 0.3},
@@ -43,13 +42,11 @@ export function useScanSound(): ScanSoundControls {
 
     const wake = useCallback((): AudioContext | null => {
         if (typeof AudioContext === 'undefined') return null;
-        // Safari defaults to 'ambient', which the silent switch mutes.
         const session = audioSession();
         if (session && session.type !== 'playback') session.type = 'playback';
         const ctx = ctxRef.current ??= new AudioContext();
         if (ctx.state !== 'running') {
             void ctx.resume();
-            // Older iOS stays locked until something actually plays in the gesture.
             const blip = ctx.createBufferSource();
             blip.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
             blip.connect(ctx.destination);
@@ -86,8 +83,6 @@ export function useScanSound(): ScanSoundControls {
 
     const play = useCallback((outcome: ScanOutcome) => {
         const ctx = ctxRef.current;
-        // Not running: no tap yet, or iOS interrupted it. A queued beep would
-        // sound at the next tap, long after the scan.
         if (!enabledRef.current || ctx?.state !== 'running') return;
         playTones(ctx, outcome);
     }, []);
@@ -103,7 +98,6 @@ export function useScanVibration(): ScanVibrationControls {
     const [enabled, store] = useDeviceSetting('ticketScanVibrate');
     const [supported, setSupported] = useState(false);
 
-    // Desktop Chrome exposes navigator.vibrate without a motor; coarse pointer identifies handhelds.
     useEffect(() => {
         setSupported('vibrate' in navigator && matchMedia('(pointer: coarse)').matches);
     }, []);
@@ -153,7 +147,6 @@ function playTones(ctx: AudioContext, outcome: ScanOutcome) {
     }
 }
 
-/** Safari's Audio Session API; other browsers don't have it. */
 function audioSession(): {type: string} | undefined {
     return (navigator as Navigator & {audioSession?: {type: string}}).audioSession;
 }

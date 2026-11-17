@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FirebaseError } from 'firebase/app';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -28,6 +28,7 @@ import { ImageUploadField } from '../ImageUploadField';
 import { UserAvatar } from '../UserRow';
 import { UserSearchAdd } from '../UserSearchAdd';
 import type { ShowToast } from '../utils';
+import { RefreshButton, ToolHeader, useToolLoader } from '../ToolHeader';
 
 interface AppsToolProps {
     onBack: () => void;
@@ -67,7 +68,6 @@ const KEY_SCOPE_LABELS: Record<ApiScope, {en: string; zh: string; descEn: string
     },
 };
 
-/** What a new key may do unless unticked: everything, but linking accounts only for an app that does. */
 const defaultKeyScopes = (app: AppSummary | null): ApiScope[] =>
     API_SCOPES.filter(scope => scope !== 'account-links' || !!app?.accountLinking);
 
@@ -78,7 +78,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const isExpired = (k: ApiKeySummary, now: number): boolean =>
     !!k.expiresAt && Date.parse(k.expiresAt) <= now;
 
-/** The expiry option a key was made with, or the default when it matches none. */
 const lifetimeOption = (k: ApiKeySummary): number => {
     if (!k.createdAt || !k.expiresAt) return DEFAULT_EXPIRY_DAYS;
     const days = Math.round((Date.parse(k.expiresAt) - Date.parse(k.createdAt)) / DAY_MS);
@@ -95,9 +94,7 @@ interface Draft {
     serviceAccount: string;
     accountLinking: boolean;
     platform: AppPlatform;
-    /** The icon it's saved with unless one is chosen: its own, or "" once removed. */
     iconUrl: string;
-    /** An icon chosen, uploaded when it's saved, and its preview until then. */
     icon: {file: File; preview: string} | null;
 }
 
@@ -115,16 +112,13 @@ const EMPTY_DRAFT: Draft = {
     icon: null,
 };
 
-/** An app icon's size in pixels: twice the 44px Settings shows it at, and more than the sign-in page's 64. */
 const ICON_SIZE = 256;
 
 const redirectLines = (text: string) => text.split('\n').map(line => line.trim()).filter(Boolean);
 
-/** An app's creator or maintainer: their photo and name, marked when their account is gone. */
 const PersonChip = ({person, isEnglish, onRemove, removeDisabled}: {
     person: AppPerson;
     isEnglish: boolean;
-    /** Shows a remove button, in the form. */
     onRemove?: () => void;
     removeDisabled?: boolean;
 }) => {
@@ -152,34 +146,22 @@ const PersonChip = ({person, isEnglish, onRemove, removeDisabled}: {
     );
 };
 
-/**
- * Apps (functions/src/utils/apps.ts) and their server API keys
- * (functions/src/utils/apiKeys.ts): registering an app gives it an ID, which
- * the server makes, up to APP_MAINTAINERS_MAX maintainers, optional sign-in
- * with accounts here, and server-to-server keys for the ticket API under that
- * app. Each card shows who registered the app and who looks after it.
- */
 export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const {isEnglish} = useLanguage();
     const {upcomingEvents} = useAllUpcomingEvents();
-    // A key held to an event keeps it once the event is archived.
     const {pastEvents} = usePastEvents();
 
     const [apps, setApps] = useState<AppSummary[] | null>(null);
     const [signer, setSigner] = useState('');
     const [serverNow, setServerNow] = useState(() => Date.now());
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
 
     const [showForm, setShowForm] = useState(false);
-    // The app being changed, or null for a new one.
     const [editing, setEditing] = useState<AppSummary | null>(null);
     const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
     const [saving, setSaving] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const formRef = useRef<HTMLDivElement>(null);
 
-    // Per-app API key creation / re-creation.
     const [keyAppId, setKeyAppId] = useState<string | null>(null);
     const [keyName, setKeyName] = useState('');
     const [keyScopes, setKeyScopes] = useState<ApiScope[]>(defaultKeyScopes(null));
@@ -188,38 +170,23 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const [expiresInDays, setExpiresInDays] = useState(DEFAULT_EXPIRY_DAYS);
     const [creatingKey, setCreatingKey] = useState(false);
     const [recreatingKey, setRecreatingKey] = useState<ApiKeySummary | null>(null);
-    // The new key, shown this once: only its hash is kept.
     const [created, setCreated] = useState<{name: string; appName: string; key: string} | null>(null);
     const createdRef = useRef<HTMLDivElement>(null);
 
-    // One key renamed or revoked at a time.
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [renameDraft, setRenameDraft] = useState('');
     const [savingRename, setSavingRename] = useState(false);
     const [revokingId, setRevokingId] = useState<string | null>(null);
 
-    const load = useCallback(async (notify: boolean) => {
-        setLoading(true);
-        try {
-            const res = await callListApps();
-            setApps(res.data.apps);
-            setSigner(res.data.signer);
-            setServerNow(Date.parse(res.data.serverNow) || Date.now());
-            setError(false);
-            if (notify) showToast(isEnglish ? 'Apps refreshed.' : '应用已刷新。', 'success');
-        } catch (err) {
-            console.error('[AppsTool] load', err);
-            setError(true);
-            if (notify) showToast(isEnglish ? 'Could not load apps.' : '无法加载应用。', 'error');
-        } finally {
-            setLoading(false);
-        }
-    }, [isEnglish, showToast]);
-
-    useEffect(() => {
-        // On mount only; refresh is manual, and a language toggle shouldn't refetch.
-        void load(false);
-    }, []);
+    const {loading, error, load} = useToolLoader(callListApps, data => {
+            setApps(data.apps);
+            setSigner(data.signer);
+            setServerNow(Date.parse(data.serverNow) || Date.now());
+        },
+        {
+            refreshed: {en: 'Apps refreshed.', zh: '应用已刷新。'},
+            failed: {en: 'Could not load apps.', zh: '无法加载应用。'}
+        }, showToast);
 
     useEffect(() => {
         if (editing) formRef.current?.scrollIntoView({block: 'start', behavior: 'smooth'});
@@ -294,7 +261,6 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
             let iconUrl = draft.iconUrl;
             if (draft.icon) {
                 iconUrl = await callUploadAdminImage(draft.icon.file, `apps/${crypto.randomUUID()}.webp`);
-                // Kept as uploaded, so trying again after a failed save doesn't upload it again.
                 URL.revokeObjectURL(draft.icon.preview);
                 setDraft(prev => ({...prev, iconUrl, icon: null}));
             }
@@ -369,8 +335,6 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
         setRecreatingKey(null);
     };
 
-    // A key itself isn't kept, so re-creating one makes a new key with its
-    // settings under the same app (so it still finds orders placed before).
     const startRecreateKey = (k: ApiKeySummary) => {
         setKeyAppId(k.appId);
         setKeyName(k.name);
@@ -510,7 +474,6 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
         ...(recreatingKey?.eventIds ?? []).filter(id => !upcomingEvents.some(e => e.id === id)),
     ];
 
-    // What the app's maintainers run once, on its project, so its sign-ins can be made here.
     const grants = (app: AppSummary) => signer ? [
         `gcloud iam service-accounts add-iam-policy-binding ${app.serviceAccount} --member="serviceAccount:${signer}" --role="roles/iam.serviceAccountTokenCreator" --project=${app.firebaseProjectId}`,
         `gcloud projects add-iam-policy-binding ${app.firebaseProjectId} --member="serviceAccount:${signer}" --role="roles/firebaseauth.admin"`,
@@ -518,20 +481,11 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
 
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
-                    {isEnglish ? '← Back to Tools' : '← 返回工具'}
-                </button>
-                <h3 className="admin-tools-title">{isEnglish ? 'Apps' : '应用'}</h3>
-                <button
-                    className="admin-toggle-btn admin-toggle-edit admin-quota-refresh"
-                    onClick={() => void load(true)}
-                    disabled={loading}
-                    type="button"
-                >
-                    {loading ? (isEnglish ? 'Loading...' : '加载中...') : (isEnglish ? 'Refresh' : '刷新')}
-                </button>
-            </div>
+            <ToolHeader title={isEnglish ? 'Apps' : '应用'} back={isEnglish ? 'Back to Tools' : '返回工具'}
+                        onBack={onBack}>
+                <RefreshButton className="admin-toggle-btn admin-toggle-edit admin-quota-refresh"
+                               onClick={() => load(true)} busy={loading}/>
+            </ToolHeader>
 
             <p className="admin-helper-text admin-section-mb">
                 {isEnglish

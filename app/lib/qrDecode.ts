@@ -3,7 +3,6 @@ interface QrPoint {
     y: number;
 }
 
-/** A code's corners, clockwise from top-left, in the pixels of the frame it was found in. */
 export type QrCorners = [QrPoint, QrPoint, QrPoint, QrPoint];
 
 interface JsQRLocation {
@@ -32,7 +31,6 @@ export function loadJsQR(): Promise<JsQRFn> {
     return jsQRModule;
 }
 
-// Try smaller resolutions first since jsQR is slow on 12MP photos; larger sizes catch small corner codes.
 const DECODE_SIZES = [800, 1600, 3200];
 
 export interface QrRect {
@@ -49,10 +47,6 @@ interface QrRead {
     bounds: QrRect;
 }
 
-/**
- * Decodes a QR code from an image blob. Draws on a white background with a quiet-zone
- * margin so transparent PNGs and tightly cropped codes still decode.
- */
 export async function decodeQrImage(image: Blob): Promise<QrRead | null> {
     const jsQR = await loadJsQR();
     const bitmap = await createImageBitmap(image);
@@ -103,10 +97,8 @@ export function snapshotAround(
     const xs = corners.map(p => p.x);
     const ys = corners.map(p => p.y);
     const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    // The code with most of its own size again around it, widened to the aspect.
     const cropH = Math.max(maxX - minX, maxY - minY) * 1.9;
     const cropW = cropH * SNAPSHOT_ASPECT;
-    // Slide the crop back inside the image where it fits, so less of it is backdrop.
     const fit = (start: number, size: number, lo: number, span: number) =>
         size >= span ? lo + (span - size) / 2 : Math.min(Math.max(start, lo), lo + span - size);
     const x = fit((minX + maxX - cropW) / 2, cropW, bounds.x, bounds.width);
@@ -120,7 +112,6 @@ export function snapshotAround(
     ctx.fillStyle = backdrop;
     ctx.fillRect(0, 0, out.width, out.height);
     ctx.imageSmoothingQuality = 'high';
-    // Draw only where the crop overlaps the image.
     const sx = Math.max(x, bounds.x);
     const sy = Math.max(y, bounds.y);
     const sw = Math.min(x + cropW, bounds.x + bounds.width) - sx;

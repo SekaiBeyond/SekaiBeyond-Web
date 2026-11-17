@@ -10,18 +10,11 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 
-/**
- * A Firestore Timestamp field as a Date, or null when absent or not a Timestamp.
- */
 export const toDate = (v: unknown): Date | null =>
     v && typeof (v as {toDate?: () => Date}).toDate === 'function'
         ? (v as {toDate: () => Date}).toDate()
         : null;
 
-/**
- * The docs in `collectionName` with these ids, read in chunks for `in`'s 30-id
- * limit. An id with no doc is left out.
- */
 export async function getDocsByIds(collectionName: string, ids: string[]): Promise<QueryDocumentSnapshot[]> {
     const unique = [...new Set(ids)];
     const col = collection(getFirebaseDb(), collectionName);
@@ -31,10 +24,6 @@ export async function getDocsByIds(collectionName: string, ids: string[]): Promi
     return snaps.flatMap(snap => snap.docs);
 }
 
-/**
- * Module-level read-through cache shared across subscribers; `enabled: false`
- * defers fetching and returns `initialValue`.
- */
 interface ValueCache<T> {
     useValue: (enabled?: boolean) => {value: T; loading: boolean; error: unknown; refresh: () => Promise<void>};
     refresh: () => Promise<T>;
@@ -72,8 +61,6 @@ export function createValueCache<T>(
             for (const fn of subscribers) fn(value, null);
             return value;
         } catch (err) {
-            // Subscribers with a value keep it; only a cache that never loaded falls
-            // back.
             if (cached === null) for (const fn of subscribers) fn(initialValue, err);
             throw err;
         }
@@ -92,8 +79,6 @@ export function createValueCache<T>(
                 : {value: initialValue, error: null, settled: false}),
         );
 
-        // Derived, not stored: `enabled` can turn true a render before the fetch
-        // starts, and a stored flag would read false in that gap.
         const loading = enabled && !state.settled;
 
         useEffect(() => {

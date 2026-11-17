@@ -5,17 +5,12 @@ import type { ShowToast } from '../utils';
 
 interface SettingsSectionProps {
     eventId: string;
-    /** Null while the setting loads. */
     admitUnlisted: boolean | null;
     onAdmitUnlistedChange: (enabled: boolean) => void;
     readOnly: boolean;
     showToast: ShowToast;
 }
 
-/**
- * How the event's door runs, kept apart from importing: whether a HomeTown
- * ticket missing from the imported list is let in.
- */
 export function SettingsSection({
                                     eventId,
                                     admitUnlisted,

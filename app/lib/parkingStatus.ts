@@ -1,32 +1,17 @@
 import type { ClockRange, UwEventPricing, UwLot } from './uwParking';
 
-/**
- * What parking at a UW lot is like over a stretch of one day: the status behind the
- * guide's pins, pills and filters, kept free of the page and of language.
- *
- * UW lists two windows a day per lot: when a permit is required, and when a visitor
- * can pay instead. Outside the permit window parking is free; inside it but outside
- * the pay window, it's permits only. Sundays have neither, a window past midnight
- * carries into the next morning, and a day on UW's event-parking calendar replaces
- * both with a flat rate. UW's holidays aren't in its data, so on one the guide may
- * say pay when it's free.
- */
-
 export type Segment = 'free' | 'pay' | 'permit';
 
 type StatusKind = 'free' | 'part' | 'paid' | 'permit' | 'event';
 
 interface Stretch {
     segment: Segment;
-    /** Minutes since midnight on the site clock; end is at most 1440. */
     start: number;
     end: number;
 }
 
 export interface ParkingWindow {
-    /** YYYY-MM-DD on the site clock. */
     date: string;
-    /** Minutes since midnight on the site clock, start < end ≤ 1440. */
     start: number;
     end: number;
     isNow: boolean;
@@ -43,7 +28,6 @@ export interface LotStatus {
     phrase: StatusPhrase;
     isNow: boolean;
     pricing: UwEventPricing | null;
-    /** 0 = Sunday … 6 = Saturday. */
     dow: number;
     day: Stretch[];
 }
@@ -60,11 +44,6 @@ const dayOfWeek = (date: string): number => {
     return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 };
 
-/**
- * UW writes 24 hours as 00:00–00:00, and an end of 00:00 is midnight closing the
- * day. Windows past midnight are clipped to `DAY_MINUTES`; `pastMidnight` returns
- * the carry-over into the next morning.
- */
 function windowMinutes(range: ClockRange | null): [number, number] | null {
     if (!range) return null;
     const start = clockMinutes(range.start);
@@ -127,7 +106,6 @@ export function lotStatus(lot: UwLot, window: ParkingWindow, pricing: UwEventPri
     const event = eventPricingFor(lot, window, pricing);
     if (event) return {...base, kind: 'event', phrase: {key: 'event', price: event.price}, pricing: event};
 
-    // For `isNow`, look ahead to midnight so the phrase can report the next transition.
     const stretches = clip(day, window.start, window.isNow ? DAY_MINUTES : window.end);
     const [first, second] = stretches;
     const allDayPay = day.length === 1 && day[0].segment === 'pay';
@@ -142,10 +120,6 @@ export function lotStatus(lot: UwLot, window: ParkingWindow, pricing: UwEventPri
     return status(stretches.some(s => s.segment === 'pay') ? 'part' : 'permit', phrase);
 }
 
-/**
- * UW visitor rate windows (transportation.uw.edu/park/visitor):
- * hourly/daily apply weekdays 6 am – 4 pm; night applies weekdays 4 – 9 pm and Saturdays 7 am – noon.
- */
 export const DAY_RATE_HOURS: [number, number] = [6 * 60, 16 * 60];
 export const NIGHT_RATE_HOURS = {weekday: [16 * 60, 21 * 60], saturday: [7 * 60, 12 * 60]} as const;
 

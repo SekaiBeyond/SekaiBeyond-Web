@@ -46,13 +46,8 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Points the site at the local emulators (Auth, Firestore and Functions on their
-// default ports), as npm run dev does through .env.emulator. App Check stays
-// off, and the emulated functions don't enforce it.
 export const USE_EMULATORS = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true';
 
-// Whether a URL is a file uploaded to Storage, rather than, say, a Google photo.
-// The Storage emulator serves its files from its own port.
 const STORAGE_HOST = USE_EMULATORS ? '127.0.0.1:9199' : 'firebasestorage.googleapis.com';
 export const isStorageUrl = (url: string | undefined) => url?.includes(STORAGE_HOST) ?? false;
 
@@ -68,8 +63,6 @@ function getFirebaseApp() {
         if (typeof window !== "undefined") {
             const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
-            // 'true' generates a debug token in the console; anything else is
-            // used as the token.
             if (import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN) {
                 (self as {FIREBASE_APPCHECK_DEBUG_TOKEN?: string | boolean}).FIREBASE_APPCHECK_DEBUG_TOKEN =
                     import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN === 'true'
@@ -112,10 +105,8 @@ function getFunctions() {
     return functions;
 }
 
-/** How many digits an emailed code has. Mirrors CODE_LENGTH in functions/src/utils/emailCodes.ts. */
 export const EMAIL_CODE_LENGTH = 8;
 
-/** Emails a code proving an address. Answers the same whether or not it has an account. */
 export const callSendEmailCode = (data: {
     purpose: 'signup' | 'password' | 'email-change';
     email: string;
@@ -136,7 +127,6 @@ export type GoogleSignIn =
     | {status: 'signed-in'; token: string}
     | {status: 'needs-account'; name: string; email: string; emailVerified: boolean; emailTaken: boolean};
 
-/** Signs in with a bound Google account, or says it needs an account made or bound first. */
 export const callSignInWithGoogle = (data: {idToken: string}) =>
     httpsCallable<typeof data, GoogleSignIn>(getFunctions(), 'signInWithGoogle')(data);
 
@@ -164,13 +154,10 @@ export const callUnbindGoogle = (data: {language: Language}) =>
 
 export interface SignInMethods {
     hasPassword: boolean;
-    /** The address of the bound Google account, or null with none bound. */
     googleEmail: string | null;
-    /** ISO time the address may next change, or null if it may now. */
     emailChangeAllowedAt: string | null;
 }
 
-/** How an account signs in: the caller's own, or anyone's for staff+. */
 export const callGetSignInMethods = (data: {uid?: string} = {}) =>
     httpsCallable<typeof data, SignInMethods>(getFunctions(), 'getSignInMethods')(data);
 
@@ -180,7 +167,6 @@ export const callChangePassword = (data: {code: string; password: string; langua
 export const callChangeEmail = (data: {email: string; code: string; language: Language}) =>
     httpsCallable<typeof data, {email: string}>(getFunctions(), 'changeEmail')(data);
 
-/** The "This wasn't me" link. Signs nobody in: the new password does that, once it's set. */
 export const callUndoEmailChange = (data: {token: string; password: string; language: Language}) =>
     httpsCallable<typeof data, {email: string}>(getFunctions(), 'undoEmailChange')(data);
 
@@ -193,13 +179,8 @@ export const callTouchSession = () =>
 export const callEndSession = (data: {sessionId: string}) =>
     httpsCallable<typeof data, {ended: boolean}>(getFunctions(), 'endSession')(data);
 
-/**
- * How long signing out waits to take this device off the device list. A call
- * that runs out still lands, as the request has already gone.
- */
 const END_OWN_SESSION_TIMEOUT_MS = 4_000;
 
-/** Takes this device off the device list, as signing out does. */
 export const callEndOwnSession = () =>
     httpsCallable<Record<string, never>, {ended: boolean}>(getFunctions(), 'endSession', {
         timeout: END_OWN_SESSION_TIMEOUT_MS,
@@ -240,11 +221,6 @@ type RedeemResult =
     coverImageUrl: string;
 };
 
-/**
- * `confirmEmailMismatch` activates an emailed passport on an account with
- * another address, refused once as "email-mismatch" with the masked address it
- * went to and the account's.
- */
 export const callRedeemCode = (data: {code: string; confirmEmailMismatch?: boolean}) =>
     httpsCallable<typeof data, RedeemResult>(getFunctions(), 'redeemCode')(data);
 
@@ -278,11 +254,9 @@ export const callCancelBadgeDeletion = (data: {badgeId: string}) =>
 export const callChangeUserGroup = (data: {targetUid: string; newGroup: string; title?: string; titleCn?: string}) =>
     httpsCallable<typeof data, {oldGroup: string; newGroup: string}>(getFunctions(), 'changeUserGroup')(data);
 
-// Exactly one of expiresAt (ISO date, or null to revoke) and extendDays per call.
 export const callSetMembership = (data: {targetUid: string; expiresAt?: string | null; extendDays?: number}) =>
     httpsCallable<typeof data, {membershipExpiresAt: string | null}>(getFunctions(), 'setMembership')(data);
 
-/** No `until` (or null) bans until lifted. Banning someone already banned sets new terms. */
 export const callBanUser = (data: {targetUid: string; until?: string | null; reason?: string}) =>
     httpsCallable<typeof data, {ban: {at: string; until: string | null; reason: string; byName: string}}>(
         getFunctions(), 'banUser',
@@ -297,11 +271,9 @@ export const callSetUserTitle = (data: {targetUid: string; title?: string; title
 export const callSavePastEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; tagIds: string[]; date: string;
-    /** Its venue, and which of its rooms it's in, if any. */
     venueId: string; roomIds: string[];
     description: string; descriptionCn: string; icon: string;
     recapLink: string; recapLinkCn: string;
-    /** Marks it as its date's year's Sekai Beyond Con. */
     con: boolean;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'savePastEvent')(data);
 
@@ -311,13 +283,11 @@ export const callSetPastEventPublished = (data: {eventId: string; published: boo
 export const callSaveUpcomingEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; description: string; descriptionCn: string;
-    /** Its venue, and which of its rooms it's in, if any. */
     venueId: string; roomIds: string[]; startAt: string; endAt: string;
     poster: string; emailHeaderBg: string; posterCredit: string;
     buyTicket: string; learnMore: string;
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;
     paid: boolean;
-    /** Marks it as its start's year's Sekai Beyond Con. */
     con: boolean;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'saveUpcomingEvent')(data);
 
@@ -355,9 +325,7 @@ export const callImportHometownTickets = (data: {
     eventId: string;
     tickets: Array<{ticketId: string; name: string; email: string; type: string; orderId: string}>;
     updateExisting?: boolean;
-    /** With updateExisting, on the last chunk: every number in the file, to flag the rest missing. */
     completeTicketIds?: string[];
-    /** The same for every chunk of one file, which then leaves one record. */
     importId: string;
 }) => httpsCallable<typeof data, {
     added: number;
@@ -371,7 +339,6 @@ export const callImportHometownTickets = (data: {
 export const callSyncHometownOrderTimes = (data: {
     eventId: string;
     orders: Array<{orderId: string; orderedAt: string}>;
-    /** The same for every chunk of one file, which then leaves one record. */
     syncId: string;
 }) => httpsCallable<typeof data, {synced: number; unchanged: number; unmatched: number}>(
     getFunctions(), 'syncHometownOrderTimes')(data);
@@ -379,10 +346,6 @@ export const callSyncHometownOrderTimes = (data: {
 export const callSetHometownAdmitUnlisted = (data: {eventId: string; enabled: boolean}) =>
     httpsCallable<typeof data, {enabled: boolean}>(getFunctions(), 'setHometownAdmitUnlisted')(data);
 
-/**
- * How long a scan waits for the server, well under the SDK's 70 s default: a
- * door can't stand still that long, and a scanner waits on each answer.
- */
 const REDEEM_TIMEOUT_MS = 20_000;
 
 export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
@@ -428,7 +391,6 @@ export interface HeldTicketEvent {
 export const callGetMyTickets = () =>
     httpsCallable<Record<string, never>, {events: HeldTicketEvent[]}>(getFunctions(), 'getMyTickets')({});
 
-/** `uid` and `displayName` are populated for core-staff+ callers only. */
 export interface AttendeeAccount {
     email: string;
     uid?: string;
@@ -461,7 +423,6 @@ export const callUpdateEventAttendee = (data: {
     name: string;
     ticketCount: number;
     type: string;
-    /** Left out to keep each ticket's own note; given, it's set on every ticket. */
     notes?: string;
 }) => httpsCallable<typeof data, {updated: boolean; regenerated: boolean; notes?: string}>(
     getFunctions(), 'updateEventAttendee')(data);
@@ -513,7 +474,6 @@ export interface EmailQuotaStatus {
     };
     providerReported: number | null;
     readingSource: 'live' | 'cached' | 'unavailable';
-    // Stopped at the page budget, so providerReported is a floor.
     usageTruncated: boolean;
     sentToday: number;
     dailyCap: number;
@@ -531,21 +491,13 @@ export const callGetEmailQuotaStatus = () =>
     httpsCallable<Record<string, never>, EmailQuotaStatus>(getFunctions(), 'getEmailQuotaStatus')({});
 
 export interface WalletPassStatus {
-    // A WalletWallet API key is set on the server.
     configured: boolean;
-    // The calendar month (UTC) being counted, "2026-10".
     month: string;
-    // Passes made this month, in flight included: this site's own count,
-    // raised to WalletWallet's when that's higher.
     used: number;
-    // WALLET_PASS_MONTHLY_CAP; 0 turns passes off, as a per-ticket cap of 0 does.
     cap: number;
-    // What Add to Wallet is held to: the cap, or the plan's limit if lower.
     limit: number;
-    // WALLET_PASS_DAILY_CAP_PER_TICKET: new passes one ticket can make a day.
     perTicketDailyCap: number;
     observedAt: string | null;
-    // WalletWallet's own reading, null when it couldn't be read.
     provider: {
         count: number;
         limit: number;
@@ -561,7 +513,6 @@ export interface WalletPassStatus {
 export const callGetWalletPassStatus = () =>
     httpsCallable<Record<string, never>, WalletPassStatus>(getFunctions(), 'getWalletPassStatus')({});
 
-/** What an API key may do. Mirrors API_SCOPES in functions/src/utils/apiKeys.ts. */
 export const API_SCOPES = [
     'events:read', 'team:read', 'event-staff:read', 'tickets:read', 'tickets:write', 'account-links',
 ] as const;
@@ -573,7 +524,6 @@ export interface ApiKeySummary {
     name: string;
     hint: string;
     scopes: ApiScope[];
-    /** Empty for every event. */
     eventIds: string[];
     createdByName: string;
     createdAt: string | null;
@@ -596,39 +546,28 @@ export const callRenameApiKey = (data: {keyId: string; name: string}) =>
 export const callRevokeApiKey = (data: {keyId: string}) =>
     httpsCallable<typeof data, {revoked: boolean}>(getFunctions(), 'revokeApiKey')(data);
 
-/** An app's ID. Mirrors APP_ID_RE in functions/src/utils/apps.ts. */
 export const APP_ID_RE = /^[a-z0-9-]{1,32}$/;
 
-/** The most accounts that may look after an app. Mirrors APP_MAINTAINERS_MAX in functions/src/utils/apps.ts. */
 export const APP_MAINTAINERS_MAX = 5;
 
-/** An app's creator or maintainer, by their name and photo now. */
 export interface AppPerson {
     uid: string;
-    /** For a deleted creator, the name they had when they registered the app; "" for a deleted maintainer. */
     name: string;
     photoURL: string;
-    /** Their account no longer exists. */
     deleted: boolean;
 }
 
 export interface AppSummary {
     id: string;
-    /** What it's called in English and in Chinese, either or both "". See appNameIn. */
     nameEn: string;
     nameCn: string;
-    /** Who registered it; null if that wasn't kept. */
     creator: AppPerson | null;
-    /** Who looks after it, up to APP_MAINTAINERS_MAX, in the order they were added. */
     maintainers: AppPerson[];
     redirectUris: string[];
     firebaseProjectId: string;
     serviceAccount: string;
-    /** Whether accounts here may link their accounts in it. */
     accountLinking: boolean;
-    /** What it runs on, for Settings to show it by. */
     platform: AppPlatform;
-    /** Its uploaded icon, shown in its platform's mark's place; "" for none. */
     iconUrl: string;
     keys: ApiKeySummary[];
     createdAt: string | null;
@@ -644,33 +583,25 @@ interface AppFields {
     serviceAccount: string;
     accountLinking: boolean;
     platform: AppPlatform;
-    /** A file uploaded under apps/, or "" for none. */
     iconUrl: string;
 }
 
-/** Every app with its API keys, the service account an app's maintainers grant roles to ("" where it can't be told), and the server time. */
 export const callListApps = () =>
     httpsCallable<Record<string, never>, {apps: AppSummary[]; signer: string; serverNow: string}>(
         getFunctions(), 'listApps')({});
 
-/** Registers an app (`create`), which the server gives an ID, or changes the one `appId` names. Says the app's ID. */
 export const callSaveApp = (data: AppFields & ({create: true} | {appId: string; create: false})) =>
     httpsCallable<typeof data, {saved: boolean; appId: string}>(getFunctions(), 'saveApp')(data);
 
 export const callDeleteApp = (data: {appId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteApp')(data);
 
-/** An app the caller may link their account in, and their link there if they have one. */
 export interface LinkableApp {
     appId: string;
-    /** What it's called in English and in Chinese, either or both "". See appNameIn. */
     nameEn: string;
     nameCn: string;
-    /** What it runs on: its icon in Settings when it has none of its own, and how Settings says to open it. */
     platform: AppPlatform;
-    /** Its uploaded icon, or "" for none. */
     iconUrl: string;
-    /** Off for an app that has stopped linking accounts, whose link may only be undone. */
     accountLinking: boolean;
     link: {appUserName: string; linkedAt: string | null} | null;
 }
@@ -678,15 +609,10 @@ export interface LinkableApp {
 export const callGetAppLinks = () =>
     httpsCallable<Record<string, never>, {apps: LinkableApp[]}>(getFunctions(), 'getAppLinks')({});
 
-/**
- * A request to link the caller's account in an app: what to show for scanning
- * or typing in there, and the server's time, to count down by.
- */
 export const callStartAppLink = (data: {appId: string}) =>
     httpsCallable<typeof data, {requestId: string; code: string; qr: string; expiresAt: string; serverTime: string}>(
         getFunctions(), 'startAppLink')(data);
 
-/** `code`: the four digits the app shows its user once it has claimed the request. */
 export const callConfirmAppLink = (data: {requestId: string; code: string; language: Language}) =>
     httpsCallable<typeof data, {linked: boolean}>(getFunctions(), 'confirmAppLink')(data);
 
@@ -696,28 +622,18 @@ export const callCancelAppLink = (data: {requestId: string}) =>
 export const callRemoveAppLink = (data: {appId: string; language: Language}) =>
     httpsCallable<typeof data, {unlinked: boolean}>(getFunctions(), 'removeAppLink')(data);
 
-/**
- * The "This wasn't me" link in a link's notice. Signs nobody in: the new
- * password does that, once it's set. `heldUntil`: when the account may link
- * another account in the app, for a second undo within the hold, else null.
- */
 export const callUndoAppLink = (data: {token: string; password: string}) =>
     httpsCallable<typeof data, {appId: string; nameEn: string; nameCn: string; heldUntil: string | null}>(
         getFunctions(), 'undoAppLink')(data);
 
-/** An account's link and hold in one app, as staff see them in the Users tab. */
 export interface UserAppLink {
     appId: string;
-    /** What it's called in English and in Chinese, either or both "". See appNameIn. */
     nameEn: string;
     nameCn: string;
     platform: AppPlatform;
-    /** Its uploaded icon, or "" for none. */
     iconUrl: string;
-    /** Off for an app that has stopped linking accounts, whose links don't work for now. */
     accountLinking: boolean;
     link: {appUserId: string; appUserName: string; linkedAt: string | null} | null;
-    /** Keeping it from linking anyone in the app but `appUserId`, until `until`. */
     hold: {appUserId: string; until: string} | null;
 }
 
@@ -727,16 +643,10 @@ export const callGetUserAppLinks = (data: {uid: string}) =>
 export const callClearAppLinkHold = (data: {targetUid: string; appId: string}) =>
     httpsCallable<typeof data, {cleared: boolean}>(getFunctions(), 'clearAppLinkHold')(data);
 
-/** What the sign-in page shows of an app. Needs no sign-in. */
 export const callGetAppSignInInfo = (data: {appId: string; redirectUri?: string}) =>
     httpsCallable<typeof data, {nameEn: string; nameCn: string; iconUrl: string; maintainerNames: string[]}>(
         getFunctions(), 'getAppSignInInfo')(data);
 
-/**
- * A one-time code for the caller to sign in to an app with, and where to hand
- * it. The app trades it at /api/v1/token with the verifier `codeChallenge` was
- * made from.
- */
 export const callIssueAppCode = (data: {appId: string; redirectUri?: string; codeChallenge: string}) =>
     httpsCallable<typeof data, {code: string; redirectUri: string}>(getFunctions(), 'issueAppCode')(data);
 
@@ -763,7 +673,6 @@ export const callAssignEventStaff = (data: {targetUid: string; eventId: string})
 export const callRemoveEventStaff = (data: {targetUid: string; eventId: string}) =>
     httpsCallable<typeof data, {removed: boolean}>(getFunctions(), 'removeEventStaff')(data);
 
-/** An event's staff as its own staff are shown them: no more of each than a public profile has. */
 export const callGetEventStaff = (data: {eventId: string}) =>
     httpsCallable<typeof data, {
         staff: {uid: string; displayName: string; photoURL: string; group: string; title: string; titleCn: string}[];
@@ -858,11 +767,9 @@ export const callSaveVenue = (data: {
     lng: number;
     buildingCode: string;
     suggestedLots: Array<{code: string; noteEn: string; noteCn: string}>;
-    /** Every room, in order. A new one's ID is made up by the editor. */
     rooms: Array<{id: string; nameEn: string; nameCn: string}>;
 }) => httpsCallable<typeof data, {
     venueId: string;
-    /** How many events lost a room this save removed. */
     eventsChanged: number;
 }>(getFunctions(), 'saveVenue')(data);
 
@@ -923,7 +830,6 @@ export const callDeleteSocialPlatform = (data: {id: string}) =>
 export const callSeedSocialPlatforms = () =>
     httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
 
-/** `note` is given to each passport; blank for none. */
 export const callGeneratePassports = (data: {designId: string; count: number; note: string}) =>
     httpsCallable<typeof data, {
         designId: string;
@@ -961,11 +867,9 @@ export const callDeleteClaimedPassport = (data: {passportId: string; subtractDay
         nothingToSubtract: boolean;
     }>(getFunctions(), 'deleteClaimedPassport')(data);
 
-/** A blank note clears it. `updated` is false when it already said that. */
 export const callSetPassportNote = (data: {passportId: string; note: string}) =>
     httpsCallable<typeof data, {note: string; updated: boolean}>(getFunctions(), 'setPassportNote')(data);
 
-/** The caller's own shelf, as their public profile lists it for everyone else. */
 export const callGetMyPassports = () =>
     httpsCallable<Record<string, never>, {
         passports: {id: string; designId: string; year: number; claimedAt: string | null}[];
@@ -974,21 +878,15 @@ export const callGetMyPassports = () =>
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
     httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);
 
-// Partial: the server merges, so two open tabs can't undo each other's switches.
 export const callSetProfileVisibility = (data: {sections: Partial<ProfileVisibility>}) =>
     httpsCallable<typeof data, {visibility: ProfileVisibility}>(getFunctions(), 'setProfileVisibility')(data);
 
-/**
- * `designId` edits that design; without it, `year` is required and a new one is
- * created. The year is fixed after that.
- */
 export const callSavePassportDesign = (data: {
     designId?: string;
     year?: number;
     name: string;
     nameCn: string;
     coverImageUrl: string;
-    /** Blank to fall back to `coverImageUrl` for the shut passport. */
     outerCoverImageUrl: string;
     termDays: number;
 }) => httpsCallable<typeof data, {designId: string}>(getFunctions(), 'savePassportDesign')(data);
@@ -996,19 +894,11 @@ export const callSavePassportDesign = (data: {
 export const callDeletePassportDesign = (data: {designId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deletePassportDesign')(data);
 
-/**
- * Mints a passport for each listed address, so two for one listed twice, and
- * emails each its key, up to MAX_PASSPORT_EMAIL a call. Addresses come back
- * sorted by what became of them when they weren't sent or queued. `note` is
- * given to each passport; blank for none.
- */
 export const callEmailPassports = (data: {designId: string; emails: string[]; note: string}) =>
     httpsCallable<typeof data, {
         sentCount: number;
         queuedCount: number;
-        /** Past both the daily cap and the queue: nothing minted. */
         deferred: string[];
-        /** Resend refused the email, so the passport was deleted again. */
         failed: string[];
     }>(getFunctions(), 'emailPassports')(data);
 
@@ -1022,27 +912,18 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         badges: string[];
         badgeEarnedAt: Record<string, string>;
         passports: {id: string; designId: string; year: number; claimedAt: string | null}[];
-        /** Their passport page is private, so the shelf's cards don't link to it. */
         passportPageHidden: boolean;
         group: string;
         isMember: boolean;
         title?: string;
         titleCn?: string;
-        // Hidden sections arrive empty; these say which, so the page can tell
-        // "kept private" from "none yet".
         visibility: {badges: boolean; events: boolean; passports: boolean};
     }>(getFunctions(), 'getPublicProfile')(data);
 
-/**
- * The name and photo of the Google account bound to a user, for staff+, or null
- * without one. `signUpName` is the name it was bound with, `name` Google's
- * latest; both cleaned as a stored displayName is, so they compare directly.
- */
 export const callGetGoogleProfile = (data: {uid: string}) =>
     httpsCallable<typeof data, {name: string; signUpName: string; photoURL: string} | null>(
         getFunctions(), 'getGoogleProfile')(data);
 
-// Callables carry JSON, so an uploaded file travels as bare base64.
 const readFileAsBase64 = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -1053,7 +934,6 @@ const readFileAsBase64 = (file: File) => new Promise<string>((resolve, reject) =
     reader.readAsDataURL(file);
 });
 
-/** Sends `file` to an upload callable alongside `fields`, resolving to the stored file's URL. */
 const uploadFile = async (name: string, file: File, fields: Record<string, string | undefined> = {}) => {
     const data = await readFileAsBase64(file);
     const result = await httpsCallable<Record<string, string | undefined>, {url: string}>(getFunctions(), name)({
@@ -1067,7 +947,6 @@ const uploadFile = async (name: string, file: File, fields: Record<string, strin
 export const callUploadAdminImage = (file: File, storagePath: string): Promise<string> =>
     uploadFile('uploadAdminImage', file, {path: storagePath});
 
-/** The con hero's background loop. `storagePath` must sit under `con/`. */
 export const callUploadConVideo = (file: File, storagePath: string): Promise<string> =>
     uploadFile('uploadConVideo', file, {path: storagePath});
 
@@ -1080,7 +959,6 @@ export const callUpdateDisplayName = (data: {displayName: string; targetUid?: st
 export const callDeleteAvatar = (data: {targetUid?: string} = {}) =>
     httpsCallable<typeof data, {photoURL: string}>(getFunctions(), 'deleteAvatar')(data);
 
-/** `language` is for the notice an account asking for its own deletion gets. */
 export const callRequestAccountDeletion = (data: {targetUid?: string; language?: Language} = {}) =>
     httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestAccountDeletion')(data);
 
@@ -1090,10 +968,8 @@ export const callCancelAccountDeletion = (data: {targetUid?: string} = {}) =>
 export const callUploadAvatar = (file: File, targetUid?: string): Promise<string> =>
     uploadFile('uploadAvatar', file, {targetUid});
 
-// Your own banner only — unlike the avatar, there is no admin path to set one.
 export const callUploadBanner = (file: File): Promise<string> => uploadFile('uploadBanner', file);
 
-// No targetUid removes your own; an admin passes one to take down someone else's.
 export const callDeleteBanner = (data: {targetUid?: string} = {}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteBanner')(data);
 
@@ -1107,26 +983,18 @@ export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
 export const functionsErrorCode = (err: unknown): string | null =>
     functionsErrorDetails<{code?: string}>(err)?.code ?? null;
 
-/**
- * An error's code: the server's own when it sent one, else the SDK's, such as
- * "functions/internal" for a call that never reached the function or
- * "unavailable" for a Firestore read.
- */
 export const errorCode = (err: unknown): string | null =>
     functionsErrorCode(err) ?? (err instanceof FirebaseError ? err.code : null);
 
-/** That code as a message's bracketed ending, " (code)" or "（code）", or "" without one. */
 export const errorSuffix = (err: unknown, isEnglish: boolean): string => {
     const code = errorCode(err);
     if (!code) return '';
     return isEnglish ? ` (${code})` : `（${code}）`;
 };
 
-/** The error's own message when it has one, else `fallback`. */
 export const errorMessage = (err: unknown, fallback: string): string =>
     err instanceof Error && err.message ? err.message : fallback;
 
-/** Starts a session with the token one of the account callables answered with. */
 export const signInWithToken = (token: string) => signInWithCustomToken(getFirebaseAuth(), token);
 
 export const signOut = () => firebaseSignOut(getFirebaseAuth());

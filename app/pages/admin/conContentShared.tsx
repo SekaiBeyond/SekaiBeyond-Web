@@ -19,7 +19,6 @@ export const SECTION_LABELS: Record<ConContentSection, Localized> = {
     faq: {en: 'FAQ', zh: '常见问题'},
 };
 
-/** The section navigator's order — keep it matching the order ConContentTab renders them in. */
 export const SECTION_ORDER: ConContentSection[] = [
     'settings', 'event', 'heroVideo', 'rooms', 'schedule', 'cafe', 'vendors', 'tickets', 'ticketFee', 'inPersonSales',
     'faq',
@@ -29,10 +28,6 @@ export const conSectionId = (section: ConContentSection) => `admin-sec-con-${sec
 
 export const BLANK: Localized = {en: '', zh: ''};
 
-/**
- * An id for a new row. Not from the list length, which would collide after a
- * delete. Lowercase hex fits the server's slug shape for room ids.
- */
 export const newRowId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 
 export const replaceAt = <T, >(items: T[], index: number, next: T): T[] =>
@@ -57,11 +52,6 @@ interface SectionEditor<T> {
     revert: () => void;
 }
 
-/**
- * One section's draft, seeded once the first fetch lands (the `initialized`
- * guard SiteConfigTab uses) and re-seeded from what the server stored after a
- * save, since it trims copy and fills in ids.
- */
 export function useSectionEditor<K extends ConContentSection>(
     section: K,
     value: ConContent[K],
@@ -95,13 +85,11 @@ export function useSectionEditor<K extends ConContentSection>(
             setSaving(false);
             return;
         }
-        // The write landed; a failed re-read is a stale form, not a failed save.
         try {
             const fresh = await refreshConContent();
             setDraft(fresh[section]);
             showToast(isEnglish ? `${label.en} saved.` : `${label.zh}已保存。`, 'success');
         } catch {
-            // Keep the draft; it is what was just stored.
             showToast(
                 isEnglish
                     ? `${label.en} saved, but the page could not re-read it. Reload to see the stored copy.`
@@ -119,10 +107,6 @@ interface SectionShellProps<K extends ConContentSection> {
     section: K;
     helper: Localized;
     editor: SectionEditor<ConContent[K]>;
-    /**
-     * Blocks Save and Discard while the draft depends on something in flight,
-     * such as an upload's `blob:` preview.
-     */
     busy?: boolean;
     busyLabel?: Localized;
     readOnly?: boolean;
@@ -186,10 +170,6 @@ interface LocalizedFieldProps {
     multiline?: boolean;
 }
 
-/**
- * BilingualFormField's two-input layout over one {en, zh} Localized value, the
- * shape con copy is stored in.
- */
 export const LocalizedField = ({label, value, onChange, readOnly, multiline}: LocalizedFieldProps) => {
     const {isEnglish} = useLanguage();
     const Tag = multiline ? 'textarea' : 'input';
@@ -225,22 +205,16 @@ interface AmountFieldProps {
     onChange: (next: number) => void;
     readOnly?: boolean;
     helper?: Localized;
-    /** Shown after the label. Dollars unless set. */
     unit?: Localized;
     max?: number;
 }
 
-/** A price or a fee is a number, not copy, so one input serves both languages. */
 export const AmountField = (
     {label, value, onChange, readOnly, helper, unit = {en: 'USD', zh: '美元'}, max}: AmountFieldProps,
 ) => {
     const {isEnglish} = useLanguage();
-    // Text held apart from the number: bound to `value`, React refills a cleared
-    // input with "0" and the next keystroke lands after it ("015").
     const [text, setText] = useState(String(value));
     useEffect(() => {
-        // Follow outside changes without undoing a blank or a trailing "12." still
-        // being typed.
         setText(prev => (Number(prev) === value ? prev : String(value)));
     }, [value]);
 
@@ -272,16 +246,10 @@ export const AmountField = (
 interface RowActionsProps {
     onRemove: () => void;
     readOnly?: boolean;
-    /** Holds the row in place while something is due to land in the list by position. */
     disabled?: boolean;
-    /**
-     * Reordering, for sections with their own order. One sorted on save (the
-     * schedule) passes none and gets only delete.
-     */
     index?: number;
     count?: number;
     onMove?: (delta: number) => void;
-    /** Arrows pointing ← → rather than ↑ ↓, for rows laid out side by side. */
     horizontal?: boolean;
 }
 
@@ -332,7 +300,6 @@ interface AddButtonProps {
     label: Localized;
     onClick: () => void;
     readOnly?: boolean;
-    /** Set when the row cannot be created yet, with `blockedHint` saying why. */
     blocked?: boolean;
     blockedHint?: Localized;
 }

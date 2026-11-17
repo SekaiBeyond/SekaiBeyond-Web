@@ -6,7 +6,6 @@ import { ImportIssues } from './ImportIssues';
 import { hometownAttendeeId, type HometownTicketRow, parseHometownFile, retryRateLimited } from './hometown';
 import { type AttendeeData, type ParseError, TICKET_TYPES, ticketTypeClass, ticketTypeLabel } from './types';
 
-/** Tickets per import call, well under the server's row cap. */
 const IMPORT_CHUNK = 500;
 
 const importChunk = (data: Parameters<typeof callImportHometownTickets>[0]) =>
@@ -20,11 +19,6 @@ interface HometownSectionProps {
     onImported: () => void;
 }
 
-/**
- * Tickets sold through HomeTown, the school's box office: its guest list export
- * imported by ticket number. Whether a HomeTown ticket missing from it is let
- * in at the door is set in Settings.
- */
 export function HometownSection({
                                     eventId,
                                     attendees,
@@ -39,11 +33,8 @@ export function HometownSection({
     const [warnings, setWarnings] = useState<ParseError[]>([]);
     const [busy, setBusy] = useState(false);
     const [importing, setImporting] = useState(false);
-    // Off after each import, since it flags whatever the file leaves out.
     const [updateExisting, setUpdateExisting] = useState(false);
 
-    // What the import will do with each ticket, by the list as last loaded; the
-    // server decides again from what's there when it runs.
     const preview = useMemo(() => {
         const hometown = attendees.filter(a => a.hometown);
         const byId = new Map(hometown.map(a => [a.id, a]));
@@ -127,8 +118,6 @@ export function HometownSection({
                     eventId,
                     importId,
                     tickets: tickets.slice(i, i + IMPORT_CHUNK),
-                    // The whole file's numbers go with its last chunk, once the
-                    // rest are in, so nothing it holds reads as missing.
                     ...(updateExisting && {
                         updateExisting: true,
                         ...(last && {completeTicketIds: tickets.map(t => t.ticketId)}),
@@ -167,7 +156,6 @@ export function HometownSection({
             setUpdateExisting(false);
         } catch (err) {
             console.error('[HometownSection] import failed', err);
-            // Earlier chunks may have landed; a re-import picks up where this stopped.
             showToast(isEnglish
                     ? `HomeTown import failed partway${errorSuffix(err, true)}. Import the same file again to finish it.`
                     : `HomeTown 导入中途失败${errorSuffix(err, false)}。请再次导入同一文件以完成。`,
@@ -179,8 +167,6 @@ export function HometownSection({
     };
 
     const issues = [...errors, ...warnings];
-    // A row that can't be read drops its ticket from the file's numbers, so an
-    // update would flag that ticket as missing.
     const rowErrors = errors.some(e => e.row > 0);
     const canImport = !readOnly && !busy && !importing && tickets.length > 0
         && !errors.some(e => e.row === 0) && !(updateExisting && rowErrors);

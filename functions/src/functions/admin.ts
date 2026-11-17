@@ -8,7 +8,7 @@ import { computeEmailQuotaDetail } from "../utils/quota";
 import { getSenderAddress, RESEND_API_KEY } from "../utils/resendClient";
 import { readWalletQuota, syncWalletUsage, WALLETWALLET_API_KEY } from "../utils/walletPass";
 import { DRAIN_INTERVAL_MINUTES, getScheduledMailQueueStatus } from "./scheduledMail";
-import { recordDoc, recordRef } from "../utils/records";
+import { performer, recordDoc, recordRef } from "../utils/records";
 import {
     decodeUpload,
     deleteStorageFile,
@@ -37,7 +37,6 @@ import { UW_BUILDING_CODE_RE, UW_LOT_CODE_RE } from "../utils/uwParking";
 import { eventLocationText, MAX_ROOMS, type Room, ROOM_ID_RE, venueRooms } from "../utils/events";
 import { dropVenueParking, refreshVenueParking } from "./parking";
 
-/** An upload from the admin panel, once the caller is confirmed as core staff: where it goes, and the file. */
 async function readAdminUpload(request: CallableRequest): Promise<{
     path: string;
     dataBase64: string;
@@ -71,11 +70,6 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
     return {url: await saveUpload(path, buffer, contentType)};
 });
 
-/**
- * The con hero's background loop. Kept apart from `uploadAdminImage` because
- * every check differs (content types, magic bytes, size cap, prefix), and
- * folding video in would give every image upload the video size ceiling.
- */
 export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async (request) => {
     const {path, dataBase64, contentType} = await readAdminUpload(request);
     if (!path.startsWith("con/")) {
@@ -83,8 +77,6 @@ export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async 
     }
 
     const buffer = decodeUpload(dataBase64, contentType, {
-        // WebM only: the hero lists a single WebM source, so an MP4 stored here
-        // would be refused by every browser.
         types: ["video/webm"],
         maxMb: MAX_VIDEO_UPLOAD_SIZE_MB,
         kind: "Video",
@@ -93,9 +85,6 @@ export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async 
     return {url: await saveUpload(path, buffer, contentType)};
 });
 
-// The upload caps, for the web app's early size check and "up to N MB" hints,
-// read from the env that enforces them. Public: members check their own photos
-// against the image cap.
 export const getUploadLimits = onCall({maxInstances: 10}, async () => ({
     imageMb: MAX_UPLOAD_SIZE_MB,
     videoMb: MAX_VIDEO_UPLOAD_SIZE_MB,
@@ -132,8 +121,7 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
             txn.set(ref, {name, nameLower, nameCn});
         }
         txn.set(recordRef(), recordDoc(tagId ? "tag-edit" : "tag-create", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             tagName: name,
         }));
         return {tagId: docId};
@@ -148,15 +136,12 @@ export const deleteTag = onCall({maxInstances: 10}, async (request) => {
         const tagRef = db.collection("eventLabels").doc(tagId);
         const tagSnap = await txn.get(tagRef);
         if (!tagSnap.exists) throw new HttpsError("not-found", "Tag not found.");
-        // Off every event holding it, so none names a tag that's gone. Only
-        // past events have tags; an upcoming one gets them on archive.
         const holding = await txn.get(db.collection("pastEvents").where("tagIds", "array-contains", tagId));
 
         txn.delete(tagRef);
         for (const doc of holding.docs) txn.update(doc.ref, {tagIds: FieldValue.arrayRemove(tagId)});
         txn.set(recordRef(), recordDoc("tag-delete", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             tagName: tagSnap.data()?.name ?? tagId,
         }));
         return {deleted: true};
@@ -178,17 +163,12 @@ export const savePolicy = onCall({maxInstances: 10}, async (request) => {
             updatedAt: FieldValue.serverTimestamp(),
         });
         txn.set(recordRef(), recordDoc("policy-update", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
         }));
         return {saved: true};
     });
 });
 
-// Each account's link in the one form the Site Config form builds
-// (SOCIAL_LINK_FORMATS in app/pages/admin/socialLinkInput.ts); keys mirror
-// SOCIAL_LINK_KEYS in app/lib/siteConfig.ts. Pinning the host keeps every link
-// on the platform it is shown as.
 const SOCIAL_LINK_PATTERNS: Record<string, RegExp> = {
     discord: /^https:\/\/discord\.gg\/[A-Za-z0-9-]+$/,
     instagram: /^https:\/\/www\.instagram\.com\/[A-Za-z0-9._]+\/$/,
@@ -198,11 +178,8 @@ const SOCIAL_LINK_PATTERNS: Record<string, RegExp> = {
     github: /^https:\/\/github\.com\/[A-Za-z0-9-]+$/,
 };
 
-// Xiaohongshu shares profiles as short links that redirect; the form passes one
-// through for resolveXiaohongshuShareLink.
 const XIAOHONGSHU_SHARE_LINK = /^https:\/\/xhslink\.(?:cn|com)\/[A-Za-z0-9/]+$/;
 
-/** Every key in SOCIAL_LINK_PATTERNS, each a link in its pattern or "" (which hides that link). */
 function validateSocialLinks(value: unknown): Record<string, string> {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
         throw new HttpsError("invalid-argument", "Invalid socialLinks.");
@@ -222,10 +199,6 @@ function validateSocialLinks(value: unknown): Record<string, string> {
     return links;
 }
 
-/**
- * The profile a Xiaohongshu share link opens, without the sharer's tracking
- * parameters.
- */
 async function resolveXiaohongshuShareLink(shareLink: string): Promise<string> {
     let target = "";
     try {
@@ -236,7 +209,6 @@ async function resolveXiaohongshuShareLink(shareLink: string): Promise<string> {
         });
         target = resp.headers.get("location") ?? "";
     } catch {
-        // Unreachable reads the same as a link to something else, below.
     }
     const id = target.match(/^https:\/\/www\.xiaohongshu\.com\/user\/profile\/([0-9a-f]{24})(?:[/?#]|$)/)?.[1];
     if (!id) {
@@ -251,22 +223,16 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 
     const input = request.data as Record<string, unknown>;
 
-    // "" clears it, which hides the site's contact links.
     const contactEmail = input.contactEmail === undefined ? undefined
         : input.contactEmail === "" ? ""
             : validateEmail(input.contactEmail, "contactEmail");
 
-    // Only the part before the @; the domain is always SENDER_DOMAIN. "" falls
-    // back to DEFAULT_SENDER_PREFIX.
     const senderPrefix = input.senderPrefix === undefined ? undefined
         : input.senderPrefix === "" ? ""
             : validateSenderPrefix(input.senderPrefix, "senderPrefix");
 
     const socialLinks = input.socialLinks === undefined ? undefined : validateSocialLinks(input.socialLinks);
 
-    // Checked before the share-link fetch, which happens outside
-    // adminTransaction; otherwise any signed-in user could trigger a server-side
-    // fetch.
     await requireAdmin(uid);
 
     if (socialLinks && XIAOHONGSHU_SHARE_LINK.test(socialLinks.xiaohongshu)) {
@@ -280,7 +246,6 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
             updatedByName: callerSnap.data()?.displayName ?? "",
             updatedAt: FieldValue.serverTimestamp(),
         };
-        // Each Site Config section saves on its own; the record names which.
         const configSections: string[] = [];
         if (contactEmail !== undefined) {
             updateData.contactEmail = contactEmail;
@@ -297,18 +262,14 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 
         txn.set(configRef, updateData, {merge: true});
         txn.set(recordRef(), recordDoc("config-update", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             configSections,
         }));
     });
 
-    // The links as stored, so the form can show the profile a share link opened.
     return socialLinks ? {saved: true, socialLinks} : {saved: true};
 });
 
-// Mirrors ROOM_ACCENTS in app/lib/conContent.ts. Each value names a CSS class
-// (sbc-accent--<accent>), so it's a whitelist.
 const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
 
 const CON_SECTIONS = [
@@ -317,8 +278,6 @@ const CON_SECTIONS = [
 ] as const;
 type ConSection = typeof CON_SECTIONS[number];
 
-// Generous against real use, but bounded so a runaway client can't grow the
-// public document indefinitely.
 const CON_LIMITS = {
     rooms: 24,
     scheduleItems: 120,
@@ -331,16 +290,12 @@ const CON_LIMITS = {
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// Mirrors HALL_TABLES in app/pages/convention/hall.ts: the hall floor plan's tables, in
-// plan order. A vendor can only sit at one of these.
 const CON_HALL_TABLES = ([["A", 14], ["B", 14], ["C", 14], ["D", 14], ["E", 3]] as const)
     .flatMap(([row, count]) => Array.from({length: count}, (_, i) => `${row}${i + 1}`));
 
-/** A request's nested object, or {} for anything that isn't one. */
 const asRecord = (raw: unknown): Record<string, unknown> =>
     raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
 
-/** Whether an optional field was filled in. */
 const isFilled = (value: unknown): boolean => value !== undefined && value !== null && value !== "";
 
 interface LocalizedText {
@@ -348,10 +303,6 @@ interface LocalizedText {
     zh: string;
 }
 
-/**
- * Con copy is stored as {en, zh} pairs, the way the con page reads it, rather
- * than `field`/`fieldCn` columns.
- */
 function validateLocalized(raw: unknown, name: string, maxLen: number, required = false): LocalizedText {
     const value = asRecord(raw);
     return {
@@ -384,11 +335,6 @@ function requireISODate(raw: unknown, name: string): string {
     return value;
 }
 
-/**
- * A con asset is either a Storage download URL or a root-relative path under
- * public/; anything else is rejected, so the page only loads files from hosts we
- * control.
- */
 function validateConAsset(raw: unknown, name: string): string {
     const value = validateStr(raw, name, 500).trim();
     if (!value) return "";
@@ -408,10 +354,6 @@ function validateConLink(raw: unknown, name: string): string {
     return value;
 }
 
-/**
- * Page-level switches. `published` is a strict boolean because a stray truthy
- * value would republish the page.
- */
 function buildConSettings(raw: unknown) {
     const s = asRecord(raw);
     if (typeof s.published !== "boolean") {
@@ -423,8 +365,6 @@ function buildConSettings(raw: unknown) {
 function buildConEvent(raw: unknown) {
     const e = asRecord(raw);
 
-    // The con's year, hours, venue and ticket link are its upcoming event's. That
-    // the event exists is checked inside saveConContent's transaction.
     if (!e.upcomingEventId) throw new HttpsError("invalid-argument", "Select the con's upcoming event.");
     const upcomingEventId = validateDocId(e.upcomingEventId, "upcomingEventId");
 
@@ -435,11 +375,6 @@ function buildConEvent(raw: unknown) {
     };
 }
 
-/**
- * The hero's background loop; without one the hero shows a gradient. The
- * extension must match the container the source element claims, or a browser
- * silently drops the source.
- */
 function buildConHeroVideo(raw: unknown) {
     const v = asRecord(raw);
     const webm = validateConAsset(v.webm, "hero webm");
@@ -449,11 +384,6 @@ function buildConHeroVideo(raw: unknown) {
     return {webm};
 }
 
-/**
- * Ids for rows the admin never sees (ticket tiers). The index-derived fallback can
- * collide with an existing id after a delete, so a duplicate is renamed rather than
- * rejected: the editor has no id field to fix it in.
- */
 function uniqueConId(raw: unknown, fallback: string, seen: Set<string>, name: string): string {
     let id = sanitizeDisplayText(validateStr(raw, name, 60)) || fallback;
     if (seen.has(id)) {
@@ -465,7 +395,6 @@ function uniqueConId(raw: unknown, fallback: string, seen: Set<string>, name: st
     return id;
 }
 
-/** Room ids are referenced by schedule items, so they must be slug-shaped and unique. */
 function buildConRooms(raw: unknown) {
     const seen = new Set<string>();
     return validateConArray(raw, "rooms", CON_LIMITS.rooms).map((room, i) => {
@@ -494,7 +423,6 @@ function buildConRooms(raw: unknown) {
 
 function buildConSchedule(raw: unknown) {
     return validateConArray(raw, "schedule", CON_LIMITS.scheduleItems).map(item => {
-        // Both times absent means TBA; exactly one is a half-filled form.
         const hasStart = isFilled(item.start);
         const hasEnd = isFilled(item.end);
         if (hasStart !== hasEnd) {
@@ -506,8 +434,6 @@ function buildConSchedule(raw: unknown) {
         const times = hasStart
             ? {start: validateConTime(item.start, "item start"), end: validateConTime(item.end, "item end")}
             : {};
-        // HH:MM compares as a string. That rules out items past midnight, which
-        // is fine for a single-day con and catches the common "17:30–15:30" typo.
         if (times.start && times.end && times.end <= times.start) {
             throw new HttpsError(
                 "invalid-argument",
@@ -515,8 +441,6 @@ function buildConSchedule(raw: unknown) {
             );
         }
 
-        // A scheduled item needs a room to be drawn in; a TBA one has none yet, so
-        // it is stored only when there is one.
         const room = hasStart
             ? sanitizeDisplayText(validateStr(item.room, "item room", 60, true))
             : "";
@@ -527,15 +451,9 @@ function buildConSchedule(raw: unknown) {
             title: validateLocalized(item.title, "item title", 200, true),
         };
     })
-        // Stored in start order, so the editor needs no reorder buttons; TBA
-        // items sort last.
         .sort((a, b) => (a.start ?? "99:99").localeCompare(b.start ?? "99:99"));
 }
 
-/**
- * The maid café. Its hours are both or neither, like a schedule item's, and every
- * poster is optional.
- */
 function buildConCafe(raw: unknown) {
     const c = asRecord(raw);
     const hasStart = isFilled(c.start);
@@ -545,7 +463,6 @@ function buildConCafe(raw: unknown) {
     }
     const start = hasStart ? validateConTime(c.start, "café opening time") : "";
     const end = hasEnd ? validateConTime(c.end, "café closing time") : "";
-    // HH:MM sorts chronologically, as in buildConSchedule.
     if (start && end <= start) {
         throw new HttpsError("invalid-argument", `The café closes at ${end}, which is not after its ${start} opening.`);
     }
@@ -583,7 +500,6 @@ function buildConVendors(raw: unknown) {
             link: validateConLink(vendor.link, `Table ${table} link`),
         };
     })
-        // Stored in plan order, as the editor keeps its draft.
         .sort((a, b) => CON_HALL_TABLES.indexOf(a.table) - CON_HALL_TABLES.indexOf(b.table));
 
     return {
@@ -597,7 +513,6 @@ function buildConVendors(raw: unknown) {
     };
 }
 
-/** A ticket price in US dollars. Stray fractions of a cent are rounded off. */
 function validateConPrice(raw: unknown, name: string): number {
     if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0 || raw > 10000) {
         throw new HttpsError("invalid-argument", `Invalid ${name}: must be a dollar amount from 0 to 10000.`);
@@ -610,7 +525,6 @@ function buildConTickets(raw: unknown) {
     return validateConArray(raw, "tickets", CON_LIMITS.tickets).map((tier, i) => {
         const name = validateLocalized(tier.name, "tier name", 120, true);
 
-        // An early bird is all or nothing: its own price and a deadline.
         const hasEarlyBird = tier.earlyBird !== undefined && tier.earlyBird !== null;
         const price = validateConPrice(tier.price, `${name.en} price`);
         let earlyBird: {price: number; endsAt: string} | undefined;
@@ -620,7 +534,6 @@ function buildConTickets(raw: unknown) {
                 price: validateConPrice(e.price, `${name.en} early bird price`),
                 endsAt: requireISODate(e.endsAt, `${name.en} early bird end`),
             };
-            // "Early bird $10, then $10" is not an offer.
             if (earlyBird.price >= price) {
                 throw new HttpsError(
                     "invalid-argument",
@@ -662,17 +575,14 @@ function buildConInPersonSales(raw: unknown) {
             const date = validateDay(session.date, "in-person sale date");
             const start = validateConTime(session.start, `${date} start`);
             const end = validateConTime(session.end, `${date} end`);
-            // HH:MM sorts chronologically, as in buildConSchedule.
             if (end <= start) {
                 throw new HttpsError("invalid-argument", `The ${date} in-person sale ends before it starts.`);
             }
             return {date, start, end};
         })
-        // Stored in date order, so the editor needs no reorder buttons.
         .sort((a, b) => `${a.date}T${a.start}`.localeCompare(`${b.date}T${b.start}`));
 
     return {
-        // Only needed while there is somewhere to send people.
         location: validateLocalized(s.location, "in-person sale location", 200, sessions.length > 0),
         note: validateLocalized(s.note, "in-person sale note", 500),
         sessions,
@@ -700,13 +610,8 @@ const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
     faq: buildConFaq,
 };
 
-/** Where the con editor uploads the hero clip and café posters. */
 const CON_ASSET_PREFIXES = ["con/"];
 
-/**
- * Every file URL con content points at; deleteStorageFile skips the ones that
- * aren't Storage URLs.
- */
 function conAssetUrls(content: Record<string, any>): string[] {
     const maids: any[] = Array.isArray(content.cafe?.maids) ? content.cafe.maids : [];
     return [
@@ -716,17 +621,6 @@ function conAssetUrls(content: Record<string, any>): string[] {
     ].filter((url): url is string => typeof url === "string" && url !== "");
 }
 
-/**
- * Writes one or more sections of the /con page.
- *
- * Each section saves on its own, merged, so two people editing different sections
- * can't overwrite each other.
- *
- * Everything lands in the staff-only `conContent/draft`. `conContent/main` is a
- * whole-document mirror that exists only while the con is published, so an
- * unannounced line-up is not on the public web at all. Read rules are in
- * firestore.rules.
- */
 export const saveConContent = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
@@ -758,9 +652,6 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             }
         }
 
-        // Rooms and the schedule can be saved separately, so check this write
-        // against the side it isn't carrying: that catches both an item pointing
-        // at a missing room and a room deleted while still in use.
         if (updateData.rooms !== undefined || updateData.schedule !== undefined) {
             const rooms = (updateData.rooms ?? stored.rooms ?? []) as {id?: string}[];
             const schedule = (updateData.schedule ?? stored.schedule ?? []) as {room?: string}[];
@@ -784,9 +675,6 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
 
-        // The public mirror exists only while the con is published. Written whole
-        // so a section deleted in the draft can't survive, and without `updatedBy`,
-        // which doesn't belong on a public doc.
         const merged = {...stored, ...updateData};
         const published = (merged.settings as {published?: boolean} | undefined)?.published === true;
         if (published) {
@@ -800,14 +688,10 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         }
 
         txn.set(recordRef(), recordDoc("con-content-update", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             conSection: sections.join(", "),
         }));
 
-        // Each upload is a new time-stamped object, so files this save replaces or
-        // drops are deleted once it commits. Both documents now name the files
-        // `merged` does, so one it doesn't name is unreferenced.
         const stillReferenced = new Set(conAssetUrls(merged));
         return [...new Set(conAssetUrls(stored))].filter(url => !stillReferenced.has(url));
     });
@@ -821,11 +705,6 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
 
 const MAX_SUGGESTED_LOTS = 10;
 
-/**
- * A venue's UW fields from a save: its building code and the UW lots suggested
- * for it, by facility code. Codes are checked for shape only; a lot UW later
- * drops is skipped by the guide.
- */
 function venueUwFields(input: Record<string, unknown>): {
     buildingCode: string;
     suggestedLots: {code: string; noteEn: string; noteCn: string}[];
@@ -857,10 +736,6 @@ function venueUwFields(input: Record<string, unknown>): {
     return {buildingCode, suggestedLots};
 }
 
-/**
- * A venue's rooms from a save, in order: each with an ID the editor made up, an
- * English name and an optional Chinese one. Two can't share an English name.
- */
 function venueRoomsInput(raw: unknown): Room[] {
     if (!Array.isArray(raw)) throw new HttpsError("invalid-argument", "rooms must be a list.");
     if (raw.length > MAX_ROOMS) throw new HttpsError("invalid-argument", `Too many rooms (max ${MAX_ROOMS}).`);
@@ -896,8 +771,6 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     const docId = venueId ?? db.collection("venues").doc().id;
 
     const eventsChanged = await adminTransaction(uid, async (txn, callerSnap) => {
-        // The events in a room this save removes, which lose it; a past event
-        // too, which then shows the venue's name without that room.
         const losing: {ref: FirebaseFirestore.DocumentReference; roomIds: string[]}[] = [];
         if (venueId) {
             const existing = await txn.get(db.collection("venues").doc(venueId));
@@ -924,17 +797,13 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
         }
         for (const {ref: eventRef, roomIds} of losing) txn.update(eventRef, {roomIds});
         txn.set(recordRef(), recordDoc(venueId ? "venue-edit" : "venue-create", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             venueId: docId,
             venueName: nameEn,
         }));
         return losing.length;
     });
 
-    // A new, moved or re-coded venue gets walking times and its outline now rather
-    // than at the nightly sync. Best effort: the save has committed, and the sync
-    // refreshes them anyway.
     await refreshVenueParking(docId, {lat, lng, buildingCode})
         .catch(err => console.error("saveVenue: parking data not refreshed for", docId, err));
     return {venueId: docId, eventsChanged};
@@ -952,10 +821,6 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
             txn.get(db.collection(col).where("venueId", "==", venueId))));
 
         txn.delete(venueRef);
-        // Off every event set to it, rooms and all. An event shows its venue's
-        // name and rooms as its location, else its location text
-        // (eventLocationDisplay in app/lib/venues.ts), so it keeps what it
-        // showed as its text.
         for (const doc of using.flatMap(snap => snap.docs)) {
             txn.update(doc.ref, {
                 venueId: "",
@@ -965,12 +830,10 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
             });
         }
         txn.set(recordRef(), recordDoc("venue-delete", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             venueName: venueSnap.data()?.nameEn ?? venueId,
         }));
     });
-    // Best effort, like the refresh on save; the nightly sync drops it otherwise.
     await dropVenueParking(venueId)
         .catch(err => console.error("deleteVenue: parking data not dropped for", venueId, err));
     return {deleted: true};
@@ -983,14 +846,9 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     const validMembers = members.map(m => {
         const useAccountRole = Boolean(m.useAccountRole);
         const useAccountPhoto = Boolean(m.useAccountPhoto);
-        // The stored role is only a fallback when it follows the linked account, so it is
-        // required only when custom, matching the client's canSave. The name is always custom.
         const name = sanitizeDisplayText(validateStr(m.name, "name", 200, true));
         if (!name) throw new HttpsError("invalid-argument", "name is required.");
         const imageUrl = validateStr(m.imageUrl, "imageUrl", 500);
-        // A team/<uuid>.webp upload, or for a member following their account its
-        // photoURL, which may be a Google avatar: hence https rather than
-        // storage-only.
         validateUrl(imageUrl, "imageUrl");
         return {
             id: validateStr(m.id, "id", 128, true),
@@ -1006,8 +864,6 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         };
     });
 
-    // Display fields only, for the world-readable config/main doc. The full roster,
-    // with uids and follow flags, lives in the server-only teamRoster/main.
     const publicMembers = validMembers.map(m => ({
         id: m.id,
         name: m.name,
@@ -1021,9 +877,6 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     const configRef = db.collection("config").doc("main");
     const rosterRef = db.collection("teamRoster").doc("main");
     const orphanedImages = await adminTransaction(uid, async (txn, callerSnap) => {
-        // Each avatar upload is a new team/<uuid>.webp, so images this save stops referencing
-        // are deleted once it commits. Account photos live outside team/, so the prefix guard
-        // below keeps them. Read before the writes, as transactions require.
         const rosterSnap = await txn.get(rosterRef);
         const prevMembers = (rosterSnap.data()?.teamMembers ?? []) as {imageUrl?: string}[];
         await requireNewlyLinkedFilesExist(validMembers.map(m => m.imageUrl), prevMembers.map(m => m.imageUrl ?? ""));
@@ -1034,7 +887,6 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
                 .filter(url => url && !stillReferenced.has(url))
         )];
 
-        // Written together so the roster and its public projection never drift.
         txn.set(rosterRef, {
             teamMembers: validMembers,
             updatedBy: uid,
@@ -1048,8 +900,7 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
             updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
         txn.set(recordRef(), recordDoc("config-update", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             configSections: ["team"],
         }));
         return orphaned;
@@ -1062,7 +913,6 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     return {saved: true};
 });
 
-// For accounts without an explicit title. Keep in sync with the client's GROUP_LABELS.
 const GROUP_LABELS: Record<string, {en: string; zh: string}> = {
     "user": {en: "User", zh: "用户"},
     "staff": {en: "Staff", zh: "工作人员"},
@@ -1078,10 +928,6 @@ const accountEffectiveTitle = (acc: {group: string; title: string; titleCn: stri
     };
 };
 
-// Public resolver for the landing page's "Our Team". The site can't read users directly,
-// so a member who follows their linked account gets its live title and photo resolved
-// here. Names are always the admin's own, only members placed on the public team are
-// looked up, and no email is exposed.
 export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
     const rosterSnap = await db.collection("teamRoster").doc("main").get();
     const members = (rosterSnap.data()?.teamMembers ?? []) as Record<string, unknown>[];
@@ -1124,13 +970,10 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
     const teamMembers = members.map(m => {
         const acc = typeof m?.uid === "string" ? accounts.get(m.uid) : undefined;
         const f = acc ? follows(m) : {role: false, photo: false};
-        // Each language's role follows the account's title in that language, then its group
-        // label, then the stored custom value.
         const title = acc ? accountEffectiveTitle(acc) : {en: "", zh: ""};
         const role = (m.role as string) ?? "";
         const roleCn = (m.roleCn as string) ?? "";
         const imageUrl = (m.imageUrl as string) ?? "";
-        // Display fields only: never the linked uid or the follow flags.
         return {
             id: (m.id as string) ?? "",
             name: (m.name as string) ?? "",
@@ -1145,8 +988,6 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
     return {teamMembers};
 });
 
-// The full roster for the "Our Team" editor, from the server-only teamRoster/main.
-// Staff+, matching who can view Site Config; saveTeamMembers stays core-staff+.
 export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireStaff(uid);
@@ -1155,17 +996,12 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
     return {teamMembers: rosterSnap.data()?.teamMembers ?? []};
 });
 
-// What Site Config's Sender Email section shows around the prefix field; the
-// domain comes from PUBLIC_ORIGIN, which the client can't see. Staff+, like
-// getTeamRoster.
 export const getSenderSettings = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireStaff(uid);
     return {domain: SENDER_DOMAIN, defaultPrefix: DEFAULT_SENDER_PREFIX};
 });
 
-// Outbound-email capacity for the Email Quota tool. Staff+: it only reads, though
-// the sends it describes are core-staff+.
 export const getEmailQuotaStatus = onCall({
     maxInstances: 5,
     secrets: [RESEND_API_KEY],
@@ -1202,9 +1038,6 @@ export const getEmailQuotaStatus = onCall({
     };
 });
 
-// This month's wallet passes for the Wallet Passes tool: WalletWallet's own
-// count when it answers, and the cap ticket emails are held to. Staff+, like
-// getEmailQuotaStatus.
 export const getWalletPassStatus = onCall({
     maxInstances: 5,
     secrets: [WALLETWALLET_API_KEY],

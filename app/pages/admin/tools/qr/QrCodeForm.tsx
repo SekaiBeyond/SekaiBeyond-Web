@@ -5,12 +5,6 @@ import { MapPicker } from '../../MapPicker';
 import { parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
 import { localized } from '~/lib/localized';
 
-/**
- * A tracked code's kind, fixed at creation since its links differ by kind.
- * 'location' is printed somewhere physical and can pin a map spot; 'social' is
- * shared on platforms and tagged per platform. Derived from whether a code has
- * platform tags.
- */
 type QrKind = 'location' | 'social';
 
 export interface QrDraft {
@@ -19,14 +13,8 @@ export interface QrDraft {
     targetUrl: string;
     eventId: string;
     expirationMode: QrExpirationMode;
-    /** datetime-local string (Pacific time) used while editing the custom date. */
     expiresLocal: string;
-    /** Editing-only: which kind of code this is (see {@link QrKind}). */
     kind: QrKind;
-    /**
-     * Social only: one QR link per platform, all opening {@link targetUrl},
-     * tallied per platform. Editable later.
-     */
     platforms: string[];
     lat: number;
     lng: number;
@@ -74,10 +62,6 @@ interface QrSavePayload {
     spotLabelCn: string;
 }
 
-/**
- * A draft as the function's payload, or a localized error when incomplete.
- * Location codes keep the spot and no platforms; social codes the reverse.
- */
 export function buildQrPayload(
     draft: QrDraft,
     isEnglish: boolean,
@@ -124,17 +108,12 @@ export function buildQrPayload(
     };
 }
 
-/**
- * Each field editor edits one facet of a {@link QrDraft}, so the create form
- * and the detail page's inline editors share controls.
- */
 interface QrFieldProps {
     draft: QrDraft;
     setDraft: (updater: (prev: QrDraft) => QrDraft) => void;
     isEnglish: boolean;
 }
 
-/** English + Chinese label inputs. */
 export const QrLabelFields = ({draft, setDraft, isEnglish}: QrFieldProps) => (
     <>
         <label>
@@ -158,7 +137,6 @@ export const QrLabelFields = ({draft, setDraft, isEnglish}: QrFieldProps) => (
     </>
 );
 
-/** Target URL input with the "editable without reprinting" reminder. */
 export const QrTargetField = ({draft, setDraft, isEnglish}: QrFieldProps) => (
     <label className="admin-form-grid-full">
         <span>{isEnglish ? 'Where it links' : '跳转目标'}</span>
@@ -176,7 +154,6 @@ export const QrTargetField = ({draft, setDraft, isEnglish}: QrFieldProps) => (
     </label>
 );
 
-/** Linked-event picker; clearing the event also drops event-based expiry. */
 export const QrEventSelect = ({draft, setDraft, isEnglish, events}: QrFieldProps & {events: UpcomingEvent[]}) => (
     <label>
         <span>{isEnglish ? 'Link to Event (optional)' : '关联活动（可选）'}</span>
@@ -184,7 +161,6 @@ export const QrEventSelect = ({draft, setDraft, isEnglish, events}: QrFieldProps
             value={draft.eventId}
             onChange={e => setDraft(prev => {
                 const eventId = e.target.value;
-                // Drop event-based expiry if the event link is removed.
                 const expirationMode = !eventId && prev.expirationMode === 'event'
                     ? 'none'
                     : prev.expirationMode;
@@ -202,7 +178,6 @@ export const QrEventSelect = ({draft, setDraft, isEnglish, events}: QrFieldProps
     </label>
 );
 
-/** Expiration mode select plus the date input when a custom date is chosen. */
 export const QrExpirationFields = ({draft, setDraft, isEnglish}: QrFieldProps) => (
     <>
         <label>
@@ -236,13 +211,10 @@ export const QrExpirationFields = ({draft, setDraft, isEnglish}: QrFieldProps) =
     </>
 );
 
-/** Platform checkbox grid (social codes), with orphaned tags kept visible. */
 export const QrPlatformPicker = (
     {draft, setDraft, isEnglish, onManagePlatforms}: QrFieldProps & {onManagePlatforms?: () => void},
 ) => {
     const {platforms} = useSocialPlatforms();
-    // Tags of deleted platforms still get a checkbox (their raw id), so they
-    // can be unchecked rather than silently dropped.
     const knownIds = new Set(platforms.map(p => p.id));
     const orphanTags = draft.platforms.filter(id => !knownIds.has(id));
 
@@ -296,7 +268,6 @@ export const QrPlatformPicker = (
     );
 };
 
-/** Map-spot picker with clear button and per-language spot notes. */
 export const QrSpotPicker = ({draft, setDraft, isEnglish}: QrFieldProps) => {
     const hasSpot = qrHasSpot(draft);
     return (
@@ -352,11 +323,9 @@ interface QrCodeFormProps {
     setDraft: (updater: (prev: QrDraft) => QrDraft) => void;
     events: UpcomingEvent[];
     isEnglish: boolean;
-    /** Opens the social-platform manager. */
     onManagePlatforms?: () => void;
 }
 
-/** The full form used when creating a tracked code. */
 export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatforms}: QrCodeFormProps) => {
     return (
         <>

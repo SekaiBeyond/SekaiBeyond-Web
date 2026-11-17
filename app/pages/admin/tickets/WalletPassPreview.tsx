@@ -15,10 +15,6 @@ interface WalletPassPreviewProps {
 
 const SAMPLE_TICKET_ID = 'ticket-uuid-1';
 
-/**
- * A pass as Apple Wallet lays it out, front and back, for a sample ticket.
- * Mirrors passBody on the server.
- */
 export function WalletPassPreview({event, settings, contactEmail}: WalletPassPreviewProps) {
     const {isEnglish} = useLanguage();
     const {venues} = useVenues();
@@ -27,7 +23,6 @@ export function WalletPassPreview({event, settings, contactEmail}: WalletPassPre
     const ticket = walletTicketStyle(type);
     const colors = WALLET_COLOR_STYLES[settings.color === 'auto' ? ticket.color : settings.color];
     const title = event.title.trim() || event.titleCn.trim() || 'Event';
-    // In English, falling back to the Chinese, as eventLocation on the server.
     const location = eventLocationDisplay(event, venues, true) || eventLocationDisplay(event, venues, false);
     const date = event.startAt.toLocaleString('en-US', {
         timeZone: SITE_TIME_ZONE,

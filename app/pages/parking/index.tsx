@@ -23,10 +23,6 @@ import { Footer } from './parts';
 import { type ParkingText, useParkingText } from './text';
 import { VenueSwitcher } from './VenueSwitcher';
 
-/**
- * The location state a link into the guide can pass: the con page's says it's from
- * there, so the guide's back link returns to the con instead of home.
- */
 export type ParkingGuideState = {from?: 'con'};
 
 const TopBar = ({tx, fromCon}: {tx: ParkingText; fromCon: boolean}) => (
@@ -47,20 +43,15 @@ const Notice = ({icon, title, desc}: {icon: string; title: string; desc: string}
     </div>
 );
 
-// How often the "right now" statuses move on.
 const NOW_TICK_MS = 60_000;
 
 export const ParkingGuide = () => {
-    // `/parking/venue/<venue id>` opens on a venue, `/parking/lot/<lot code>` on a lot, and
-    // `/parking/event/<event id>` on an event, with `/lot/<lot code>` after it for a lot.
     const [kind = '', id = '', sub = '', subId = ''] = (useParams()['*'] ?? '').split('/');
     const urlVenueId = kind === 'venue' ? id : '';
     const urlEventId = kind === 'event' ? id : '';
     const urlCode = (kind === 'lot' ? id : urlEventId && sub === 'lot' ? subId : '').toUpperCase();
-    // A guide opened from the con page goes back there, with `goTo` keeping that as the address changes.
     const {state} = useLocation();
     const fromCon = (state as ParkingGuideState | null)?.from === 'con';
-    // The address names the event, the lot open, or else the venue picked, so any of them can be linked to.
     const navigate = useNavigate();
     const goTo = (path: string) => navigate(path, {replace: true, preventScrollReset: true, state});
     const venuePath = (venueId: string) => venueId ? `/parking/venue/${encodeURIComponent(venueId)}` : '/parking';
@@ -70,7 +61,6 @@ export const ParkingGuide = () => {
     const {parking, loading: parkingLoading} = useUwParking();
     const {upcomingEvents, loading: eventsLoading} = useUpcomingEvents();
 
-    // The guide shows parking right now, which the clock moves on, unless it's an event's guide.
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const id = setInterval(() => setNow(new Date()), NOW_TICK_MS);
@@ -78,23 +68,17 @@ export const ParkingGuide = () => {
     }, []);
     const thisMinute = useMemo(() => nowWindow(now), [now]);
 
-    // The upcoming event the address names by its id. Ended events count too, so one
-    // that's over still names its venue.
     const urlEvent = useMemo((): GuideEvent | null => {
         const upcoming = urlEventId ? upcomingEvents.find(e => e.id === urlEventId) : undefined;
         return upcoming ? fromUpcoming(upcoming) : null;
     }, [urlEventId, upcomingEvents]);
-    // Its days from today on, which its guide switches between, opening on the first.
     const days = useMemo(() => urlEvent ? eventDays(urlEvent, thisMinute.date) : [], [urlEvent, thisMinute.date]);
-    // An event that's over, or isn't found, opens parking right now instead.
     const event = days.length > 0 ? urlEvent : null;
     const [dayKey, setDayKey] = useState<string | null>(null);
     const shownDay = days.find(d => d.key === dayKey) ?? days[0] ?? null;
     const parkingWindow = shownDay?.window ?? thisMinute;
     const eventVenueId = event?.venueId ?? '';
 
-    // Which venue's parking guide is displayed: the one picked, else the one the address
-    // names or its event's, else none, the whole campus.
     const [pickedVenueId, setPickedVenueId] = useState<string | null>(urlVenueId || null);
     const selectedVenueId = pickedVenueId ?? urlEvent?.venueId ?? '';
     const venue = resolveVenueById(selectedVenueId, venues);
@@ -106,7 +90,6 @@ export const ParkingGuide = () => {
     );
     const [query, setQuery] = useState('');
     const [chosenFilters, setFilters] = useState<ReadonlySet<LotFilter>>(new Set());
-    // Only the filters offered apply, so "free" is set aside while no lot is free.
     const offered = useMemo(() => offeredFilters(views), [views]);
     const filters = useMemo(
         () => new Set([...chosenFilters].filter(f => offered.includes(f))),
@@ -116,18 +99,15 @@ export const ParkingGuide = () => {
     const visibleCodes = useMemo(() => new Set(visibleViews.map(v => v.lot.code)), [visibleViews]);
     const listedCodes = useMemo(() => new Set(parking.lots.map(l => l.code)), [parking.lots]);
 
-    // The lot open in the panel is the one the address names.
     const selectedCode = listedCodes.has(urlCode) ? urlCode : null;
     const [hover, setHover] = useState<HoverTarget | null>(null);
     const [hotCode, setHotCode] = useState<string | null>(null);
     const mapApi = useRef<ParkingMapApi>(null);
     const panelRef = useRef<HTMLElement>(null);
-    // Where the list was scrolled to, so closing a lot returns there.
     const listScroll = useRef(0);
 
     const selectVenue = (id: string) => {
         setPickedVenueId(id);
-        // An event's guide keeps the event's address while another venue is looked at.
         goTo(event ? eventPath : venuePath(id));
         setHover(null);
         setHotCode(null);
@@ -143,7 +123,6 @@ export const ParkingGuide = () => {
         mapApi.current?.focusLot(code);
         if (!panel) return;
         panel.scrollTop = 0;
-        // Stacked under the map on narrow screens, the details would open out of sight.
         if (narrowScreen()) {
             panel.scrollIntoView({behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start'});
         }
@@ -167,7 +146,6 @@ export const ParkingGuide = () => {
 
     const venueName = (v: Venue) => localizedVenueName(v, tx.isEnglish);
 
-    // An event's guide waits for the events, so it doesn't open on right now first.
     const loading = venuesLoading || parkingLoading || (!!urlEventId && eventsLoading);
     if (loading) {
         return (
@@ -180,7 +158,6 @@ export const ParkingGuide = () => {
         );
     }
 
-    // No venues exist at all — there's nothing to show or switch between.
     if (venues.length === 0) {
         return (
             <div className="parking-page">

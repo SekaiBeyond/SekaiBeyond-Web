@@ -2,7 +2,6 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { localized } from '~/lib/localized';
 import { localizedVenueName, resolveVenueById, useVenues, venueLocationName } from '~/lib/venues';
 
-/** Where an event is: a venue, and which of its rooms, if any. */
 interface VenuePick {
     venueId: string;
     roomIds: string[];
@@ -11,24 +10,16 @@ interface VenuePick {
 interface VenueFormFieldProps {
     value: VenuePick;
     onChange: (next: VenuePick) => void;
-    /** The saved event's location text, or '' for a new event. */
     location?: string;
     locationCn?: string;
 }
 
-/**
- * Event-editor venue selector, with the venue's rooms to pick from, none of which
- * have to be. The venue's name and rooms are the event's location, and the venue
- * gives it its parking guide. An event without one shows its location text, if it
- * has any (see `eventLocationDisplay`), which saving with a venue clears.
- */
 export const VenueFormField = ({value, onChange, location = '', locationCn = ''}: VenueFormFieldProps) => {
     const {isEnglish} = useLanguage();
     const {venues} = useVenues();
     const venue = resolveVenueById(value.venueId, venues);
     const leftover = localized(isEnglish, location, locationCn).trim();
 
-    // Kept in the venue's order, the order the location lists them in.
     const toggleRoom = (roomId: string) => {
         if (!venue) return;
         const picked = new Set(value.roomIds);
@@ -43,7 +34,6 @@ export const VenueFormField = ({value, onChange, location = '', locationCn = ''}
                 <span>{isEnglish ? 'Venue' : '场地'}</span>
                 <select
                     value={value.venueId}
-                    // Rooms belong to a venue, so another venue starts with none.
                     onChange={e => onChange({venueId: e.target.value, roomIds: []})}
                     className="admin-input"
                 >
@@ -58,7 +48,6 @@ export const VenueFormField = ({value, onChange, location = '', locationCn = ''}
                 </select>
             </label>
             {venue && venue.rooms.length > 0 && (
-                // A div, not a <label>, so clicking the heading doesn't toggle the first chip.
                 <div className="admin-tag-field">
                     <span>{isEnglish ? 'Rooms (optional)' : '房间（可选）'}</span>
                     <div className="admin-tag-chips">

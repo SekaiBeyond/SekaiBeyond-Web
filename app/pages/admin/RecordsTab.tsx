@@ -33,8 +33,6 @@ const parseRecordDocs = (snapshot: {docs: DocumentSnapshot[]}): ActivityRecord[]
         } as ActivityRecord;
     });
 
-// Needs composite indexes (type, timestamp), (performedBy, timestamp) and
-// (type, performedBy, timestamp).
 const buildRecordsQuery = (category: RecordCategory | '', actorFilter: string, after?: DocumentSnapshot) => {
     const constraints: QueryConstraint[] = [];
     if (category) {
@@ -81,7 +79,6 @@ export const RecordsTab = ({
     const [recordFilterActor, setRecordFilterActor] = useState('');
     const [knownActors, setKnownActors] = useState<{uid: string; name: string}[]>([]);
     const activeFilterRef = useRef<{type: RecordCategory | ''; actor: string}>({type: '', actor: ''});
-    // So a page landing after the filter changed is dropped.
     const loadSeqRef = useRef(0);
 
     const loadRecords = useCallback(async (typeFilter: RecordCategory | '', actorFilter: string, after?: DocumentSnapshot) => {
@@ -100,7 +97,6 @@ export const RecordsTab = ({
             setLastDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
             setHasMore(snapshot.docs.length === PAGE_SIZE);
 
-            // System records have no actor to filter by.
             setKnownActors(prev => {
                 const merged = [...prev];
                 for (const item of items) {

@@ -9,44 +9,21 @@ import { extendedExpiry, startedAtAfter } from "./membership";
 import { recordDoc, recordRef } from "./records";
 import { sanitizeDisplayText, validateStr } from "./validation";
 
-/**
- * A physical passport is a sticker with the public `passportId` (this doc's id,
- * as a QR to /p/<id>) and a separate slip with the secret activation key.
- * Claiming needs only the slip; scanning afterwards needs only the sticker.
- */
-
-// Printed and in every scan URL, so it only needs to be unguessable: 31^10 ≈
-// 8.2e14.
 const PASSPORT_ID_LENGTH = 10;
-// The slip's secret: 31^12 ≈ 7.9e17 (~59 bits), like a badge code, redeemed from
-// the same box under the same rate limit. The length is what makes it safe to
-// accept without the sticker.
 const ACTIVATION_KEY_LENGTH = 12;
 
-// Each design sets its own term; this only stands in for a passport that has
-// none.
 export const PASSPORT_TERM_DAYS = 365;
 
-// Each passport writes two docs (passport and secret), so this stays within half
-// of BATCH_LIMIT to commit in one chunk. Notes are committed apart (see
-// generatePassports).
 export const MAX_GENERATE_COUNT = Math.min(200, Math.floor(BATCH_LIMIT / 2));
 
-// Same arithmetic: a delete erases the passport and its secret.
 export const MAX_DELETE_COUNT = MAX_GENERATE_COUNT;
 
-// Reads only, so bounded by one getAll; the client splits bigger selections.
 export const MAX_KEY_EXPORT_COUNT = 500;
 
-// One emailPassports call mints and mails this many, within both the mint
-// ceiling and one Resend batch; the client splits bigger lists. Its four writes
-// an address (passport, secret, note, queued email) stay within one batch.
 export const MAX_EMAIL_COUNT = Math.min(MAX_GENERATE_COUNT, SEND_CHUNK_SIZE, Math.floor(BATCH_LIMIT / 4));
 
-/** One line, like a ticket's note. Mirrored by PASSPORT_NOTE_MAX in app/lib/passports.ts. */
 const PASSPORT_NOTE_MAX = 500;
 
-/** A note as sent: one line, tags and control characters gone. Blank for none. */
 export function validatePassportNote(value: unknown): string {
     return sanitizeDisplayText(validateStr(value, "note", PASSPORT_NOTE_MAX));
 }
@@ -71,7 +48,6 @@ export function normalizeActivationKey(raw: unknown): string | null {
     return normalizeCode(raw, ACTIVATION_KEY_LENGTH);
 }
 
-/** Grouped in fours for the printed slip. Normalization strips the dashes again. */
 export function formatActivationKey(key: string): string {
     return (key.match(/.{1,4}/g) ?? [key]).join("-");
 }
@@ -80,11 +56,6 @@ function hashActivationKey(key: string, salt: string): string {
     return crypto.createHash("sha256").update(`${salt}:${key}`).digest("hex");
 }
 
-/**
- * A fresh key and the server-only material that verifies it. Claims check the
- * salted hash; the plaintext sits beside it so an admin can reprint the slip
- * (revealPassportKey).
- */
 export function newActivationKey(): {key: string; salt: string; secretHash: string} {
     const key = generateSecureCode(ACTIVATION_KEY_LENGTH);
     const salt = crypto.randomBytes(16).toString("hex");
@@ -95,7 +66,6 @@ function activationKeyMatches(key: string, secret: {salt?: unknown; secretHash?:
     if (typeof secret.salt !== "string" || typeof secret.secretHash !== "string") return false;
     const expected = Buffer.from(secret.secretHash, "hex");
     const actual = Buffer.from(hashActivationKey(key, secret.salt), "hex");
-    // timingSafeEqual throws on a length mismatch.
     if (expected.length !== actual.length || expected.length === 0) return false;
     return crypto.timingSafeEqual(expected, actual);
 }
@@ -105,14 +75,8 @@ export function isPassportYear(value: unknown): value is number {
 }
 
 export const PASSPORTS = "passports";
-/** Each passport's key, under its id. Server only (see firestore.rules). */
 export const SECRETS = "passportSecrets";
 
-/**
- * Staff's note on a passport, such as why it was made. Kept apart from the
- * passport, as it was while its holder could read that, under the same id. The
- * design is copied so the stock table can read a design's notes in one query.
- */
 export const passportNoteRef = (passportId: string) => db.collection("passportNotes").doc(passportId);
 
 export function passportNoteDoc(designId: string, note: string, by: {uid: string; name: string}) {
@@ -125,7 +89,6 @@ export function passportNoteDoc(designId: string, note: string, by: {uid: string
     };
 }
 
-/** What minting copies from a design, and what a key email shows of it. */
 export interface MintingDesign {
     designId: string;
     year: number;
@@ -135,10 +98,6 @@ export interface MintingDesign {
     termDays: number;
 }
 
-/**
- * The design to mint from. Without one there is nothing to render on the shelf
- * or the public page.
- */
 export async function readMintingDesign(designId: string): Promise<MintingDesign> {
     const snap = await db.collection("passportDesigns").doc(designId).get();
     if (!snap.exists) {
@@ -155,18 +114,6 @@ export async function readMintingDesign(designId: string): Promise<MintingDesign
     };
 }
 
-/**
- * One new unclaimed passport and its key, as a write for commitInChunks.
- *
- * The year is copied because it never changes, and the shelf and records use it
- * without reading designs; the term because it can be edited, and a passport
- * grants what it was issued with. `seen` only guards ids within one call;
- * batch.create() fails on a collision with an existing passport rather than
- * overwriting it. `extra` is set on the passport alongside.
- *
- * A non-blank `note` comes back as `noteWrite`, apart from `write`, since the
- * callers commit it differently; null without one.
- */
 export function mintPassport(
     design: MintingDesign,
     seen: Set<string>,
@@ -187,8 +134,6 @@ export function mintPassport(
     return {
         passportId,
         key,
-        // create(), like the passport's, so a colliding id fails rather than
-        // overwriting another passport's note.
         noteWrite: note
             ? (batch) => batch.create(passportNoteRef(passportId), passportNoteDoc(design.designId, note, by))
             : null,
@@ -215,27 +160,14 @@ export function mintPassport(
 export const ACTIVATION_CODE_PLACEHOLDER = /{{\s*activationCode\s*}}/g;
 export const ACTIVATE_URL_PLACEHOLDER = /{{\s*activateUrl\s*}}/g;
 
-/**
- * A key email's two key placeholders: the key as printed on a slip, and the
- * link that opens the Redeem Code box with it filled in. Filled apart from the
- * rest of the template, so a queued email holds them unfilled and
- * scheduledMailDrain fills in the key current when it goes.
- */
 export function fillActivationKey(text: string, key: string): string {
     const activationCode = formatActivationKey(key);
     const activateUrl = `${PUBLIC_ORIGIN}/profile?redeem=${encodeURIComponent(activationCode)}`;
-    // Function replacements, so nothing in them is read as a pattern.
     return text
         .replace(ACTIVATION_CODE_PLACEHOLDER, () => activationCode)
         .replace(ACTIVATE_URL_PLACEHOLDER, () => activateUrl);
 }
 
-/**
- * The passport whose current key is `key`, or null. Found through the plaintext
- * kept for revealPassportKey, which a claim leaves in place, so a spent key
- * answers "already activated" rather than "invalid". Keys aren't checked for
- * uniqueness: a repeat among 31^12 is about one in a billion.
- */
 export async function findPassportByKey(key: string): Promise<string | null> {
     const snap = await db.collection(SECRETS).where("key", "==", key).limit(1).get();
     return snap.empty ? null : snap.docs[0].id;
@@ -249,21 +181,6 @@ interface PassportGrant {
     year: number;
 }
 
-/**
- * Claim `passportId` for `uid` with its slip's key: grants the passport's term
- * on top of any membership and binds it for good. Throws an HttpsError
- * otherwise.
- *
- * An emailed passport activated on an account that has never had the address
- * it was sent to may be a gift or may be the wrong account, and can't be moved
- * after. So it's refused as "email-mismatch" until the holder
- * says to go ahead with `confirmEmailMismatch`, and the address is kept on the
- * passport as `claimedEmail` for the admin screens to compare.
- *
- * There's no per-passport lockout: a wrong key isn't aimed at any one passport.
- * Guessing is stopped by the key's length, the per-account rate limit and App
- * Check.
- */
 export async function claimPassportWithKey(
     uid: string,
     passportId: string,
@@ -297,8 +214,6 @@ export async function claimPassportWithKey(
                 {code: "no-key"},
             );
         }
-        // Not "invalid": the key is fine but the account has no profile, so the
-        // holder shouldn't be sent to retype it.
         if (!userSnap.exists) {
             throw new HttpsError(
                 "failed-precondition",
@@ -307,13 +222,10 @@ export async function claimPassportWithKey(
             );
         }
 
-        // Found by this key, so a mismatch means it was reissued in between.
         if (!activationKeyMatches(activationCode, secretSnap.data()!)) {
             throw new HttpsError("permission-denied", "That activation key is not correct.", {code: "bad-key"});
         }
 
-        // Asked only once the key is proven, and masked: the key's holder may
-        // not own the address it went to.
         const userData = userSnap.data()!;
         const accountEmail: string = userData.email ?? "";
         const sentTo = typeof passport.sentTo === "string" ? passport.sentTo : "";
@@ -336,13 +248,10 @@ export async function claimPassportWithKey(
             claimedAt: FieldValue.serverTimestamp(),
             claimedEmail: accountEmail,
         });
-        // Membership only; `group` is never touched (see the top of
-        // functions/passports.ts).
         txn.update(userRef, {
             membershipExpiresAt,
             membershipStartedAt: membershipStartedAt ?? FieldValue.delete(),
         });
-        // The hash has done its one job. The key stays for revealPassportKey.
         txn.update(secretRef, {salt: FieldValue.delete(), secretHash: FieldValue.delete()});
         txn.set(recordRef(), recordDoc("passport-claim", {
             performedBy: uid,

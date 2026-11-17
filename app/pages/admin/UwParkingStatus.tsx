@@ -12,10 +12,6 @@ interface UwParkingStatusProps {
 
 const WHEN: Intl.DateTimeFormatOptions = {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'};
 
-/**
- * Where the guide's UW data stands: lot count, when UW generated it and when it
- * last synced, what the last sync couldn't refresh, and Sync now.
- */
 export const UwParkingStatus = ({showToast, readOnly = false}: UwParkingStatusProps) => {
     const {isEnglish} = useLanguage();
     const {parking, loading, failed, refresh} = useUwParking();

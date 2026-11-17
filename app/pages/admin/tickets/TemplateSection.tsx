@@ -19,9 +19,7 @@ interface TemplateSectionProps {
     readOnly: boolean;
     showToast: ShowToast;
     onUnsavedChange: (unsaved: boolean) => void;
-    /** Whether a template is saved, once the stored one has been read. */
     onSavedChange: (saved: boolean) => void;
-    /** Whether the event's emails give each ticket an Add to Wallet button. */
     walletButton: boolean;
 }
 
@@ -45,8 +43,6 @@ export function TemplateSection({
     });
     const {template, loading, loadFailed} = editor;
 
-    // What's stored, not what's in the fields: the default fills them when
-    // nothing is.
     const saved = isTemplateSaved(editor.saved);
 
     useEffect(() => {
@@ -57,7 +53,6 @@ export function TemplateSection({
         return <div className="spinner spinner-centered"/>;
     }
 
-    // No editor after a failed read, so the stored template can't be saved over.
     if (loadFailed) {
         return (
             <p className="admin-no-results">

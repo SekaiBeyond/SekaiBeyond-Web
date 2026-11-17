@@ -12,7 +12,6 @@ export interface PastEvent {
     location: string;
     locationCn: string;
     venueId: string;
-    /** Rooms of its venue it's in; none means the venue as a whole. */
     roomIds: string[];
     description: string;
     descriptionCn: string;
@@ -22,7 +21,6 @@ export interface PastEvent {
     published: boolean;
     paid: boolean;
     deleteAt: Date | null;
-    /** Set when this was a year's Sekai Beyond Con. */
     con: ConInfo | null;
 }
 

@@ -12,7 +12,6 @@ const ACTION_CELL_STYLE = {display: 'flex', alignItems: 'center', gap: '6px', fl
 const ACTION_BADGE_STYLE = {minWidth: '85px', textAlign: 'center'} as const;
 const ACTION_SELECT_STYLE = {padding: '2px 4px', borderRadius: '4px', border: '1px solid #ccc', width: '90px'};
 
-/** A field's value, or the stored one struck through beside the file's when they differ. */
 const DiffCell = ({changed, before, after}: {changed: boolean; before: ReactNode; after: ReactNode}) => (
     <td className={changed ? 'admin-tickets-import-cell-changed' : undefined}>
         {changed ? (
@@ -86,7 +85,6 @@ export function ImportPreviewTable({
                             : isNew
                                 ? 'admin-tickets-import-row-new'
                                 : 'admin-tickets-import-row-unchanged';
-                        // A new row is added unless skipped; an existing one skipped unless overridden.
                         const actions: [RowAction, string][] = isNew
                             ? [['add', isEnglish ? 'Add' : '添加'], ['skip', isEnglish ? 'Skip' : '跳过']]
                             : [['skip', isEnglish ? 'Skip' : '跳过'], ['override', isEnglish ? 'Override' : '覆盖']];

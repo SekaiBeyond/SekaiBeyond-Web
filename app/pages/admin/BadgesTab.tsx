@@ -39,7 +39,6 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
 
     const [selectedBadgeDef, setSelectedBadgeDef] = useState<BadgeDef | null>(null);
 
-    // Create badge state
     const [showCreateBadge, setShowCreateBadge] = useState(false);
     const [createForm, setCreateForm] = useState<BadgeForm>(emptyBadgeForm);
     const [creatingBadgeDef, setCreatingBadgeDef] = useState(false);

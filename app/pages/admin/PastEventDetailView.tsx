@@ -12,12 +12,7 @@ import { ClaimCodeSection } from './ClaimCodeSection';
 import { EventStaffSection } from './EventStaffSection';
 import { PastEventAttendeesSection } from './PastEventAttendeesSection';
 import { TicketsSubtab } from './tickets/TicketsSubtab';
-import {
-    DeleteOrCancelButton,
-    PendingDeletionNote,
-    PublishToggleButton,
-    useEventLifecycle,
-} from './useEventLifecycle';
+import { EventActions, EventDetailHeader, PendingDeletionNote, SubTab, useEventLifecycle } from './useEventLifecycle';
 
 interface PastEventDetailViewProps {
     event: PastEvent;
@@ -31,8 +26,6 @@ interface PastEventDetailViewProps {
     onLookupUser?: (uid: string) => void;
 }
 
-// An archived event in the UpcomingEvent shape TicketsSubtab expects; only the
-// read-only views' fields matter.
 const toTicketEvent = (e: PastEvent): UpcomingEvent => ({
     id: e.id,
     title: e.title,
@@ -73,13 +66,12 @@ export const PastEventDetailView = ({
     const {isEnglish} = useLanguage();
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searching, setSearching] = useState(false);
-    // Paid events show Tickets/Stats; free ones the attendee list.
     const [eventSubTab, setEventSubTab] = useState<'attendees' | 'staff' | 'tickets'>(
         event.paid ? 'tickets' : 'attendees',
     );
     const [staffCount, setStaffCount] = useState<number | null>(null);
 
-    const {deletionBusyId, requestDeleteEvent, cancelDeleteEvent, togglePublish} = useEventLifecycle({
+    const lifecycle = useEventLifecycle({
         requestDeletion: callRequestEventDeletion,
         cancelDeletion: callCancelEventDeletion,
         setPublished: callSetPastEventPublished,
@@ -99,8 +91,6 @@ export const PastEventDetailView = ({
         }
     };
 
-    // Once per event: the view is keyed on its id, and `paid` is fixed at
-    // archive.
     useEffect(() => {
         let active = true;
 
@@ -125,7 +115,6 @@ export const PastEventDetailView = ({
                 if (!active) return;
                 setStaffCount(staff.length);
             } catch {
-                /* Non-fatal — count badge just won't appear. */
             }
         };
 
@@ -134,90 +123,47 @@ export const PastEventDetailView = ({
         return () => {
             active = false;
         };
-        // Not keyed on isEnglish: a language toggle shouldn't refetch.
     }, [event.id, event.paid, showToast]);
 
     return (
         <div className="admin-event-detail">
-            <button className="admin-btn admin-btn--link" onClick={onBack}>
-                &larr; {isEnglish ? 'All Events' : '所有活动'}
-            </button>
-
-            <div className="admin-event-detail-header">
-                {event.icon && (
-                    <img src={event.icon} alt="" className="admin-event-detail-img"/>
+            <EventDetailHeader
+                image={event.icon}
+                title={localized(isEnglish, event.title, event.titleCn)}
+                onBack={onBack}
+                backLabel={isEnglish ? 'All Events' : '所有活动'}
+            >
+                {event.con && (
+                    <span>{isEnglish ? `Sekai Beyond Con ${event.con.year}` : `${event.con.year} 彼世界动漫游戏展`}</span>
                 )}
-                <div>
-                    <h3>{localized(isEnglish, event.title, event.titleCn)}</h3>
-                    <p className="admin-event-detail-meta">
-                        {event.con && (
-                            <span>{isEnglish ? `Sekai Beyond Con ${event.con.year}` : `${event.con.year} 彼世界动漫游戏展`}</span>
-                        )}
-                        <span>{event.tagIds
-                            .map(id => tags.find(t => t.id === id))
-                            .filter((t): t is Tag => !!t)
-                            .map(t => localized(isEnglish, t.name, t.nameCn))
-                            .join(', ')}</span>
-                        <span>{event.date}</span>
-                        <span>{eventLocationDisplay(event, venues, isEnglish)}</span>
-                    </p>
-                </div>
-            </div>
+                <span>{event.tagIds
+                    .map(id => tags.find(t => t.id === id))
+                    .filter((t): t is Tag => !!t)
+                    .map(t => localized(isEnglish, t.name, t.nameCn))
+                    .join(', ')}</span>
+                <span>{event.date}</span>
+                <span>{eventLocationDisplay(event, venues, isEnglish)}</span>
+            </EventDetailHeader>
 
-            {!readOnly && (
-                <div className="admin-form-actions admin-section-mb">
-                    <button
-                        className="admin-toggle-btn admin-toggle-edit"
-                        onClick={() => onEdit(event)}
-                    >
-                        {isEnglish ? 'Edit Event' : '编辑活动'}
-                    </button>
-                    <PublishToggleButton
-                        published={event.published}
-                        onToggle={() => togglePublish(event)}
-                    />
-                    <DeleteOrCancelButton
-                        deleteAt={event.deleteAt}
-                        busy={deletionBusyId === event.id}
-                        onRequest={() => requestDeleteEvent(event)}
-                        onCancel={() => cancelDeleteEvent(event)}
-                    />
-                </div>
-            )}
+            {!readOnly && <EventActions event={event} onEdit={() => onEdit(event)} lifecycle={lifecycle}/>}
             <PendingDeletionNote deleteAt={event.deleteAt}/>
             <div className="admin-sub-tabs">
                 {event.paid ? (
-                    <button
-                        className={`admin-sub-tab ${eventSubTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setEventSubTab('tickets')}
-                    >
+                    <SubTab active={eventSubTab === 'tickets'} onClick={() => setEventSubTab('tickets')}>
                         {isEnglish ? 'Tickets' : '门票'}
-                    </button>
+                    </SubTab>
                 ) : (
-                    <button
-                        className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setEventSubTab('attendees')}
-                    >
+                    <SubTab active={eventSubTab === 'attendees'} onClick={() => setEventSubTab('attendees')}
+                            count={eventAttendees.length}>
                         {isEnglish ? 'Attendees' : '参加者'}
-                        {eventAttendees.length > 0 && (
-                            <span className="admin-sub-tab-count">{eventAttendees.length}</span>
-                        )}
-                    </button>
+                    </SubTab>
                 )}
-                <button
-                    className={`admin-sub-tab ${eventSubTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
-                    onClick={() => setEventSubTab('staff')}
-                >
+                <SubTab active={eventSubTab === 'staff'} onClick={() => setEventSubTab('staff')} count={staffCount}>
                     {isEnglish ? 'Staff' : '工作人员'}
-                    {staffCount != null && staffCount > 0 && (
-                        <span className="admin-sub-tab-count">{staffCount}</span>
-                    )}
-                </button>
+                </SubTab>
             </div>
 
             {event.paid && eventSubTab === 'tickets' && (
-                // Read-only: copied under pastEvents on archive, and the event
-                // is over.
                 <TicketsSubtab
                     event={toTicketEvent(event)}
                     readOnly

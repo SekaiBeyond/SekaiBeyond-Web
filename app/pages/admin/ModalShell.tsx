@@ -4,16 +4,10 @@ import { useModalEffects } from '~/lib/useModalEffects';
 interface ModalShellProps {
     title: ReactNode;
     onClose: () => void;
-    /** Blocks every close path (overlay click, ×, Escape) while true (e.g. mid-save). */
     closeDisabled?: boolean;
     children: ReactNode;
 }
 
-/**
- * The admin modal chrome: dimmed overlay, centered content box, title header
- * with a × button, focus trap + scroll lock + Escape-to-close. Mount it only
- * while the modal is open.
- */
 export function ModalShell({title, onClose, closeDisabled = false, children}: ModalShellProps) {
     const overlayRef = useRef<HTMLDivElement>(null);
     const close = () => {

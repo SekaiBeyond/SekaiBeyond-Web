@@ -16,31 +16,19 @@ import { Footer } from '~/pages/convention/Footer';
 import { Unpublished } from '~/pages/convention/Unpublished';
 import { useT } from '~/pages/convention/i18n';
 
-/**
- * The Sekai Beyond Con page, with its own navbar and footer: the bar sits
- * transparent over the hero and links to this page's anchors. `sbc-` keeps its
- * styles clear of app/styles.
- */
 export const ConPage = () => {
     const t = useT();
-    // The published mirror, or the draft for staff previewing.
     const {content, loading: contentLoading, failed} = useConContent();
-    // Alongside the content, so the hero doesn't flash "TBA" for the date or venue.
     const {loading: listingLoading} = useConListing();
     const {loading: venuesLoading} = useVenues();
     const loading = contentLoading || listingLoading || venuesLoading;
     const {profile} = useAuth();
 
-    // Waits for the content, since a cold read can outlast `useHashScroll`'s own
-    // retry.
     useHashScroll(!loading);
 
     const canPreview = !!profile && hasPermission(profile.group, 'staff');
-    // A failed read falls back to defaults nobody agreed to publish.
     const published = content.settings.published && !failed;
 
-    // Rendering before the switch and the viewer's group are known could flash an
-    // unpublished con.
     if (loading) return <div className="sbc-page"/>;
 
     if (!published && !canPreview) return <Unpublished/>;

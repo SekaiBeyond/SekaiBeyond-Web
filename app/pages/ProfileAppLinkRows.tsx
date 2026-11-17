@@ -19,28 +19,20 @@ import {
 import type { ShowToast } from '~/lib/useToasts';
 import { appBrand, ConnectionRow, type ConnectionStatus } from '~/pages/ProfileConnectionRow';
 
-/** A request this tab started, as startAppLink gave it. */
 interface Started {
     appId: string;
     requestId: string;
     code: string;
     qr: string;
-    /**
-     * How far the server's clock is ahead of this device's, as of starting it:
-     * the request's times are the server's, and a device's clock can be off by
-     * more than the minutes a request lasts.
-     */
     clockOffset: number;
 }
 
-/** Why the app's last claim was refused, kept on a request still waiting for another. */
 interface Refusal {
     code: string;
     side?: string;
     until?: string;
 }
 
-/** The request as it stands, watched in Firestore for the app's claim. `failed`: it can't be watched. */
 interface Watched {
     status: 'waiting' | 'claimed' | 'linked' | 'cancelled' | 'failed';
     appUserName: string;
@@ -61,14 +53,8 @@ const readRefusal = (raw: unknown): Refusal | null => {
 
 const STATUSES = ['waiting', 'claimed', 'linked', 'cancelled'] as const;
 
-/** The four digits the app shows its user once it has claimed the request. */
 const CONFIRM_CODE_RE = /^\d{4}$/;
 
-/**
- * The request `requestId` names, kept up to date as the app claims it, or
- * null until it's first read. The server pushes its time on when it's
- * claimed, so the countdown starts over for confirming.
- */
 function useLinkRequest(requestId: string | null): Watched | null {
     const [watched, setWatched] = useState<Watched | null>(null);
     useEffect(() => {
@@ -88,7 +74,6 @@ function useLinkRequest(requestId: string | null): Watched | null {
     return watched;
 }
 
-/** The server's time now, as best this device can tell (`offset`), a second at a time while `on`. */
 function useServerNow(on: boolean, offset: number): number {
     const [now, setNow] = useState(() => Date.now() + offset);
     useEffect(() => {
@@ -105,12 +90,6 @@ const formatLeft = (ms: number) => {
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 };
 
-/**
- * A request in progress: the code to scan or type in the app, then, once the
- * app's user has claimed it there, who they are and a box for the four digits
- * the app now shows them. Only someone who can see the app can type those in,
- * so a name copied from yours can't link you to someone else's app account.
- */
 const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
     app: LinkableApp;
     started: Started;
@@ -129,7 +108,6 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
 
     const expired = !!watched && open && watched.expiresAt <= now;
 
-    // Confirmed from another tab.
     const linkedElsewhere = watched?.status === 'linked';
     useEffect(() => {
         if (linkedElsewhere) onLinked();
@@ -152,7 +130,6 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
     };
 
     const cancel = () => {
-        // Nothing to wait for: an unconfirmed request links nothing, and runs out anyway.
         void callCancelAppLink({requestId: started.requestId}).catch(() => {
         });
         onClose();
@@ -239,8 +216,6 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
             </div>
             <div className="settings-link-guide">
                 {wechat ? (
-                    // The mini program's own words (sekai-beyond_uniapp, pages/user/sekai-link): change
-                    // these with them. In English they're given translated.
                     <ol className="settings-link-steps">
                         <li>
                             {isEnglish
@@ -284,7 +259,6 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
                         : '在同一部手机上操作？请直接输入 6 位数字，无需扫码。'}
                 </span>
                 {watched.refusal && (
-                    // The app tried and was refused: say why, as the app tells its user.
                     <span className="settings-link-refusal" role="alert">
                         {isEnglish ? `${appName} couldn’t link: ` : `${appName}未能绑定：`}
                         {linkRefusalMessage(watched.refusal, isEnglish)}
@@ -303,13 +277,6 @@ const LinkPanel = ({app, started, onLinked, onClose, showToast}: {
     );
 };
 
-/**
- * The Connected Accounts card's rows for the apps this account may link to its
- * account in them, such as the WeChat mini program, and its links there. None
- * when no app links accounts. A row with a way to try again when they can't be
- * loaded, since a link already made can only be removed from here. Everything
- * is enforced server-side (functions/appLinks.ts).
- */
 export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const language = isEnglish ? 'en' : 'zh';
@@ -326,7 +293,6 @@ export const AppLinkRows = ({showToast}: {showToast: ShowToast}) => {
             setApps((await callGetAppLinks()).data.apps);
             setLoadFailed(false);
         } catch {
-            // What was shown before stays; with nothing shown yet, say so.
             setLoadFailed(true);
         } finally {
             setLoading(false);

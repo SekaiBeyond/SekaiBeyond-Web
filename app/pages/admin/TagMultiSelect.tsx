@@ -8,8 +8,6 @@ interface TagMultiSelectProps {
     isEnglish: boolean;
 }
 
-// Toggle chips for an event's tags, under a div rather than a <label> so
-// clicking the heading doesn't toggle the first chip.
 export const TagMultiSelect = ({tags, selected, onChange, isEnglish}: TagMultiSelectProps) => {
     const toggle = (id: string) => {
         onChange(selected.includes(id)

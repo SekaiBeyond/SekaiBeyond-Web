@@ -25,26 +25,16 @@ export const ScheduleSection = ({content, loading, showToast, readOnly}: Section
     const update = (index: number, next: ConContent['schedule'][number]) =>
         setDraft(prev => replaceAt(prev, index, next));
 
-    /**
-     * Rooms the draft uses, in the Rooms section's order. An unbooked room gets no
-     * chip, since its only result would be an empty list.
-     */
     const booked = new Set(draft.flatMap(item => item.room ? [item.room] : []));
     const filterableRooms = content.rooms.filter(room => booked.has(room.id));
 
-    // Derived, so a chip whose room empties falls back to showing everything.
     const activeRoom = filterableRooms.some(room => room.id === roomFilter) ? roomFilter : null;
     const filtering = activeRoom !== null;
 
-    /**
-     * Items with their real index in the draft, which every edit and delete uses,
-     * so filtering can't make an edit land on a neighbour.
-     */
     const visible = draft
         .map((item, index) => ({item, index}))
         .filter(({item}) => !filtering || item.room === activeRoom);
 
-    /** "12:00 – 13:30", or the TBA marker for an item with no time yet. */
     const timeLabel = (item: ConContent['schedule'][number]) => {
         if (item.start === undefined) return isEnglish ? 'TBA' : '待定';
         return `${item.start || '--:--'} – ${item.end || '--:--'}`;
@@ -112,7 +102,6 @@ export const ScheduleSection = ({content, loading, showToast, readOnly}: Section
                                         ...item,
                                         start: e.target.checked ? undefined : '',
                                         end: e.target.checked ? undefined : '',
-                                        // The room goes and comes back with the hour.
                                         room: e.target.checked
                                             ? undefined
                                             : (item.room ?? activeRoom ?? content.rooms[0]?.id ?? ''),
@@ -149,8 +138,6 @@ export const ScheduleSection = ({content, loading, showToast, readOnly}: Section
                                 </>
                             )}
 
-                            {/* Only a scheduled item picks a room: the hour and room are
-                                booked together. */}
                             {item.start !== undefined && (
                                 <>
                                     <label>
@@ -188,12 +175,9 @@ export const ScheduleSection = ({content, loading, showToast, readOnly}: Section
                     onClick={() => setDraft(prev => [...prev, {
                         start: '',
                         end: '',
-                        // The filtered room, so the new row stays on screen.
                         room: activeRoom ?? content.rooms[0]?.id ?? '',
                         title: BLANK,
                     }])}
-                    // Every item needs a room server-side, so without rooms the save
-                    // would fail.
                     blocked={content.rooms.length === 0}
                     blockedHint={{
                         en: 'Add and save a room above before adding schedule items.',

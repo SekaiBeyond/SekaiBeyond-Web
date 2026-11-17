@@ -2,14 +2,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { createValueCache, toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
-/**
- * The parking guide's synced copy of UW Transportation Services' parking data
- * (uwParking/current), written nightly by the uwParkingNightlySync function.
- * Mirrors UwLot / UwEventPricing in functions/src/utils/uwParking.ts.
- */
-
 export interface ClockRange {
-    /** HH:mm on the site clock. */
     start: string;
     end: string;
 }
@@ -17,7 +10,6 @@ export interface ClockRange {
 export interface UwLot {
     code: string;
     name: string;
-    /** As UW words it: "Surface Lot", "Garage" or "Underground Garage". */
     type: string;
     area: string;
     lat: number;
@@ -36,9 +28,7 @@ export interface UwLot {
     zipcar: boolean;
     ucar: boolean;
     dialARide: boolean;
-    /** When visitors can pay to park. Null on a day with no paid hours. */
     paidHours: {weekday: ClockRange | null; saturday: ClockRange | null};
-    /** When a permit is required; outside paidHours, a visitor can't park then. */
     permitHours: {weekday: ClockRange | null; saturday: ClockRange | null};
     gateHours: ClockRange | null;
 }
@@ -64,10 +54,6 @@ interface VenueWalking {
     lots: Record<string, WalkingTime>;
 }
 
-/**
- * Building footprint polygons mapping ring index to flat `[lng, lat, lng, lat, …]`
- * coordinate lists.
- */
 export interface VenueOutline {
     polygons: Record<string, number[]>[];
 }

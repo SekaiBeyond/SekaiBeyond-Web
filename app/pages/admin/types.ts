@@ -20,16 +20,13 @@ export interface BadgeActivationCode {
     usedCount: number;
 }
 
-/** A ban on an account, in force or run out (see functions/src/utils/bans.ts). */
 export interface UserBan {
     at: Date;
-    /** Null for a ban until lifted. */
     until: Date | null;
     reason: string;
     byName: string;
 }
 
-/** Whether a ban is in force: one that has run out stays on the account until its next sign-in clears it. */
 export const isBanActive = (ban: UserBan | null): boolean =>
     !!ban && (!ban.until || ban.until.getTime() > Date.now());
 
@@ -47,19 +44,12 @@ export interface UserRecord {
     title?: string;
     titleCn?: string;
     eventStaffEvents: string[];
-    /** Their passports' public page is off. One switch for all of them, theirs alone to flip. */
     hidePassportPage: boolean;
     ban: UserBan | null;
 }
 
 export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'passports' | 'records' | 'tools' | 'config' | 'con';
 
-/**
- * Every record type by Records tab category: the source of RecordType, the type
- * filter, and each row's tag and colour. Mirrors RecordType in
- * functions/src/utils/records.ts. Each category is one `in` query, so keep it
- * within 30 types.
- */
 export const RECORD_CATEGORIES = {
     role: {
         en: 'Role', zh: '角色',
@@ -146,11 +136,9 @@ export const RECORD_CATEGORIES = {
 export type RecordCategory = keyof typeof RECORD_CATEGORIES;
 type RecordType = (typeof RECORD_CATEGORIES)[RecordCategory]['types'][number];
 
-/** A record as the Records tab reads it. Mirrors RecordFields in functions/src/utils/records.ts. */
 export interface ActivityRecord {
     id: string;
     type: RecordType;
-    /** Absent on records the system writes: TTL deletions and the mail drain. */
     performedBy?: string;
     performedByName: string;
     targetUid?: string;
@@ -162,25 +150,18 @@ export interface ActivityRecord {
     badgeId?: string;
     badgeName?: string;
     tagName?: string;
-    /** Location records: the item's ID, for the link, and its English name at the time. */
     venueId?: string;
     venueName?: string;
     qrLabel?: string;
-    /** Passport records: the printed code, and its design's year and name. */
     passportId?: string;
     passportYear?: number | null;
     passportDesignName?: string;
-    /** How many passports a generate, delete or key export covered. */
     passportCount?: number;
-    /** A passport-claim on an account with another address: where it was emailed. */
     passportSentTo?: string;
     platformLabel?: string;
-    /** Comma-separated con page sections touched by a con-content-update. */
     conSection?: string;
-    /** The Site Config sections a config-update saved (keys of CONFIG_SECTION_LABELS). */
     configSections?: string[];
     lotCount?: number;
-    /** Event check-in codes only; see RecordFields.code. */
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;
@@ -195,47 +176,26 @@ export interface ActivityRecord {
     newName?: string;
     oldType?: string;
     newType?: string;
-    /** A ban: when it runs out, "" for one until lifted, and staff's note on why. */
     banUntil?: string;
     banReason?: string;
-    /**
-     * Why staff was granted: 'staff-assignment' (by an admin) or 'staff-code' (a
-     * redeemed code).
-     */
     reason?: string;
     addedCount?: number;
     replacedCount?: number;
     sentCount?: number;
-    /** A walk-in's tickets, and whether they were checked in as they were added. */
     ticketCount?: number;
     checkedIn?: boolean;
-    /** HomeTown tickets admitted unlisted at the door that an import then found. */
     confirmedCount?: number;
-    /**
-     * A HomeTown import that updated existing tickets: how many changed, and how
-     * many listed ones the file left out.
-     */
     updatedCount?: number;
     missingCount?: number;
-    /**
-     * A HomeTown purchase time sync: tickets given their order's time, and
-     * orders in the file with no ticket here.
-     */
     syncedCount?: number;
     unmatchedCount?: number;
-    /** Whether unlisted HomeTown tickets are now admitted. */
     enabled?: boolean;
-    /** The API key a key record is about, or that placed an order: its name and hint, never the key. */
     apiKeyName?: string;
     apiKeyHint?: string;
-    /** The seller's own number for an order placed through the API. */
     apiOrderId?: string;
-    /** The app an app record is about, and its name then. */
     appId?: string;
     appName?: string;
-    /** An account link: the app's user's name, as the app gave it. */
     appUserName?: string;
-    /** An unlink nobody asked for: what ended the link (see RecordFields in functions/src/utils/records.ts). */
     linkEndedBy?: 'email-undo' | 'account-deleted' | 'app-removed';
     timestamp: Date;
 }

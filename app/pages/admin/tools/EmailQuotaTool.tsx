@@ -1,19 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetEmailQuotaStatus, type EmailQuotaStatus } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
+import { RefreshButton, ToolHeader, useToolLoader } from '../ToolHeader';
 
 interface EmailQuotaToolProps {
     onBack: () => void;
     showToast: ShowToast;
 }
 
-// At or below this, headroom is "running low", flagged before a send spills
-// into the queue.
 const LOW_HEADROOM = 10;
 
-// Age of `iso` against the server's clock, so local skew can't make a fresh
-// counter look old. Null when absent.
 const formatAge = (
     iso: string | null,
     serverNow: string,
@@ -42,43 +39,16 @@ const formatAge = (
 export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
     const {isEnglish} = useLanguage();
     const [status, setStatus] = useState<EmailQuotaStatus | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
 
-    const load = useCallback(async (notify: boolean) => {
-        setLoading(true);
-        try {
-            const res = await callGetEmailQuotaStatus();
-            setStatus(res.data);
-            setError(false);
-            if (notify) {
-                showToast(isEnglish ? 'Quota refreshed.' : '额度已刷新。', 'success');
-            }
-        } catch (err) {
-            console.error('[EmailQuotaTool] load', err);
-            setError(true);
-            if (notify) {
-                showToast(
-                    isEnglish ? 'Could not load email quota.' : '无法加载邮件额度。',
-                    'error',
-                );
-            }
-        } finally {
-            setLoading(false);
-        }
-    }, [isEnglish, showToast]);
-
-    useEffect(() => {
-        // On mount only; refresh is manual, and a language toggle shouldn't
-        // refetch.
-        void load(false);
-    }, []);
+    const {loading, error, load} = useToolLoader(callGetEmailQuotaStatus, setStatus,
+        {
+            refreshed: {en: 'Quota refreshed.', zh: '额度已刷新。'},
+            failed: {en: 'Could not load email quota.', zh: '无法加载邮件额度。'}
+        }, showToast);
 
     const providerName = status?.provider.name ?? '';
     const unavailable = status?.readingSource === 'unavailable';
 
-    // From the local counter that gates sends, so it never promises capacity a
-    // concurrent send has taken.
     const remainingToday = status ? Math.max(0, status.dailyCap - status.sentToday) : 0;
     const remainingQueue = status ? Math.max(0, status.queueCap - status.queuedCount) : 0;
     const atCap = status !== null && !unavailable && remainingToday === 0;
@@ -86,8 +56,6 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
         && remainingToday > 0 && remainingToday <= LOW_HEADROOM;
     const queueFull = status !== null && remainingQueue === 0 && status.queuedCount > 0;
 
-    // Percentages of the cap: `confirmed` counted by the provider, `reserved` in
-    // flight. Clamped so an overshoot can't overflow the bar.
     const confirmedPct = status
         ? Math.min(100, (status.confirmed / Math.max(1, status.dailyCap)) * 100)
         : 0;
@@ -99,8 +67,6 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
     const oldestQueuedAge = status
         && formatAge(status.oldestQueuedAt, status.serverNow, isEnglish);
 
-    // "live" should match the provider's dashboard now; "cached" is the last
-    // send's reading, as good as its age.
     const readingLabel = !status ? '' : status.readingSource === 'live'
         ? (isEnglish ? `live from ${providerName}` : `来自 ${providerName} 实时数据`)
         : status.readingSource === 'cached'
@@ -111,24 +77,11 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
 
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
-                    {isEnglish ? '← Back to Tools' : '← 返回工具'}
-                </button>
-                <h3 className="admin-tools-title">
-                    {isEnglish ? 'Email Quota' : '邮件额度'}
-                </h3>
-                <button
-                    className="admin-toggle-btn admin-toggle-edit admin-quota-refresh"
-                    onClick={() => void load(true)}
-                    disabled={loading}
-                    type="button"
-                >
-                    {loading
-                        ? (isEnglish ? 'Loading...' : '加载中...')
-                        : (isEnglish ? 'Refresh' : '刷新')}
-                </button>
-            </div>
+            <ToolHeader title={isEnglish ? 'Email Quota' : '邮件额度'} back={isEnglish ? 'Back to Tools' : '返回工具'}
+                        onBack={onBack}>
+                <RefreshButton className="admin-toggle-btn admin-toggle-edit admin-quota-refresh"
+                               onClick={() => load(true)} busy={loading}/>
+            </ToolHeader>
 
             <p className="admin-helper-text admin-section-mb">
                 {isEnglish

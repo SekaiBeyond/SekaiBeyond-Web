@@ -27,23 +27,10 @@ type View =
     | 'google-account'
     | 'google-bind';
 
-/** A Google sign-in with no account behind it yet, held for the prompt that makes or binds one. */
 type PendingGoogle = Extract<GoogleSignIn, {status: 'needs-account'}> & {idToken: string};
 
-/**
- * What the server is being waited on for: which control set it going, a form's
- * button, Google's or the link for a new code, and what that control says
- * meanwhile.
- */
 type Waiting = {on: 'form' | 'google' | 'code'; label: string};
 
-/**
- * Every way into an account. Opened by the auth context's signIn, from any page.
- *
- * While the server is being waited on, whatever was pressed stays lit, with a
- * spinner and what it's doing, and everything else dims and can't be used, so
- * it's plain that it's working and that nothing needs pressing again.
- */
 export const SignInModal = () => {
     const {user, signInWithToken} = useAuth();
     const {isEnglish} = useLanguage();
@@ -56,7 +43,6 @@ export const SignInModal = () => {
     const [code, setCode] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [pendingGoogle, setPendingGoogle] = useState<PendingGoogle | null>(null);
-    // Whether a code has gone to the address typed into the prompt.
     const [googleCodeSent, setGoogleCodeSent] = useState(false);
     const [error, setError] = useState('');
     const [waiting, setWaiting] = useState<Waiting | null>(null);
@@ -79,10 +65,6 @@ export const SignInModal = () => {
         setShow(true);
     }), []);
 
-    // Closes once someone is signed in and nothing here is still waiting. A
-    // sign-in made here keeps waiting until the profile is in, so the page
-    // behind already shows them signed in; one made in another tab closes it as
-    // it arrives. Before the paint, so the form isn't seen coming back to life.
     useLayoutEffect(() => {
         if (user && !waiting) setShow(false);
     }, [user, waiting]);
@@ -109,7 +91,6 @@ export const SignInModal = () => {
         }
     };
 
-    /** A form's submit handler. `label` is what its button says while `action` runs. */
     const submit = (label: string, action: () => Promise<void>) => (e: FormEvent) => {
         e.preventDefault();
         void run('form', label, action);
@@ -134,15 +115,12 @@ export const SignInModal = () => {
         setDisplayName(data.name);
         setEmail(data.email);
         setGoogleCodeSent(false);
-        // Its address already has an account, so making another isn't an option.
         goTo(data.emailTaken ? 'google-bind' : 'google-account');
     });
 
-    // Google has proven its own address. Any other needs a code, like signing up.
     const googleNeedsCode = !!pendingGoogle
         && (email.trim().toLowerCase() !== pendingGoogle.email || !pendingGoogle.emailVerified);
 
-    // The same button first sends the code, then makes the account.
     const googleSendsCode = googleNeedsCode && !googleCodeSent;
 
     const createWithGoogle = submit(googleSendsCode ? sendingCode : creatingAccount, async () => {
@@ -186,9 +164,6 @@ export const SignInModal = () => {
 
     if (!show) return null;
 
-    // Read-only rather than disabled while waiting, here and on the buttons
-    // that start a wait: disabling what has the focus drops the focus, and
-    // someone whose password was wrong should still be in the field to fix it.
     const emailField = (
         <input
             type="email"
@@ -233,9 +208,7 @@ export const SignInModal = () => {
     const newPasswordLabel = isEnglish ? 'New password (at least 8 characters)' : '新密码（至少 8 个字符）';
     const errorLine = error && <p className="redeem-error-text">{error}</p>;
 
-    // What's being waited on says what it's doing, with a spinner before it.
     const waitingLabel = waiting && <><span className="spinner-inline" aria-hidden="true"/>{waiting.label}</>;
-    // Goes under it once it's been a while.
     const stillWaitingNote = stillWaiting &&
         <p className="auth-note auth-still-waiting">{stillWaitingText(isEnglish)}</p>;
 
@@ -291,7 +264,6 @@ export const SignInModal = () => {
                             {submitButton(isEnglish ? 'Sign In' : '登录')}
                         </form>
                         <div className="auth-divider">{isEnglish ? 'or' : '或'}</div>
-                        {/* Google's button can't be restyled, so what it's doing is laid over it. */}
                         <div
                             className={`auth-google-slot${waiting?.on === 'google' ? ' auth-google-slot--waiting' : ''}`}>
                             <div className="auth-google-button" inert={busy}>
@@ -528,12 +500,10 @@ export const SignInModal = () => {
                     </>
                 )}
 
-                {/* For screen readers, which a spinner and a dimmed form tell nothing. */}
                 <p className="admin-sr-only" role="status">
                     {waiting && (stillWaiting ? `${waiting.label} ${stillWaitingText(isEnglish)}` : waiting.label)}
                 </p>
 
-                {/* Last, so a form's first field takes the focus when the modal opens. */}
                 <button className="modal-close" onClick={close} type="button" disabled={busy}
                         aria-label={isEnglish ? 'Close' : '关闭'}>×
                 </button>

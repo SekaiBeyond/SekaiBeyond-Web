@@ -8,14 +8,8 @@ import { ProfileAccountSection, useSignInMethods } from '~/pages/ProfileAccountS
 import { ProfileConnectionsSection } from '~/pages/ProfileConnectionsSection';
 import { ProfileDevicesSection } from '~/pages/ProfileDevicesSection';
 
-/**
- * Every privacy switch, saved one at a time so a second open tab can't undo a
- * change. A failed refresh is swallowed: the write landed. The saved value is
- * held locally either way.
- */
 function usePrivacySettings(showToast: ShowToast): {
     values: Record<PrivacyKey, boolean>;
-    /** The key mid-save, so only that row goes busy. */
     saving: PrivacyKey | null;
     setVisible: (key: PrivacyKey, visible: boolean) => Promise<void>;
 } {
@@ -56,7 +50,6 @@ function usePrivacySettings(showToast: ShowToast): {
     return {values, saving, setVisible};
 }
 
-/** An on/off switch that saves as soon as it is flipped. */
 const PrivacySwitch = ({checked, busy, label, onChange}: {
     checked: boolean;
     busy: boolean;
@@ -76,14 +69,6 @@ const PrivacySwitch = ({checked, busy, label, onChange}: {
     </button>
 );
 
-/**
- * /profile's Settings tab: your email and password, the accounts connected to
- * yours (Google, and apps such as the WeChat mini program), what other people
- * are shown, then the devices signed in. Every switch is enforced server-side
- * (getPublicProfile leaves hidden sections out; getPassportPublicProfile
- * refuses a private passport page). Only the cards; the profile page owns the
- * nav, sign-in wall and toasts.
- */
 export const ProfileSettingsTab = ({showToast}: {showToast: ShowToast}) => {
     const signIn = useSignInMethods();
     return (

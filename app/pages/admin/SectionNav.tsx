@@ -3,34 +3,21 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { useDismiss } from '~/lib/useDismiss';
 
 interface NavSection {
-    /** The DOM id of the element the section starts at. */
     id: string;
     label: string;
 }
 
 interface SectionNavProps {
-    /** In page order. Fewer than two hides the navigator. */
     sections: NavSection[];
 }
 
-/** How far below the viewport top content stops being covered by the fixed admin nav. */
 const topInset = () => (document.querySelector('.profile-nav')?.getBoundingClientRect().bottom ?? 0) + 16;
 
-/**
- * Floating previous / next / jump-to for admin tabs of long stacked sections,
- * relative to the section under the top nav. Render it after the sections; its
- * spacer lets the last section scroll clear.
- */
 export const SectionNav = ({sections}: SectionNavProps) => {
     const {isEnglish} = useLanguage();
     const [current, setCurrent] = useState(0);
     const [menuOpen, setMenuOpen] = useState(false);
     const containerRef = useRef<HTMLElement>(null);
-    /**
-     * The section last jumped to, until the admin scrolls away; otherwise a short
-     * section near the bottom would read as its neighbour. `settledY` is null while
-     * the scroll is moving.
-     */
     const pin = useRef<{index: number; settledY: number | null} | null>(null);
     const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -41,8 +28,6 @@ export const SectionNav = ({sections}: SectionNavProps) => {
         }, 150);
     }, []);
 
-    // Ids have no whitespace, so this is a stable key even though `sections` is
-    // rebuilt every render.
     const idKey = sections.map(s => s.id).join(' ');
 
     useEffect(() => {
@@ -68,8 +53,6 @@ export const SectionNav = ({sections}: SectionNavProps) => {
                 const el = document.getElementById(id);
                 if (el && el.getBoundingClientRect().top <= line) index = i;
             });
-            // At the very end, the last section is current even if too short to
-            // reach the line.
             const {scrollHeight} = document.documentElement;
             if (window.scrollY > 0 && window.innerHeight + window.scrollY >= scrollHeight - 2) {
                 index = ids.length - 1;
@@ -83,7 +66,6 @@ export const SectionNav = ({sections}: SectionNavProps) => {
         measure();
         window.addEventListener('scroll', schedule, {passive: true});
         window.addEventListener('resize', schedule);
-        // Sections grow and shrink as rows are added or lists load, without a scroll.
         const observer = new ResizeObserver(schedule);
         observer.observe(document.body);
         return () => {
@@ -102,7 +84,6 @@ export const SectionNav = ({sections}: SectionNavProps) => {
 
     if (sections.length < 2) return null;
 
-    // `current` can briefly outlive a section that just dropped out of the list.
     const index = Math.min(current, sections.length - 1);
 
     const jump = (target: number) => {

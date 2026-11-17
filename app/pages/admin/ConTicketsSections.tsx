@@ -219,7 +219,6 @@ export const TicketFeeSection = ({content, loading, showToast, readOnly}: Sectio
     const {draft, setDraft} = editor;
     const lang = isEnglish ? 'en' : 'zh';
 
-    /** "$10 + $0.59 fee = $10.59" for one price under the fee being edited. */
     const previewAt = (price: number) => {
         const fee = ticketFeeFor(price, draft);
         return isEnglish
@@ -227,7 +226,6 @@ export const TicketFeeSection = ({content, loading, showToast, readOnly}: Sectio
             : `${formatPrice(price, lang)} + 手续费 ${formatPrice(fee, lang)} = ${formatPrice(price + fee, lang)}`;
     };
 
-    // Against the saved tiers, since those are the prices visitors actually see.
     const previews = content.tickets.flatMap(tier => {
         const name = t(tier.name);
         const rows: string[] = [];
@@ -407,8 +405,6 @@ export const InPersonSalesSection = ({content, loading, showToast, readOnly}: Se
                 <AddButton
                     label={{en: 'sale day', zh: '售票日期'}}
                     onClick={() => setDraft(prev => {
-                        // Hours rarely change day to day, so a new day starts from
-                        // the last one's.
                         const last = prev.sessions[prev.sessions.length - 1];
                         return {
                             ...prev,

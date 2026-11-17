@@ -12,15 +12,11 @@ import { eventLocationDisplay, useVenues } from "~/lib/venues";
 
 type Status = 'upcoming' | 'live' | 'past';
 
-/** One year of the Con, from the event marked as it. */
 interface Edition {
-    /** The event's id. */
     id: string;
     year: number;
     status: Status;
-    /** Its first day, `YYYY-MM-DD` in site time, which the countdown runs to. */
     startDay: string;
-    /** Its day, or first and last day, in the reader's language. */
     when: (isEnglish: boolean) => string;
     location: string;
     locationCn: string;
@@ -33,7 +29,6 @@ interface Edition {
     recapLinkCn: string;
 }
 
-/** A `YYYY-MM-DD` day, which reads as UTC midnight, so it's formatted in UTC. */
 const formatDay = (day: string, isEnglish: boolean) =>
     new Date(day).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
         year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
@@ -43,7 +38,6 @@ const tabId = (year: number) => `con-year-${year}`;
 
 const DAY_FORMAT: Intl.DateTimeFormatOptions = {year: 'numeric', month: 'long', day: 'numeric'};
 
-/** Whole days from today, in site time, to a `YYYY-MM-DD` day. */
 const daysUntil = (day: string) =>
     Math.round((Date.parse(day) - Date.parse(siteDay(new Date()))) / 86_400_000);
 
@@ -54,14 +48,11 @@ export const SekaiBeyondCon = () => {
     const {pastEvents, loading: pastLoading} = usePastEvents();
     const {venues} = useVenues();
     const [selectedYear, setSelectedYear] = useState<number | null>(null);
-    // Which way the last switch went, so the banner slides in from that side.
     const [direction, setDirection] = useState<'older' | 'newer' | null>(null);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const yearsRef = useRef<HTMLDivElement>(null);
     const touchStart = useRef<{x: number; y: number} | null>(null);
 
-    // One per year, newest first. Only published events, as everywhere public;
-    // the server allows one Con a year, and the unarchived one wins a tie.
     const editions = useMemo(() => {
         const now = Date.now();
         const byYear = new Map<number, Edition>();
@@ -114,17 +105,13 @@ export const SekaiBeyondCon = () => {
     }, [upcomingEvents, pastEvents]);
 
     const loading = conLoading || upcomingLoading || pastLoading;
-    // Newest first, as the badges hang left to right.
     const shown = loading ? [] : editions;
 
-    // Opens on the Con that's on or ahead, else the latest year.
     const opening = shown.find(e => e.status === 'live')
         ?? shown.findLast(e => e.status === 'upcoming')
         ?? shown[0];
     const edition = shown.find(e => e.year === selectedYear) ?? opening;
 
-    // Keeps the chosen badge in view on a narrow screen, scrolling only the
-    // row of years, never the page.
     useEffect(() => {
         const years = yearsRef.current;
         const badge = edition && years?.querySelector<HTMLElement>(`#${tabId(edition.year)}`);
@@ -138,23 +125,18 @@ export const SekaiBeyondCon = () => {
 
     if (!edition) return null;
 
-    // The /con page is about the event it links. Without a link to one of these,
-    // it's the Con still to come.
     const linkedId = conContent.event.upcomingEventId;
     const linksAnEdition = shown.some(e => e.id === linkedId);
     const showConPage = conContent.settings.published && (linksAnEdition
         ? edition.id === linkedId
         : edition.status !== 'past');
 
-    // Either language's recap stands in for a missing one, as in Past Events.
     const recapHref = eitherLanguage(isEnglish, edition.recapLink, edition.recapLinkCn);
     const showRecap = edition.status === 'past' && isValidHttpUrl(recapHref);
     const location = eventLocationDisplay(edition, venues, isEnglish);
     const description = localized(isEnglish, edition.description, edition.descriptionCn);
     const conName = isEnglish ? "Sekai Beyond Con" : "彼世界动漫游戏展";
 
-    // The year is the title's, so the label says only that the Con is on or how
-    // far off it is. A past one has none.
     const daysLeft = daysUntil(edition.startDay);
     const label = edition.status === 'past' ? null
         : edition.status === 'live'
@@ -177,7 +159,6 @@ export const SekaiBeyondCon = () => {
         setDirection(year > edition.year ? 'newer' : 'older');
         setSelectedYear(year);
     };
-    // Left to right: +1 is a year older. Stops at either end.
     const step = (offset: number) => {
         const next = shown[shown.indexOf(edition) + offset];
         if (next) select(next.year);
@@ -194,7 +175,6 @@ export const SekaiBeyondCon = () => {
         select(target.year);
         document.getElementById(tabId(target.year))?.focus();
     };
-    // A sideways swipe on the banner turns to the next or previous year.
     const onTouchStart = (event: TouchEvent) => {
         const touch = event.touches[0];
         touchStart.current = {x: touch.clientX, y: touch.clientY};
@@ -211,7 +191,6 @@ export const SekaiBeyondCon = () => {
 
     return (
         <section id="con" className="section">
-            {/* The years' badges hang from the subtitle. */}
             <div className="section-header con-header--badges">
                 <h2 className="section-title">Sekai Beyond Con</h2>
                 <p className="section-subtitle">
@@ -222,8 +201,6 @@ export const SekaiBeyondCon = () => {
             </div>
 
             <div className="con-editions">
-                {/* Each year a convention badge strung from the subtitle above;
-                    the chosen one drops down and swings straight. */}
                 <div className="con-years" ref={yearsRef}>
                     <div className="con-years-track">
                         <div
@@ -281,9 +258,6 @@ export const SekaiBeyondCon = () => {
                         <span className="con-deco">🎸</span>
                     </div>
 
-                    {/* Keyed, so each switch replays the slide, from the side the new
-                        year sits on. The poster, taped up like a flyer, sits beside
-                        the year's details; without one, the details stand alone. */}
                     <div
                         key={edition.year}
                         className={`con-banner-inner con-edition con-edition-enter${edition.image ? '' : ' con-edition--solo'}${direction ? ` con-edition-enter--${direction}` : ''}`}

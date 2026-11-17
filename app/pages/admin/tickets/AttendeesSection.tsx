@@ -19,10 +19,6 @@ interface AttendeesSectionProps {
     error: string | null;
     totals: AttendeeTotals;
     attendees: AttendeeData[];
-    /**
-     * Lowercased email → its account, or null for none. Missing means not
-     * looked up yet, so the tag waits.
-     */
     accountLinks: Map<string, AccountLink>;
     search: string;
     onSearchChange: (v: string) => void;
@@ -33,23 +29,16 @@ interface AttendeesSectionProps {
     statusFilter: StatusFilter;
     onStatusFilterChange: (v: StatusFilter) => void;
     readOnly: boolean;
-    /**
-     * The event is on and the viewer may take walk-ins, so Add takes walk-ins,
-     * shown even when the list is otherwise read-only.
-     */
     walkIn: boolean;
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
-    /** Downloads the attendees the filters match. Left out for those who may not. */
     onExport?: () => void;
-    /** How many attendees the filters match, beyond the page shown. */
     matchCount: number;
     onVoidTicket: (a: AttendeeData, ticketId: string) => void;
     onUnvoidTicket: (a: AttendeeData, ticketId: string) => void;
     onRedeemTicket: (a: AttendeeData, ticketId: string) => void;
     onResetTicket: (a: AttendeeData, ticketId: string) => void;
     onUpdateTicketType: (a: AttendeeData, ticketId: string, newType: TicketType) => void;
-    /** Resolves to the note as saved, or null if it wasn't. */
     onUpdateTicketNotes: (a: AttendeeData, ticketId: string, notes: string) => Promise<string | null>;
     onResend: (a: AttendeeData) => void;
     onDelete: (a: AttendeeData) => void;
@@ -103,7 +92,6 @@ export function AttendeesSection({
         return () => clearTimeout(timer);
     }, [copiedTicketId]);
 
-    // The whole ID, which is what the scanner's manual entry takes.
     const copyTicketId = async (ticketId: string) => {
         try {
             await navigator.clipboard.writeText(ticketId);
@@ -159,7 +147,6 @@ export function AttendeesSection({
                             ].filter(Boolean).join('，')}）`)}
                     </span>
                 )}
-                {/* Read-only staff working the door still take walk-ins. */}
                 {(!readOnly || walkIn) && (
                     <button
                         className="admin-toggle-btn admin-toggle-save admin-tickets-refresh"
@@ -170,7 +157,6 @@ export function AttendeesSection({
                             : (isEnglish ? 'Add Attendee' : '添加参加者')}
                     </button>
                 )}
-                {/* Exports what the filters match, so it says how many once any is set. */}
                 {onExport && (
                     <button
                         className="admin-toggle-btn admin-toggle-edit"
@@ -224,7 +210,6 @@ export function AttendeesSection({
                     <option value="redeemed">{isEnglish ? 'Redeemed' : '已验证'}</option>
                     <option value="unredeemed">{isEnglish ? 'Not Redeemed' : '未验证'}</option>
                     <option value="voided">{isEnglish ? 'Voided' : '已作废'}</option>
-                    {/* The HomeTown tickets to review: likely fakes, and likely refunds. */}
                     {totals.hometown > 0 && (
                         <>
                             <option
@@ -260,18 +245,12 @@ export function AttendeesSection({
             {attendees.map((a) => {
                 const {used, voided, remaining} = ticketStatusCounts(a);
                 const isExpanded = expanded.has(a.id);
-                // undefined while asking; null for no account, as an app order
-                // always has whatever its email.
                 const account = a.apiOrder ? null : accountLinks.get(a.email.toLowerCase());
-                // Nothing to send without an address, HomeTown and the seller's app
-                // send their own, and a walk-in already in at the door is owed nothing.
                 const emailState = !a.email || ticketsSentElsewhere(a) ? null
                     : a.emailSending ? 'unconfirmed'
                         : a.emailScheduled ? 'queued'
                             : a.emailSent ? 'sent'
                                 : checkedInWalkIn(a) ? null : 'unsent';
-                // A buyer with several HomeTown tickets has a row for each, told
-                // apart by number; a nameless, emailless one already leads with it.
                 const hometownNumber = a.hometown && (a.name || a.email) ? a.ticketIds[0] : '';
                 return (
                     <div key={a.id} className="admin-tickets-attendee-row">
@@ -280,8 +259,6 @@ export function AttendeesSection({
                             onClick={() => toggleExpand(a.id)}
                         >
                             <div className="admin-tickets-attendee-info">
-                                {/* Whatever they gave leads, and the second line says
-                                    what's missing, keeping every row the same height. */}
                                 <div className="admin-user-name">
                                     {a.name || a.email || anonymousAttendeeName(a, isEnglish)}
                                 </div>
@@ -327,8 +304,6 @@ export function AttendeesSection({
                                         {isEnglish ? 'Not in latest export' : '不在最新导出中'}
                                     </span>
                                 )}
-                                {/* An unlisted HomeTown ticket's type isn't known until an import
-                                    lists it; tickets changed one by one can hold several. */}
                                 {!a.unlisted && ticketTypeCounts(a).map(([type]) => (
                                     <span
                                         key={type}
@@ -484,8 +459,6 @@ export function AttendeesSection({
                                         <button
                                             className="admin-toggle-btn admin-toggle-revoke"
                                             onClick={() => onDelete(a)}
-                                            // Its record is what stops the number getting in again, or
-                                            // what a retried API order finds instead of issuing new tickets.
                                             disabled={a.hometown || a.apiOrder}
                                             title={a.hometown
                                                 ? (isEnglish ? 'HomeTown tickets are voided, not removed.' : 'HomeTown 门票只能作废，不能移除。')
@@ -498,7 +471,6 @@ export function AttendeesSection({
                                     </div>
                                 )}
                                 <div className="admin-data-table-wrap">
-                                    {/* On a phone each row is a card, its cells labelled from data-label. */}
                                     <table className="admin-data-table admin-tickets-table">
                                         <thead>
                                         <tr>
@@ -524,8 +496,6 @@ export function AttendeesSection({
                                                         aria-label={isEnglish ? `Copy ticket ID ${t.ticketId}` : `复制门票 ID ${t.ticketId}`}
                                                         onClick={() => void copyTicketId(t.ticketId)}
                                                     >
-                                                        {/* A HomeTown number is short, and what's printed on
-                                                            the buyer's ticket, so it shows in full. */}
                                                         {a.hometown ? t.ticketId : `${t.ticketId.slice(0, 8)}…`}
                                                         {copiedTicketId === t.ticketId ? (
                                                             <span
@@ -621,7 +591,6 @@ export function AttendeesSection({
                                                         />
                                                     )}
                                                 </td>
-                                                {/* Read-only gets no actions rather than greyed-out ones. */}
                                                 {!readOnly && (
                                                     <td className="admin-tickets-cell-actions">
                                                         <div className="admin-tickets-ticket-actions">
@@ -682,12 +651,10 @@ export function AttendeesSection({
     );
 }
 
-/** A HomeTown ticket's number after the row's second line, as printed on the buyer's ticket. */
 const HometownNumber = ({number}: {number: string}) => (
     <span className="admin-tickets-attendee-number"> · #{number}</span>
 );
 
-/** A ticket's note, saved on Enter or leaving the field; Escape puts back the saved one. */
 function TicketNotesInput({notes, onSave, isEnglish}: {
     notes: string;
     onSave: (notes: string) => Promise<string | null>;
@@ -696,7 +663,6 @@ function TicketNotesInput({notes, onSave, isEnglish}: {
     const [draft, setDraft] = useState(notes);
     const [saving, setSaving] = useState(false);
 
-    // Follows a refresh that changes it.
     useEffect(() => setDraft(notes), [notes]);
 
     const save = async () => {

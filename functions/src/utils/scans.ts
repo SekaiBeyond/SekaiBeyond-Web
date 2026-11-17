@@ -7,16 +7,8 @@ const QUOTA = "scanQuota";
 
 const SCAN_QUOTA_WINDOW_MS = 30 * 60_000;
 
-/**
- * Scans one client may add to one code per window. Loose enough that honest
- * traffic behind a shared venue NAT won't reach it.
- */
 const SCAN_QUOTA = 500;
 
-// Salts a hash thrown away within the hour. Set SCAN_CLIENT_SALT to make
-// digests unguessable from a database export; the fallback still keeps raw
-// addresses out of storage, but someone with the source and the data could
-// brute-force IPv4 back out.
 const CLIENT_SALT = process.env.SCAN_CLIENT_SALT ?? "sekai-beyond-scan-client";
 
 interface ScanRequestLike {
@@ -24,12 +16,6 @@ interface ScanRequestLike {
     ip?: string;
 }
 
-/**
- * A non-identifying quota key for whoever is scanning: their address, narrowed to
- * the IPv6 /64 so a client can't rotate through its prefix, plus the user agent
- * so phones behind one NAT stay apart. Hashed, never stored raw. An unreadable
- * address falls into a shared bucket, not an exemption.
- */
 export function scanClientKey(req: ScanRequestLike | undefined): string {
     const forwarded = req?.headers?.["x-forwarded-for"];
     const chain = Array.isArray(forwarded) ? forwarded.join(",") : (forwarded ?? "");
@@ -42,14 +28,6 @@ export function scanClientKey(req: ScanRequestLike | undefined): string {
         .slice(0, 32);
 }
 
-/**
- * A rate limit's key for the network a callable came from, hashed like
- * scanClientKey. Stricter than it, for limits that protect accounts: the user
- * agent is the caller's to choose, so it's left out, and the address is the last
- * X-Forwarded-For entry, which Google's front end added. Anything before that
- * the caller wrote themselves. Callables are reached directly, never through
- * Hosting, so there's no other proxy after it.
- */
 export function callerAddressKey(req: ScanRequestLike | undefined): string {
     const forwarded = req?.headers?.["x-forwarded-for"];
     const chain = Array.isArray(forwarded) ? forwarded.join(",") : (forwarded ?? "");
@@ -57,18 +35,11 @@ export function callerAddressKey(req: ScanRequestLike | undefined): string {
     return createHash("sha256").update(`${CLIENT_SALT}|${narrowAddress(address)}`).digest("hex").slice(0, 32);
 }
 
-/** An IPv6 client typically owns a whole /64, so the suffix is theirs to vary. */
 function narrowAddress(address: string): string {
     if (!address.includes(":")) return address;
     return address.split(":").slice(0, 4).join(":");
 }
 
-/**
- * Whether this client has used up its allowance on this code. The window is in
- * the doc id, so each gets a fresh doc and a leftover from an old window (TTL
- * sweeps lazily) can't suppress a later scan. A failed read lets the scan
- * through.
- */
 async function quotaExhausted(ref: FirebaseFirestore.DocumentReference): Promise<boolean> {
     try {
         const used = (await ref.get()).data()?.count;
@@ -79,14 +50,6 @@ async function quotaExhausted(ref: FirebaseFirestore.DocumentReference): Promise
     }
 }
 
-/**
- * Bump a QR code's counters and log a scan under `scans`. Both recordQrScan and
- * redirectQr write through here, which keeps the counters, the TTL policy and
- * the chart (fetchScans in app/lib/scans.ts) in agreement.
- *
- * `platform` is the link's `p` tag, also tallied under
- * `platformScans.<platform>`; "" skips that.
- */
 export async function recordScan(
     ref: FirebaseFirestore.DocumentReference,
     {clientKey, platform = ""}: {
@@ -100,8 +63,6 @@ export async function recordScan(
     );
 
     if (await quotaExhausted(quotaRef)) {
-        // Logged: this is the signal a code is being hammered. The redirect
-        // still runs.
         console.log(`recordScan: quota reached for ${ref.path}, scan not counted`);
         return;
     }
@@ -119,7 +80,6 @@ export async function recordScan(
         platform,
         expiresAt: scanExpiresAt(),
     });
-    // In the same commit. Two windows' grace on the TTL, like chargeRateLimit.
     batch.set(quotaRef, {
         count: FieldValue.increment(1),
         expiresAt: Timestamp.fromMillis(Date.now() + SCAN_QUOTA_WINDOW_MS * 2),

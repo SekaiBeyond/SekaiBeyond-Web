@@ -3,15 +3,12 @@ import type { ReactNode } from 'react';
 interface UserRowProps {
     user: {photoURL: string; displayName: string; email: string};
     onClick?: () => void;
-    /** Trailing content (group tag, action buttons) — pushed to the right edge of the row. */
     children?: ReactNode;
 }
 
-/** A user's photo, or their initial when they have none, rather than a broken image. */
 export function UserAvatar({photoURL, displayName, className = 'admin-user-avatar', onClick}: {
     photoURL: string;
     displayName: string;
-    /** The size and frame; the list avatar's by default. */
     className?: string;
     onClick?: () => void;
 }) {
@@ -24,7 +21,6 @@ export function UserAvatar({photoURL, displayName, className = 'admin-user-avata
     );
 }
 
-/** The avatar + name + email row every admin user list is built from. */
 export function UserRow({user, onClick, children}: UserRowProps) {
     return (
         <div

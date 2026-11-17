@@ -12,7 +12,6 @@ for (const [category, {types}] of Object.entries(RECORD_CATEGORIES)) {
     for (const type of types) CATEGORY_BY_TYPE.set(type, category as RecordCategory);
 }
 
-// A config-update's sections, labelled as the Site Config tab's navigator labels them.
 const CONFIG_SECTION_LABELS: Record<string, {en: string; zh: string}> = {
     contact: {en: 'Contact Email', zh: '联系邮箱'},
     'social-links': {en: 'Social Links', zh: '社交链接'},
@@ -53,11 +52,8 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
 
     const clickableName = (uid: string, name: string) => clickable(name, () => onLookupUser(uid));
 
-    // A live item is linked and named as it is now; a deleted one keeps the
-    // record's name.
     const localized = (en: string, zh: string) => (isEnglish ? en : zh) || en;
 
-    // Archiving keeps an event's ID, so looking in both lists finds it either way.
     const clickableEvent = (eventId?: string, storedTitle?: string): ReactNode => {
         const upcoming = upcomingEvents.find(e => e.id === eventId);
         if (upcoming) {
@@ -80,7 +76,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         return clickable(storedName ?? '');
     };
 
-    // A record can outlive a group's rename, so its group may have no label left.
     const groupLabel = (g?: UserGroup) => {
         const labels = g ? GROUP_LABELS[g] : undefined;
         if (!labels) return g ?? '';
@@ -100,11 +95,8 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
     const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
     const event = clickableEvent(r.eventId, r.eventTitle);
     const badge = clickableBadge(r.badgeId, r.badgeName);
-    // Ticket holders are attendees, not accounts: an email instead of a UID. A
-    // walk-in may have neither.
     const attendee = r.targetName || r.targetEmail || (isEnglish ? 'a walk-in guest' : '一位现场来宾');
     const code = r.code ? <> <span className="record-code">{r.code}</span></> : null;
-    // A ticket email an API order asked for.
     const apiOrderNote = r.apiOrderId
         ? isEnglish
             ? <>, for order <span className="record-code">{r.apiOrderId}</span> sold through {r.apiKeyName || 'API'}</>
@@ -117,7 +109,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>assigned {target} from {groupLabel(r.oldGroup)} to {groupLabel(r.newGroup)}</>
                 : <>将 {target} 从 {groupLabel(r.oldGroup)} 改为 {groupLabel(r.newGroup)}</>;
         case 'membership-grant': {
-            // No old expiry means they held no membership before this.
             const was = r.oldExpiresAt
                 ? (isEnglish ? ` (was ${fmtExpiry(r.oldExpiresAt)})` : `（原为 ${fmtExpiry(r.oldExpiresAt)}）`)
                 : '';
@@ -206,10 +197,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         case 'account-app-unlink': {
             const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
             const app = r.appName || r.appId;
-            // Ended by something else: the owner undoing an email change (only
-            // links made since, each disowned as "This wasn't me" disowns one),
-            // or, with no hold, the account's deletion or the app's removal,
-            // which the record's performer did.
             if (r.linkEndedBy === 'email-undo') {
                 return isEnglish
                     ? <>unlinked their {app} account{who}, linked after the email change they undid</>
@@ -225,7 +212,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                     ? <>ended {target}'s link to the {app} account{who} by removing the app</>
                     : <>移除了应用，{target} 与{app}账号{who}的绑定随之解除</>;
             }
-            // From the app, through its key, rather than from Settings.
             const inApp = r.apiKeyName ? (isEnglish ? ' in the app' : '（在应用内）') : '';
             return isEnglish
                 ? <>unlinked their {app} account{who}{inApp}</>
@@ -233,14 +219,11 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         }
         case 'account-app-link-undo': {
             const who = r.appUserName ? (isEnglish ? ` "${r.appUserName}"` : `“${r.appUserName}”`) : '';
-            // The "This wasn't me" link in the link's notice, which also replaced
-            // the password and took off any Google account bound.
             return isEnglish
                 ? <>undid a link to the {r.appName || r.appId} account{who} they didn’t make</>
                 : <>撤销了一个并非本人操作的{r.appName || r.appId}账号{who}绑定</>;
         }
         case 'account-app-hold-clear':
-            // Staff letting an account link another of its own app accounts before the 30 days are up.
             return isEnglish
                 ? <>lifted {target}'s hold on linking in {r.appName || r.appId}</>
                 : <>解除了 {target} 在{r.appName || r.appId}的绑定等待期</>;
@@ -263,7 +246,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             }
             return isEnglish ? <>created claim code for {badge}</> : <>为 {badge} 创建了兑换码</>;
         case 'event-attend':
-            // Or it reads as a manual edit.
             if (r.reason === 'staff-code') {
                 return isEnglish
                     ? <>was marked as attending {event} on joining its staff with a code</>
@@ -457,7 +439,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         case 'hometown-import': {
             const added = r.addedCount ?? 0;
             const confirmed = r.confirmedCount ?? 0;
-            // Counted only by an import that updated existing tickets.
             const updating = r.updatedCount !== undefined;
             return isEnglish
                 ? <>imported HomeTown tickets for {event} ({added} added, {confirmed} unlisted
@@ -514,13 +495,11 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>edited the note on a ticket for {attendee} at {event}</>
                 : <>编辑了 {attendee} 在 {event} 的门票备注</>;
         case 'ticket-attendee-delete':
-            // "removed a walk-in guest", not "removed attendee a walk-in guest".
             return isEnglish
                 ? <>removed {r.targetName || r.targetEmail ? <>attendee {attendee}</> : attendee} from {event}</>
                 : <>将 {attendee} 从 {event} 的名单中移除</>;
         case 'ticket-attendee-edit': {
             const oldName = r.oldName || attendee;
-            // Not a rename to the email or number a nameless attendee shows as.
             if (!r.newName) {
                 return isEnglish
                     ? <>cleared the name of attendee {oldName} at {event}</>
@@ -556,7 +535,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 : <>为 {attendee} 签发了 {event} 的 {count} 张门票，通过 {via} 售出{r.apiOrderId
                     && <>（订单 <span className="record-code">{r.apiOrderId}</span>）</>}</>;
         }
-        // An app with no name is recorded as "": its ID stands in.
         case 'api-key-create': {
             const app = r.appName || r.appId;
             return isEnglish
@@ -581,7 +559,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 : <>吊销并删除了 {app ? `${app} 的 ` : ''}API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
                     className="record-code">{r.apiKeyHint}</span></>}</>;
         }
-        // The app's ID is shown anyway, so only a name goes before it.
         case 'app-create':
             return isEnglish
                 ? <>registered app {r.appName && <>{r.appName} </>}<span className="record-code">{r.appId}</span></>
@@ -627,7 +604,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                     “{r.passportDesignName ?? ''}”</>
                 : <>用 {r.passportYear ?? ''} 年设计「{r.passportDesignName ?? ''}」生成了 {r.passportCount ?? 0} 本通行证</>;
         case 'passport-claim': {
-            // Activated on an account with another address, after the warning.
             const elsewhere = r.passportSentTo ? (isEnglish
                 ? <>, though it was emailed to {r.passportSentTo}</>
                 : <>，但其发送地址为 {r.passportSentTo}</>) : null;
@@ -637,16 +613,10 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）{elsewhere}</>;
         }
         case 'passport-delete': {
-            // A single deletion names its passport and any holder; a bulk one
-            // counts.
             if (r.passportId) {
-                // Negative, mirroring passport-claim; absent when nothing was
-                // taken.
                 const taken = r.extendDays ? (isEnglish
                     ? <>, taking back {Math.abs(r.extendDays)} days (now {fmtExpiry(r.newExpiresAt)})</>
                     : <>，并收回 {Math.abs(r.extendDays)} 天（现到期于 {fmtExpiry(r.newExpiresAt)}）</>) : null;
-                // No name if the holder was deleted first; a blank would read
-                // "deleted 's passport".
                 if (r.targetName) {
                     return isEnglish
                         ? <>deleted {target}'s passport {r.passportId}{taken}</>
@@ -751,7 +721,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>updated con page content {r.conSection ? `(${r.conSection})` : ''}</>
                 : <>更新了漫展页面内容 {r.conSection ? `(${r.conSection})` : ''}</>;
         default:
-            // A type from a newer function than this build: show the raw slug.
             return <>{r.type}</>;
     }
 }

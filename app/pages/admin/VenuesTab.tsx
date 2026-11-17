@@ -25,12 +25,9 @@ import { MapPicker } from './MapPicker';
 import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
 import { refreshAfterSave, type ShowToast } from './utils';
 
-/** The server's cap on suggested lots per venue. */
 const MAX_SUGGESTED_LOTS = 10;
-/** The server's caps on rooms per venue, and on a room's name. */
 const MAX_ROOMS = 50;
 const MAX_ROOM_NAME = 100;
-/** How many lots the editor fills in from a building lookup when the list is empty. */
 const PREFILL_COUNT = 3;
 const METERS_PER_MILE = 1609.34;
 
@@ -86,7 +83,6 @@ const metersBetween = (a: {lat: number; lng: number}, b: {lat: number; lng: numb
 interface VenuesTabProps {
     venues: Venue[];
     refreshVenues: () => Promise<void>;
-    /** Reloads the event lists, whose events a deleted venue is taken off. */
     refreshEvents: () => Promise<unknown>;
     showToast: ShowToast;
     readOnly?: boolean;
@@ -120,7 +116,6 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         return null;
     };
 
-    // Saving a new or moved venue re-measures its walking times on the server.
     const afterSave = async () => {
         await refreshAfterSave(refreshVenues, showToast, isEnglish);
         await refreshParking().catch(() => undefined);
@@ -172,7 +167,6 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         try {
             const {data} = await callSaveVenue({venueId: editingId, ...draftToPayload(editDraft)});
             await afterSave();
-            // Rooms it dropped went off events, so the lists' copies are stale.
             if (data.eventsChanged > 0) await refreshEvents().catch(() => undefined);
             setEditingId(null);
             showToast(isEnglish ? 'Venue updated.' : '场地已更新。', 'success');
@@ -192,7 +186,6 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         try {
             await callDeleteVenue({venueId: venue.id});
             await afterSave();
-            // Their venue went with it, so the lists' copies are stale.
             await refreshEvents().catch(() => undefined);
             if (editingId === venue.id) setEditingId(null);
             showToast(isEnglish ? 'Venue deleted.' : '场地已删除。', 'warning');
@@ -302,7 +295,6 @@ VenuesTab.displayName = 'VenuesTab';
 interface VenueFormProps {
     draft: VenueDraft;
     setDraft: (updater: (prev: VenueDraft) => VenueDraft) => void;
-    /** The venue being edited, or null while creating one. */
     venueId: string | null;
     parking: UwParkingData;
     isEnglish: boolean;
@@ -319,8 +311,6 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
     const here = {lat: draft.lat, lng: draft.lng};
     const sameSpot = (p: {lat: number; lng: number}) => metersBetween(p, here) < 1;
 
-    // Walking time from the venue as the form has it: from a lookup of this spot, from the
-    // last sync if it hasn't moved, else a straight-line estimate.
     const synced = venueId ? parking.walking[venueId] : undefined;
     const walkLabel = (lot: UwLot): string => {
         const fromLookup = lookup && sameSpot(lookup.building) ? lookup.nearestLots.find(n => n.code === lot.code) : undefined;
@@ -355,7 +345,6 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
             const {data} = await callLookUpUwBuilding({code});
             setLookup(data);
             const {building} = data;
-            // An empty list is filled from UW's note first, then the nearest lots on foot.
             const prefill = [...data.recommendedLots, ...data.nearestLots.map(n => n.code)]
                 .filter((c, i, all) => all.indexOf(c) === i)
                 .slice(0, PREFILL_COUNT);
@@ -377,7 +366,6 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
         }
     };
 
-    // Suggestions, each skipping lots already on the list.
     const fresh = (codes: string[]) => codes.filter(c => !chosen.has(c) && lotByCode.has(c));
     const uwPicks = lookup ? fresh(lookup.recommendedLots) : [];
     const lotsByDistance = parking.lots
@@ -591,12 +579,10 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
 interface VenueRoomsFieldProps {
     draft: VenueDraft;
     setDraft: (updater: (prev: VenueDraft) => VenueDraft) => void;
-    /** Whether the venue is saved, so its rooms may have events in them. */
     editing: boolean;
     isEnglish: boolean;
 }
 
-// A venue's rooms, in the order an event's location lists them.
 const VenueRoomsField = ({draft, setDraft, editing, isEnglish}: VenueRoomsFieldProps) => {
     const {rooms} = draft;
     const full = rooms.length >= MAX_ROOMS;
@@ -608,7 +594,6 @@ const VenueRoomsField = ({draft, setDraft, editing, isEnglish}: VenueRoomsFieldP
         [next[index], next[index + delta]] = [next[index + delta], next[index]];
         return next;
     });
-    // As venueLocationName shows it, with the first room.
     const venueName = localized(isEnglish, draft.nameEn.trim() || (isEnglish ? 'Venue' : '场地'), draft.nameCn.trim());
     const example = rooms.length > 0
         ? `${venueName} · ${localized(isEnglish, rooms[0].nameEn.trim() || '…', rooms[0].nameCn.trim())}`

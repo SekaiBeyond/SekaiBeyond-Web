@@ -9,10 +9,6 @@ import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from
 import { Countdown } from '~/pages/convention/Countdown';
 import type { ParkingGuideState } from '~/pages/parking';
 
-/**
- * The venue name's link: HUB on Google Maps. Fixed here, not taken from the
- * picked venue, so change it if the con moves.
- */
 const VENUE_MAP_URL = 'https://maps.app.goo.gl/wVdWeZfELBYUEckx9';
 
 const generateSparkStyles = () =>
@@ -36,21 +32,14 @@ export const Hero = () => {
 
     const allowsMotion = useMediaQuery('(prefers-reduced-motion: no-preference)');
     const showClip = Boolean(heroVideo.webm) && allowsMotion;
-    // The year the con's event starts, on the site's clock; none until one is linked.
     const year = listing.date.slice(0, 4);
 
     return (
         <section id="con-home" className="sbc-hero">
             <div className="sbc-hero-media" aria-hidden="true">
-                {/* Under the clip, so a slow or failed load ends on this gradient;
-                    it's the whole backdrop with no clip or for reduced motion. Both
-                    layers are unstacked absolutes, so they paint in source order. */}
                 <div className="sbc-hero-backdrop"/>
 
                 {showClip && (
-                    // Keyed on the source so a new clip remounts it; changing a
-                    // <source> does nothing without .load(). Muted and playsInline
-                    // so phones autoplay it.
                     <video
                         key={heroVideo.webm}
                         className="sbc-hero-clip"
@@ -127,8 +116,6 @@ export const Hero = () => {
 
                 <Countdown/>
 
-                {/* Tickets and parking are for coming to the con, so neither
-                    outlives it. */}
                 {!ended && (
                     <div className="sbc-hero-buttons">
                         {listing.ticketUrl && (
@@ -156,8 +143,6 @@ export const Hero = () => {
                 )}
             </div>
 
-            {/* The Tickets section goes once the con is over, so the cue skips to
-                About. */}
             <a
                 className="sbc-hero-scroll-cue"
                 href={ended ? '#about' : '#tickets'}

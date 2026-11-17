@@ -1,13 +1,7 @@
 import { formatSiteTime, siteDay } from '~/lib/siteTime';
 
-/* An event's calendar days, counted in SITE_TIME_ZONE. Mirrors
-   functions/src/utils/eventDays.ts, which holds the staff group and event staff
-   to these days when scanning. */
-
-/** The last moment the event runs. One that ends on the stroke of midnight doesn't run into the next day. */
 const lastMs = (startAt: Date, endAt: Date): number => Math.max(startAt.getTime(), endAt.getTime() - 1);
 
-/** Whether `now` is before, on, or after the calendar day(s) the event runs on, whatever its hours. */
 export const eventDayStatus = (startAt: Date, endAt: Date, now: Date = new Date()): 'before' | 'during' | 'after' => {
     const today = siteDay(now);
     if (today < siteDay(startAt)) return 'before';
@@ -15,7 +9,6 @@ export const eventDayStatus = (startAt: Date, endAt: Date, now: Date = new Date(
     return 'during';
 };
 
-/** The event's day, or its first and last, as dated in SITE_TIME_ZONE. */
 export const formatEventDays = (startAt: Date, endAt: Date, isEnglish: boolean): string => {
     const format = (date: Date) => formatSiteTime(date, isEnglish, {weekday: 'short', month: 'short', day: 'numeric'});
     const first = format(startAt);

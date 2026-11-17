@@ -5,32 +5,20 @@ import { SCAN_FETCH_LIMIT, type ScanEvent, type ScanHistory } from '~/lib/scans'
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import { advance, bucketStart, formatBucketLabel, granularityForSpan } from './timeBuckets';
 
-// Platform series colours, in platform order, never cycled; checked for
-// colorblind separation between neighbours on white. Slot 1 is the app pink;
-// #6c5ce7 is reserved for the cumulative line.
 const SERIES_COLORS = [
     '#ff6b9d', '#2a78d6', '#eda100', '#008300', '#e34948',
     '#1baf7a', '#eb6834', '#4a3aa7', '#a05a2c',
 ];
-// Untagged scans and overflow platforms go neutral, never looking like a
-// tracked platform.
 const UNTAGGED_COLOR = '#8a8987';
 const CUMULATIVE_COLOR = '#6c5ce7';
 
 interface PlatformSeries {
-    /** Platform id; '' is the untagged "Direct" bucket. */
     id: string;
-    /** Datum key — platform ids are user data, so they're namespaced. */
     key: string;
     name: string;
     color: string;
 }
 
-/**
- * One series per platform tracked or in the history (removed platforms keep
- * their scans), plus "Direct" for untagged scans. Empty for a plain location
- * code.
- */
 function buildPlatformSeries(
     scans: ScanEvent[],
     platforms: string[],
@@ -58,12 +46,9 @@ interface Datum {
     label: string;
     cumulative: number;
 
-    /** Per-series bucket counts under `p:<platform id>` keys. */
     [seriesKey: string]: number | string;
 }
 
-// Hour, day or week buckets by overall span, per series, with a running total
-// for reach.
 function buildSeries(scans: ScanEvent[], seriesKeys: string[], isEnglish: boolean): Datum[] {
     if (scans.length === 0) return [];
     const sorted = [...scans].sort((a, b) => a.at.getTime() - b.at.getTime());
@@ -98,11 +83,6 @@ function buildSeries(scans: ScanEvent[], seriesKeys: string[], isEnglish: boolea
     return data;
 }
 
-/**
- * "Scans Over Time" for a detail page: loads the scans, offers a refresh, and
- * renders {@link ScanTrends}. `fetchScans` must be stable, since it triggers the
- * load.
- */
 export function ScanTrendsSection({id, fetchScans, platforms}: {
     id: string;
     fetchScans: (id: string) => Promise<ScanHistory>;
@@ -112,7 +92,6 @@ export function ScanTrendsSection({id, fetchScans, platforms}: {
     const [history, setHistory] = useState<ScanHistory | null>(null);
     const [failed, setFailed] = useState(false);
 
-    // Only the newest load may answer, since Refresh can start one mid-load.
     const token = useRef(0);
     const load = useCallback(() => {
         const mine = ++token.current;
@@ -158,15 +137,12 @@ export function ScanTrendsSection({id, fetchScans, platforms}: {
 
 interface ScanTrendsProps {
     scans: ScanEvent[];
-    /** The code's platform ids — fixes series order and colors (social codes). */
     platforms?: string[];
 }
 
-/** One QR code's scan history over time. */
 function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
     const {isEnglish} = useLanguage();
     const {platforms: platformDefs} = useSocialPlatforms();
-    // Platform id being viewed ('' = the Direct bucket); null = all stacked.
     const [selected, setSelected] = useState<string | null>(null);
 
     const series = useMemo(
@@ -174,7 +150,6 @@ function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
         [scans, platforms, platformDefs, isEnglish],
     );
 
-    // A location code has no platform series and charts as one pink bar series.
     const barSeries = useMemo<PlatformSeries[]>(() => series.length > 0
             ? (selected === null ? series : series.filter(sr => sr.id === selected))
             : [{id: '', key: 'p:', name: isEnglish ? 'Scans' : '扫描数', color: SERIES_COLORS[0]}],
@@ -232,7 +207,6 @@ function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
                         <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{fontSize: 11}}
                                width="auto"/>
                         <Tooltip/>
-                        {/* Legend in stack order with Cumulative last; the default sorts by name. */}
                         <Legend verticalAlign="top" iconType="circle" wrapperStyle={{fontSize: '12px'}}
                                 itemSorter={item => {
                                     const i = barSeries.findIndex(sr => sr.key === item.dataKey);

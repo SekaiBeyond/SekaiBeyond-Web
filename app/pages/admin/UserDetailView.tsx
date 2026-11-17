@@ -45,10 +45,6 @@ import { UserAvatar } from './UserRow';
 import { UserConnectionsSection } from './UserConnectionsSection';
 import { UserSignInSection, useUserSignInMethods } from './UserSignInSection';
 
-/**
- * A badge or past event the user has or hasn't: a Grant or Revoke button, or for
- * read-only staff a tag saying which.
- */
 const GrantRow = ({image, name, detail, has, hasLabel, lacksLabel, readOnly, disabled, title, onToggle}: {
     image: string;
     name: string;
@@ -64,7 +60,6 @@ const GrantRow = ({image, name, detail, has, hasLabel, lacksLabel, readOnly, dis
     const {isEnglish} = useLanguage();
     return (
         <div className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
-            {/* An empty tile for an event archived without a poster, keeping the rows aligned. */}
             {image
                 ? <img src={image} alt="" className="admin-badge-img"/>
                 : <span className="admin-badge-img admin-no-poster" aria-hidden="true"/>}
@@ -92,10 +87,6 @@ const GrantRow = ({image, name, detail, has, hasLabel, lacksLabel, readOnly, dis
 
 type GoogleProfile = Awaited<ReturnType<typeof callGetGoogleProfile>>['data'];
 
-/**
- * Whether a photo was uploaded on the site or is the Google account's, read
- * from its URL alone, so the user lists can show it too.
- */
 export const PhotoSourceTag = ({photoURL}: {photoURL: string}) => {
     const {isEnglish} = useLanguage();
     const custom = isStorageUrl(photoURL);
@@ -118,11 +109,6 @@ export const PhotoSourceTag = ({photoURL}: {photoURL: string}) => {
     );
 };
 
-/**
- * Whether the name and photo shown are the user's own, set on the site, or the
- * Google account's the profile started with. The name tag waits for the Google
- * name and is left off if it can't be had; the photo needs only its URL.
- */
 const ProfileSourceTags = ({displayName, photoURL, google}: {
     displayName: string;
     photoURL: string;
@@ -149,7 +135,6 @@ const ProfileSourceTags = ({displayName, photoURL, google}: {
                 )}
                 <PhotoSourceTag photoURL={photoURL}/>
             </div>
-            {/* The account behind a name or photo of their own, to tell who it is. */}
             {google && (customName || customPhoto) && (
                 <p className="admin-detail-google">
                     <span>{isEnglish ? 'Google account:' : 'Google 账户：'}</span>
@@ -219,7 +204,6 @@ export const UserDetailView = ({
         callGetGoogleProfile({uid: userRecord.uid})
             .then(result => !stale && setGoogleProfile(result.data))
             .catch(() => {
-                // The name tag stays off; the photo tag doesn't need it.
             });
         return () => {
             stale = true;
@@ -464,7 +448,6 @@ export const UserDetailView = ({
         }
     };
 
-    // Take-down only: a banner is the member's own to put up.
     const deleteBanner = async () => {
         if (!confirm(isEnglish
             ? `Remove ${userRecord.displayName}'s profile banner? Their profile will show the default banner.`
@@ -738,7 +721,6 @@ export const UserDetailView = ({
                 showToast={showToast}
             />
 
-            {/* Each opens on its own page in the Passports tab. */}
             <div className="admin-group-section">
                 <h4 className="admin-badges-title">
                     {isEnglish ? 'Passports' : '通行证'}
@@ -758,7 +740,6 @@ export const UserDetailView = ({
                     </p>
                 ) : (
                     <>
-                        {/* One setting for all of them. */}
                         <p className="admin-passport-privacy">
                             <PassportPageTag hidden={userRecord.hidePassportPage}/>
                             <span>
@@ -931,7 +912,6 @@ export const UserDetailView = ({
 
             <h4 className="admin-badges-title">
                 {isEnglish ? 'Events Attended' : '参与活动'}
-                {/* Of the past events listed: attendedEvents also holds ones still to be archived. */}
                 <span className="admin-badges-count">
                     {pastEvents.filter(e => userRecord.attendedEvents.includes(e.id)).length}/{pastEvents.length}
                 </span>

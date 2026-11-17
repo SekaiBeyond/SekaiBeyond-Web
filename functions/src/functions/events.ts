@@ -25,7 +25,7 @@ import {
 import { db } from "../utils/firebase";
 import { type BatchOp, commitInChunks, deleteOps } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
-import { recordDoc, recordRef, type RecordType } from "../utils/records";
+import { performer, recordDoc, recordRef, type RecordType } from "../utils/records";
 import { siteDay } from "../utils/siteTime";
 import { revokeEventWalletPasses, WALLETWALLET_API_KEY } from "../utils/walletPass";
 import {
@@ -58,10 +58,6 @@ const UPCOMING_EVENT: Deletable = {
 export const requestEventDeletion = onCall({maxInstances: 10}, request => requestDeletion(request, PAST_EVENT));
 export const cancelEventDeletion = onCall({maxInstances: 10}, request => cancelDeletion(request, PAST_EVENT));
 
-/**
- * Deletes an event's attendees, email template and settings, which Firestore
- * leaves behind with the event.
- */
 async function deleteEventSubcollections(eventRef: FirebaseFirestore.DocumentReference): Promise<void> {
     const snaps = await Promise.all(["attendees", "emailTemplate", "settings"].map(sub => eventRef.collection(sub).get()));
     const ops = snaps.flatMap(snap => deleteOps(snap.docs));
@@ -95,8 +91,6 @@ export const onPastEventDeleted = onDocumentDeleted(
             console.error(`onPastEventDeleted: cascade failed for ${eventId}`, err);
         }
 
-        // Firestore leaves subcollections behind: here, the attendees and
-        // template a paid event's archive copied over.
         try {
             await deleteEventSubcollections(db.collection("pastEvents").doc(eventId));
         } catch (err) {
@@ -116,15 +110,8 @@ export const onPastEventDeleted = onDocumentDeleted(
         }
     }
 );
-/**
- * An event's location is its venue's name and rooms, so saves take no location
- * text. The text an event has is what a deleted venue showed (deleteVenue) or a
- * custom location from before venues set the location; the site shows it only
- * while the event has no venue (eventLocationDisplay in app/lib/venues.ts).
- */
 const NO_LOCATION_TEXT = {location: "", locationCn: ""};
 
-/** Picking a venue clears the text, which no longer shows; without one, it stays. */
 const locationTextUpdate = (venueId: string) => venueId ? NO_LOCATION_TEXT : {};
 
 export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
@@ -161,11 +148,9 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
             prevIcon = existing.data()?.icon ?? "";
         }
-        // The year follows the date, so moving a Con to another year moves it there.
         const con = markedCon ? conForDay(date) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
         const venueRoomIds = await requireVenueRooms(txn, venueId, roomIds);
-        // A Con has no tags.
         const keptTagIds = con ? [] : await existingTagIds(txn, tagIds);
         await requireNewlyLinkedFilesExist([icon], [prevIcon]);
         const saved = {...data, roomIds: venueRoomIds, con, tagIds: keptTagIds};
@@ -176,8 +161,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
             txn.set(ref, {...saved, ...NO_LOCATION_TEXT, published: false});
         }
         txn.set(recordRef(), recordDoc(eventId ? "event-edit" : "event-create", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             eventTitle: title,
             eventId: docId,
         }));
@@ -192,7 +176,6 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     return result;
 });
 
-/** Shows or hides an event on the site. */
 async function setEventPublished(
     request: CallableRequest,
     collection: "pastEvents" | "upcomingEvents",
@@ -210,8 +193,7 @@ async function setEventPublished(
         if (!snap.exists) throw new HttpsError("not-found", "Event not found.");
         txn.update(ref, {published});
         txn.set(recordRef(), recordDoc(published ? recordTypes.publish : recordTypes.unpublish, {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             eventTitle: snap.data()?.title ?? eventId,
             eventId,
         }));
@@ -277,14 +259,11 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             prevEmailHeaderBg = existing.data()?.emailHeaderBg ?? "";
             wasPublished = existing.data()?.published ?? false;
         }
-        // The year is the start's, the day archiving gives it.
         const con = markedCon ? conForDay(siteDay(startAt.toMillis())) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
         const venueRoomIds = await requireVenueRooms(txn, venueId, roomIds);
         await requireNewlyLinkedFilesExist([poster, emailHeaderBg], [prevPoster, prevEmailHeaderBg]);
 
-        // Paid events use tickets, so purge claim codes left from a free→paid
-        // switch. Reads before writes, as transactions require.
         let codesToDelete: FirebaseFirestore.QueryDocumentSnapshot[] = [];
         if (paid && eventId) {
             const codesSnap = await txn.get(
@@ -308,8 +287,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         for (const codeDoc of codesToDelete) {
             txn.delete(codeDoc.ref);
             txn.set(recordRef(), recordDoc("event-code-deactivate", {
-                performedBy: uid,
-                performedByName: callerSnap.data()?.displayName ?? "",
+                ...performer(uid, callerSnap),
                 eventTitle: title,
                 eventId: docId,
                 code: codeDoc.data().code ?? codeDoc.id,
@@ -317,8 +295,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         }
 
         txn.set(recordRef(), recordDoc(eventId ? "upcoming-event-edit" : "upcoming-event-create", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             eventTitle: title,
             eventId: docId,
         }));
@@ -346,7 +323,6 @@ export const requestUpcomingEventDeletion = onCall({maxInstances: 10},
 export const cancelUpcomingEventDeletion = onCall({maxInstances: 10},
     request => cancelDeletion(request, UPCOMING_EVENT));
 export const onUpcomingEventDeleted = onDocumentDeleted(
-    // The time and the key for revoking its wallet passes.
     {document: "upcomingEvents/{eventId}", maxInstances: 10, timeoutSeconds: 300, secrets: [WALLETWALLET_API_KEY]},
     async (event) => {
         const data = event.data?.data();
@@ -354,8 +330,6 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         if (!data) return;
 
         try {
-            // Check-in and staff codes belong to the live event and must not survive
-            // archive or deletion.
             const [codesSnap, staffCodesSnap] = await Promise.all([
                 db.collection("claimCodes").where("eventId", "==", eventId).get(),
                 db.collection("staffClaimCodes").where("eventId", "==", eventId).get(),
@@ -366,12 +340,7 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: cascade failed for ${eventId}`, err);
         }
 
-        // The tail end of an archive: archiveUpcomingEvent already wrote its
-        // record, and the past event reuses this id, so eventStaffEvents must not
-        // be purged.
         let archived = false;
-        // An archived Con's poster is its past event's image. Kept when the check
-        // fails too: a stray file costs less than a Con without its picture.
         let keepPoster = false;
         try {
             const pastSnap = await db.collection("pastEvents").doc(eventId).get();
@@ -391,7 +360,6 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
 
         if (archived) return;
 
-        // A hard delete: purge the id from eventStaffEvents.
         try {
             const staffSnap = await db.collection("users")
                 .where("eventStaffEvents", "array-contains", eventId).get();
@@ -402,8 +370,6 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: eventStaffEvents cascade failed for ${eventId}`, err);
         }
 
-        // Its tickets' wallet passes, before their attendees go: a cancelled
-        // event's would otherwise still look valid until it would have ended.
         try {
             const attendees = await db.collection("upcomingEvents").doc(eventId).collection("attendees").get();
             const revoked = await revokeEventWalletPasses(attendees.docs);
@@ -412,8 +378,6 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: wallet pass revoke failed for ${eventId}`, err);
         }
 
-        // Firestore leaves subcollections behind. An archive never gets here:
-        // its Phase C clears its own.
         try {
             await deleteEventSubcollections(db.collection("upcomingEvents").doc(eventId));
         } catch (err) {
@@ -431,12 +395,6 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
     }
 );
 
-/**
- * Writes that bring `dest` from the `copied` snapshot up to `live`, then empty
- * `live`'s collection. Unchanged docs aren't rewritten. Each copy is queued
- * before its original's delete, and commitInChunks stops at the first failed
- * chunk, so no original goes before its copy lands.
- */
 function reconcileCopy(
     copied: FirebaseFirestore.QuerySnapshot,
     live: FirebaseFirestore.QuerySnapshot,
@@ -465,13 +423,8 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128).map(id => validateDocId(id, "tagId"));
     const newDocRef = db.collection("pastEvents").doc(eventId);
 
-    // Phase A writes before Phase B's transaction checks the caller, so check
-    // first: otherwise anyone signed in could copy attendees into an orphaned
-    // pastEvents path.
     await requireAdmin(uid);
 
-    // Only an event that's over moves to Past Events. Checked before Phase A,
-    // so a refusal leaves no copies under pastEvents.
     const eventSnap = await db.collection("upcomingEvents").doc(eventId).get();
     if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
     const endAt: number | undefined = eventSnap.data()!.endAt?.toMillis?.();
@@ -479,7 +432,6 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         throw new HttpsError("failed-precondition", "Only an event that has ended can be archived.");
     }
 
-    // ---- Phase A: stream-copy subcollections to pastEvents ----
     const attendeesSrc = db.collection("upcomingEvents").doc(eventId).collection("attendees");
     const emailTemplateSrc = db.collection("upcomingEvents").doc(eventId).collection("emailTemplate");
 
@@ -502,7 +454,6 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
 
     if (copyOps.length > 0) await commitInChunks(copyOps);
 
-    // ---- Phase B: archive transaction (atomic) ----
     const {pastEventId} = await adminTransaction(uid, async (txn, callerSnap) => {
         const [eventSnap, pastCollisionSnap] = await Promise.all([
             txn.get(db.collection("upcomingEvents").doc(eventId)),
@@ -517,8 +468,6 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         const startDate: Date = eventData.startAt?.toDate?.() ?? new Date();
         const dateStr = siteDay(startDate.getTime());
         const con = readConInfo(eventData.con);
-        // A Con has no tags. Any deleted since the dialog loaded are dropped,
-        // not refused: Phase A's copies are already made.
         const keptTagIds = con ? [] : await existingTagIds(txn, tagIds);
 
         txn.set(newDocRef, {
@@ -531,38 +480,24 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             roomIds: Array.isArray(eventData.roomIds) ? eventData.roomIds : [],
             description: eventData.description ?? "",
             descriptionCn: eventData.descriptionCn ?? "",
-            // A Con keeps its poster, the home page's picture of that year;
-            // onUpcomingEventDeleted then leaves the file be.
             icon: con ? (eventData.poster ?? "") : "",
             tagIds: keptTagIds,
             con,
             published: false,
-            // So the past-events panel shows the read-only Tickets/Stats view.
             paid: eventData.paid === true,
         });
         txn.delete(db.collection("upcomingEvents").doc(eventId));
         txn.set(recordRef(), recordDoc("upcoming-event-archive", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             eventTitle: eventData.title ?? eventId,
             eventId: newDocRef.id,
         }));
         return {pastEventId: newDocRef.id};
     });
 
-    // ---- Phase C: carry over late changes, then delete the originals ----
-    //
-    // Tickets can change until Phase B deletes the event, so Phase A's copy may
-    // be stale. After Phase B the transactional writers refuse, so the live
-    // collections are final but for a batch already past its event check.
-    // Reconcile before deleting: otherwise late changes are lost, and anything
-    // left strands under upcomingEvents/{deletedId}, which
-    // onUpcomingEventDeleted skips once a pastEvents doc exists.
     const [liveAttendees, liveTemplate, liveSettings] = await Promise.all([
         attendeesSrc.get(),
         emailTemplateSrc.get(),
-        // Door settings (setHometownAdmitUnlisted) only matter while the event
-        // runs, so they go without a copy.
         db.collection("upcomingEvents").doc(eventId).collection("settings").get(),
     ]);
     const moveOps = [
@@ -571,12 +506,6 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         ...deleteOps(liveSettings.docs),
     ];
     if (moveOps.length > 0) await commitInChunks(moveOps);
-
-    // Event staff are kept on archive: eventStaffEvents keeps the past event's id
-    // for the profile Staff badge and the admin roster. Admin and scanner access
-    // is gated on upcoming events (isEventStaffOnly in admin/index.tsx), so it
-    // lapses on its own. The id is purged only when the past event is
-    // hard-deleted.
 
     return {pastEventId};
 });
@@ -595,7 +524,6 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
         ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const targetData = targetSnap.data()!;
-        // Self-edits are exempt from the hierarchy check.
         if (targetUid !== uid) requireCanManage(callerSnap.data()!.group, targetData.group);
 
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
@@ -622,8 +550,7 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
             attendedEvents: grant ? FieldValue.arrayUnion(eventId) : FieldValue.arrayRemove(eventId),
         });
         txn.set(recordRef(), recordDoc(grant ? "event-attend" : "event-unattend", {
-            performedBy: uid,
-            performedByName: callerSnap.data()!.displayName ?? "",
+            ...performer(uid, callerSnap),
             targetUid,
             targetName: targetData.displayName ?? "",
             eventTitle: eventSnap.data()!.title ?? eventId,
@@ -654,8 +581,6 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         const attendedEvents: string[] = targetData.attendedEvents ?? [];
         const alreadyAttended = attendedEvents.includes(eventId);
 
-        // Past: drop the event from attendedEvents, so staff don't show among a
-        // free event's attendees. Upcoming: staff count as attending.
         const attendanceAction: "add" | "remove" | "none" = isPastEvent
             ? (alreadyAttended ? "remove" : "none")
             : (alreadyAttended ? "none" : "add");
@@ -664,7 +589,6 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
             return {added: false, attendeeRemoved: false};
         }
 
-        // Past the early return, at least one of these changes.
         txn.update(db.collection("users").doc(targetUid), {
             ...(alreadyStaff ? {} : {eventStaffEvents: FieldValue.arrayUnion(eventId)}),
             ...(attendanceAction === "add" ? {attendedEvents: FieldValue.arrayUnion(eventId)} : {}),
@@ -672,8 +596,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         });
 
         const fields = {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             targetUid,
             targetName: targetData.displayName ?? "",
             eventId,
@@ -694,14 +617,6 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         };
     });
 });
-/**
- * An event's staff as its own staff see them: each one's name, photo, group
- * and title, as a public profile has them, and never an address. Staff and
- * above read the accounts themselves; the event's own staff can't (see
- * firestore.rules), and are shown this instead, while the event is upcoming:
- * eventStaffEvents keeps an event once it's archived, and their work on it is
- * over by then.
- */
 export const getEventStaff = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const eventId = validateDocId((request.data as {eventId?: unknown} | null)?.eventId, "eventId");
@@ -751,15 +666,13 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
             return {removed: false};
         }
 
-        // An event deleted since keeps its ID in the record.
         const eventTitle: string = eventSnap.data()?.title ?? eventId;
 
         txn.update(db.collection("users").doc(targetUid), {
             eventStaffEvents: FieldValue.arrayRemove(eventId),
         });
         txn.set(recordRef(), recordDoc("event-staff-remove", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             targetUid,
             targetName: targetData.displayName ?? "",
             eventId,

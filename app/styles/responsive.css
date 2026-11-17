@@ -180,7 +180,7 @@
     }
 
     .event-description {
-        display: none; /* Hide description on mobile grid to save space */
+        display: none;
     }
 
     .nav-actions {
@@ -189,7 +189,7 @@
 
     .language-switcher {
         width: 44px;
-        height: 44px; /* Better touch target */
+        height: 44px;
     }
 
     .show-more-btn {
@@ -369,7 +369,7 @@
     }
 
     .event-description {
-        display: block; /* Show description again on single column layout */
+        display: block;
         font-size: 13px;
     }
 

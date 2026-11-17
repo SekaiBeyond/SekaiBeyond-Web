@@ -1,16 +1,10 @@
 import { db } from "./firebase";
 import { isoOrNull } from "./helpers";
 
-/** The string ids in a raw Firestore array field, ignoring anything else. */
 export function toStringIds(raw: unknown): string[] {
     return Array.isArray(raw) ? raw.filter((id: unknown): id is string => typeof id === "string") : [];
 }
 
-/**
- * Which of the given ids name an existing past event. Public profiles only
- * publish past-event ids: an upcoming id would leak an unpublished event's
- * title. Takes every list at once, since attended and staffed events overlap.
- */
 export async function pastEventIds(...lists: unknown[]): Promise<Set<string>> {
     const ids = [...new Set(lists.flatMap(toStringIds))];
     if (ids.length === 0) return new Set();
@@ -18,7 +12,6 @@ export async function pastEventIds(...lists: unknown[]): Promise<Set<string>> {
     return new Set(ids.filter((_, i) => snaps[i].exists));
 }
 
-/** One passport on a public profile: what its shelf card shows, and no more. */
 interface ShelfPassport {
     id: string;
     designId: string;
@@ -26,10 +19,6 @@ interface ShelfPassport {
     claimedAt: string | null;
 }
 
-/**
- * The passports bound to a member, newest year first and then latest activated,
- * as their own shelf orders them. Their keys, delivery and generation stay out.
- */
 export async function shelfPassports(uid: string): Promise<ShelfPassport[]> {
     const snap = await db.collection("passports").where("ownerUid", "==", uid).get();
     return snap.docs

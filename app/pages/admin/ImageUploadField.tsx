@@ -5,30 +5,18 @@ import { convertImageToWebp, type ShowToast, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 
 interface ImageUploadFieldProps {
-    // Omitted by every variant but 'field', whose callers render the label themselves.
     label?: string;
     labelCn?: string;
     preview: string | null;
     onFileChange: (file: File, previewUrl: string) => void;
     onCleanupPreview?: (url: string) => void;
     cropAspect?: number;
-    /**
-     * Width the crop is written at; height follows `cropAspect`. The default
-     * suits a thumbnail.
-     */
     cropWidth?: number;
     convertToWebp?: boolean;
     showToast: ShowToast;
-    // 'avatar' shows a round preview beside a button, the crop the site renders; the
-    // caller owns the label. 'cover' does the same in the site's frame for a cover or
-    // poster (`cropAspect`, or 3:4). 'icon' does it with `iconPreview`, which the
-    // caller draws as the image will be shown.
     variant?: 'field' | 'avatar' | 'cover' | 'icon';
-    // The avatar preview with no image: the public page's own default.
     placeholderSrc?: string;
-    // The 'icon' variant's preview, with or without an image.
     iconPreview?: React.ReactNode;
-    // Offered beside the button while there's an image, to go back to none.
     onRemove?: () => void;
     disabled?: boolean;
 }
@@ -114,12 +102,9 @@ export const ImageUploadField = ({
 
     if (variant !== 'field') {
         const cover = variant === 'cover';
-        // A picture of something rather than a photo of someone.
         const image = cover || variant === 'icon';
         const busy = converting || disabled;
         const frame = cover && cropAspect ? {aspectRatio: String(cropAspect)} : undefined;
-        // A cover is cropped to its display shape; anything else is only
-        // trimmed at display time, which needs saying differently.
         const hint = {
             en: `Any image up to ${imageMb} MB.` + (cropAspect
                 ? cover ? " You'll crop it to this frame before it's saved." : " You'll crop it before it's saved."
@@ -149,8 +134,6 @@ export const ImageUploadField = ({
                     )}
                     <div className="admin-avatar-actions">
                         <div className="admin-btn-row">
-                            {/* The input is hidden but focusable, so this label is the button and
-                                :focus-within draws its ring. */}
                             <label className={`admin-btn admin-btn--chip admin-avatar-choose${
                                 busy ? ' admin-avatar-choose-busy' : ''}`}>
                                 <input type="file" accept={accept} onChange={handleChange} disabled={busy}/>

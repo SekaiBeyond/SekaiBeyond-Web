@@ -40,6 +40,7 @@ import {
 } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
 import { type AttendeeData, type StatusFilter, type TicketData, type TicketsSection, type TicketType } from './types';
+import { SubTab } from '../useEventLifecycle';
 
 interface TicketsSubtabProps {
     event: UpcomingEvent;
@@ -58,8 +59,6 @@ export function TicketsSubtab({
                               }: TicketsSubtabProps) {
     const {isEnglish} = useLanguage();
     const {profile} = useAuth();
-    // By group, not readOnly: an archived event's list is read-only for everyone,
-    // and that's when it's exported most.
     const canExport = !!profile && hasPermission(profile.group, 'core-staff');
     const eventId = event.id;
     const startMs = event.startAt.getTime();
@@ -75,15 +74,11 @@ export function TicketsSubtab({
 
     const canScan = scanAccess !== 'none';
     const scanOpen = scanAccess === 'always' || (scanAccess === 'event-days' && eventDay === 'during');
-    // Whoever works the door: core staff, and those who scan here on the
-    // event's days, the staff group and the event's own staff. Mirrors
-    // addWalkInAttendee.
     const canAddWalkIn = eventDay === 'during' && (!readOnly || canScan);
 
     const [section, setSection] = useState<TicketsSection>(scanOpen && readOnly ? 'scan' : 'attendees');
     const [attendees, setAttendees] = useState<AttendeeData[]>([]);
     const [loadingAttendees, setLoadingAttendees] = useState(false);
-    // Set on a failed load, with the error to show the code of.
     const [attendeesFailed, setAttendeesFailed] = useState<{error: unknown} | null>(null);
     const [search, setSearch] = useState('');
     const [filterUnsent, setFilterUnsent] = useState(false);
@@ -95,9 +90,6 @@ export function TicketsSubtab({
 
     const [displayCount, setDisplayCount] = useState(10);
 
-    // Read up front, since without a saved template nothing is emailed: not
-    // from Emails, and not for a ticket API order that asks. Null until known,
-    // or when the read fails, which the Emails tab reports on its own.
     const checksTemplate = !readOnly && collectionRoot === 'upcomingEvents';
     const [templateSaved, setTemplateSaved] = useState<boolean | null>(null);
     useEffect(() => {
@@ -114,7 +106,6 @@ export function TicketsSubtab({
         };
     }, [checksTemplate, eventId]);
 
-    // Load attendees lazily so a scanner-only session doesn't fetch the full list.
     const listKey = `${collectionRoot}/${eventId}`;
     const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
@@ -162,7 +153,6 @@ export function TicketsSubtab({
         return attendees.filter(a => {
             if (filterUnsent && (a.emailSent || checkedInWalkIn(a))) return false;
             if (ticketTypeFilter !== 'all') {
-                // An unlisted HomeTown ticket's type isn't known yet.
                 if (a.unlisted || !a.tickets.some(t => t.type === ticketTypeFilter)) return false;
             }
             if (statusFilter === 'unlisted') {
@@ -180,8 +170,6 @@ export function TicketsSubtab({
                 if (!hasStatus) return false;
             }
             if (!needle) return true;
-            // Part of a HomeTown number, which is all digits, but only the whole
-            // of one of ours: a few letters would match half the UUIDs.
             return a.email.toLowerCase().includes(needle)
                 || a.name.toLowerCase().includes(needle)
                 || a.ticketIds.some(id => a.hometown ? id.includes(needle) : id.toLowerCase() === needle)
@@ -211,7 +199,6 @@ export function TicketsSubtab({
                     if (t.redeemed) used++;
                 }
             }
-            // A walk-in already in at the door is owed no email.
             const owed = !a.emailSent && !checkedInWalkIn(a);
             if (owed) unsent++;
             if (a.walkIn) walkIns++;
@@ -219,7 +206,6 @@ export function TicketsSubtab({
             if (a.unlisted) unlisted++;
             if (a.missingFromHometown) missingFromHometown++;
 
-            // Emailless walk-ins can't be sent to, and HomeTown and the seller's app send their own.
             if (activeInThisAttendee > 0 && a.email && !ticketsSentElsewhere(a)) {
                 sendable++;
                 if (owed) unsentSendable++;
@@ -242,7 +228,6 @@ export function TicketsSubtab({
         return filteredAttendees.slice(0, displayCount);
     }, [filteredAttendees, displayCount]);
 
-    // An app order is never credited to an account, so there's none to look up.
     const attendeeEmails = useMemo(() => attendees.filter(a => !a.apiOrder).map(a => a.email), [attendees]);
     const {links: accountLinks} = useAccountLinks(eventId, attendeeEmails);
 
@@ -355,7 +340,6 @@ export function TicketsSubtab({
         }
     };
 
-    // The note as saved, which the server may have trimmed, or null if it wasn't.
     const updateTicketNotesAction = async (a: AttendeeData, ticketId: string, notes: string): Promise<string | null> => {
         if (readOnly) return null;
         try {
@@ -372,8 +356,6 @@ export function TicketsSubtab({
         }
     };
 
-    // Just the attendees the filters match, with the type and status picked
-    // named in the file so exports of different slices tell apart.
     const exportAttendees = () => {
         if (!canExport) return;
         const base = event.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || eventId;
@@ -464,13 +446,9 @@ export function TicketsSubtab({
         <div className="admin-tickets-section">
             <div className="admin-tickets-inner-tabs">
                 {sectionTabs.filter(tab => tab.shown).map(tab => (
-                    <button
-                        key={tab.id}
-                        className={`admin-sub-tab ${section === tab.id ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection(tab.id)}
-                    >
+                    <SubTab key={tab.id} active={section === tab.id} onClick={() => setSection(tab.id)}>
                         {isEnglish ? tab.en : tab.zh}
-                    </button>
+                    </SubTab>
                 ))}
             </div>
 
@@ -572,7 +550,6 @@ export function TicketsSubtab({
             {section === 'import' && (
                 <ImportSection
                     eventId={eventId}
-                    // HomeTown tickets and API orders aren't re-issued by email, so they're no duplicate.
                     existingAttendees={attendees.filter(a => !a.hometown && !a.apiOrder)}
                     readOnly={readOnly}
                     showToast={showToast}

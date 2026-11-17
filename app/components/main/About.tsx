@@ -167,7 +167,6 @@ export const About = () => {
             </div>
 
             <div className="about-content">
-                {/* Left: Interactive Dimensional Realm Switcher */}
                 <div className="about-explorer">
                     <div
                         className="about-realm-tabs"
@@ -220,11 +219,9 @@ export const About = () => {
                     </div>
                 </div>
 
-                {/* Right: 3D Flipping Mascot Dossier / Polaroid Card */}
                 <div className="about-image">
                     <div className={`mika-dossier${isFlipped ? ' is-flipped' : ''}`}>
                         <div className="mika-dossier-inner">
-                            {/* Front: Washi-taped Polaroid Portrait */}
                             <div className="mika-face mika-face--front" aria-hidden={isFlipped}>
                                 <button
                                     type="button"
@@ -263,7 +260,6 @@ export const About = () => {
                                 </button>
                             </div>
 
-                            {/* Back: Anime Character Sheet (設定資料) */}
                             <div className="mika-face mika-face--back" aria-hidden={!isFlipped}>
                                 <div className="mika-sheet-top">
                                     <img
@@ -320,7 +316,6 @@ export const About = () => {
                 </div>
             </div>
 
-            {/* Bottom Perforated Ticket Strip: Social Portals */}
             {hasFollowLinks(config.socialLinks) && (
                 <div className="about-follow">
                     <div className="about-follow-header">

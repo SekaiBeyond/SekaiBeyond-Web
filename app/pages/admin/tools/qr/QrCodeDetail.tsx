@@ -24,7 +24,6 @@ import { refreshAfterSave, type ShowToast } from '../../utils';
 
 const QR_SIZE = 240;
 
-/** The independently editable facets of a code. Only one edits at a time. */
 type EditSection = 'label' | 'target' | 'event' | 'expiration' | 'platforms' | 'spot';
 
 interface QrCodeDetailProps {
@@ -37,10 +36,6 @@ interface QrCodeDetailProps {
     readOnly: boolean;
 }
 
-/**
- * One code's page: stats, QR images, settings and scan trends. Each setting is
- * a value with its own Edit, so only the facet being changed becomes a form.
- */
 export const QrCodeDetail = ({
                                  code,
                                  events,
@@ -55,8 +50,6 @@ export const QrCodeDetail = ({
     const {request: requestDownload, node: downloadNode} = useQrDownload();
 
     const [editing, setEditing] = useState<EditSection | null>(null);
-    // The whole draft, since saves send the full payload; stale while nothing is
-    // edited.
     const [draft, setDraft] = useState<QrDraft>(() => qrToDraft(code));
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -67,8 +60,6 @@ export const QrCodeDetail = ({
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const scanValue = qrScanUrl(code.id, origin);
 
-    // Unsaved changes are judged on the payload, so cosmetic leftovers don't
-    // count, and a draft that can't build one always does.
     const payloadJson = (d: QrDraft): string | null => {
         const built = buildQrPayload(d, isEnglish);
         return 'error' in built ? null : JSON.stringify(built.payload);
@@ -140,12 +131,9 @@ export const QrCodeDetail = ({
         d ? d.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
         }) : (isEnglish ? 'Never' : '从未');
-    // Expiries are on the Pacific clock; scans are moments, in the viewer's
-    // zone.
     const fmtExpiry = (d: Date): string =>
         formatSiteTime(d, isEnglish, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
 
-    // Small inline "Edit" affordance shown beside a facet's name.
     const editButton = (section: EditSection) =>
         !readOnly && editing !== section ? (
             <button type="button" className="admin-qr-row-edit" onClick={() => openEdit(section)}>
@@ -153,7 +141,6 @@ export const QrCodeDetail = ({
             </button>
         ) : null;
 
-    // Save/Cancel for whichever section is open (all sections share one draft).
     const editorActions = (
         <div className="admin-btn-row">
             <button
@@ -349,8 +336,6 @@ export const QrCodeDetail = ({
                         </p>
                     )}
                     <div className="admin-qr-platform-cards">
-                        {/* While picking, the cards follow the checkboxes; a new
-                            platform shows 0 scans until saved. */}
                         {(editing === 'platforms' ? draft.platforms : code.platforms).map(pid => (
                             <PlatformQrCard
                                 key={pid}
@@ -432,7 +417,6 @@ interface PlatformQrCardProps {
     showToast: ShowToast;
 }
 
-/** One platform's QR + link for a social code, with its own scan tally. */
 const PlatformQrCard = ({code, platformId, isEnglish, platforms, showToast}: PlatformQrCardProps) => {
     const {request: requestDownload, node: downloadNode} = useQrDownload();
     const origin = typeof window !== 'undefined' ? window.location.origin : '';

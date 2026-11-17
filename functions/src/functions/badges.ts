@@ -6,7 +6,7 @@ import { cancelDeletion, type Deletable, requestDeletion } from "../utils/deleti
 import { db } from "../utils/firebase";
 import { type BatchOp, commitInChunks, deleteOps } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
-import { recordDoc, recordRef } from "../utils/records";
+import { performer, recordDoc, recordRef } from "../utils/records";
 import {
     sanitizeDisplayText,
     validateDocId,
@@ -71,8 +71,6 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const imageUrl = validateStr(input.imageUrl, "imageUrl", 500);
     validateStorageImageUrl(imageUrl, "imageUrl");
-    // createdBy* credits the badge's designer; the admin who saves it is recorded as
-    // performedBy.
     const createdByUid = validateStr(input.createdByUid, "createdByUid", 128);
     const createdByName = sanitizeDisplayText(validateStr(input.createdByName, "createdByName", 100));
     const createdByLink = validateStr(input.createdByLink, "createdByLink", 500);
@@ -99,8 +97,7 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
                 createdByUid, createdByName, createdByLink,
             });
             txn.set(recordRef(), recordDoc("badge-edit", {
-                performedBy: uid,
-                performedByName: callerSnap.data()?.displayName ?? "",
+                ...performer(uid, callerSnap),
                 badgeId,
                 badgeName: name,
             }));
@@ -114,8 +111,7 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
             createdAt: FieldValue.serverTimestamp(),
         });
         txn.set(recordRef(), recordDoc("badge-create", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             badgeId: newRef!.id,
             badgeName: name,
         }));

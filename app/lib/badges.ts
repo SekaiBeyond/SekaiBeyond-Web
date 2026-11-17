@@ -8,7 +8,6 @@ export interface BadgeDef {
     description: string;
     descriptionCn: string;
     imageUrl: string;
-    /** Who made the art: a member's uid, or else just a name with an optional link. */
     createdByUid: string;
     createdByName: string;
     createdByLink: string;

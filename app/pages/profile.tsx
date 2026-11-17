@@ -53,31 +53,17 @@ interface ViewedProfile {
     badges: string[];
     badgeEarnedAt: Record<string, Date>;
     passports: ShelfPassport[];
-    /** Their passport page is private, so the shelf's cards don't link to it. */
     passportPageHidden: boolean;
     group: UserGroup;
     isMember: boolean;
     title?: string;
     titleCn?: string;
-    /**
-     * Which sections this member shows others. A hidden one arrives empty, so
-     * this separates "kept private" from "none yet".
-     */
     visibility: {badges: boolean; events: boolean; passports: boolean};
 }
 
-/**
- * Width over height of an uploaded banner: the banner's shape on the widest card
- * (1158 × 96, see .profile-hero-banner). Narrower screens trim the sides.
- */
 const BANNER_ASPECT = 12;
-// Wide enough to stay sharp across the full-width card on a high-density screen.
 const BANNER_WIDTH = 1500;
 
-/**
- * A badge: a button opening its detail modal, with a preview on hover or focus.
- * A link can't sit inside a button, so the maker's credit is left to the modal.
- */
 const BadgeCard = ({badge, earnedDate, isEnglish, onOpen}: {
     badge: BadgeDef;
     earnedDate?: Date;
@@ -106,7 +92,6 @@ const BadgeCard = ({badge, earnedDate, isEnglish, onOpen}: {
     </button>
 );
 
-/** One attended event, with a link to its admin page for staff. */
 const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
     event: PastEvent;
     isEnglish: boolean;
@@ -141,7 +126,6 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
                 ) : (
                     <span className="profile-event-category profile-event-category-hidden">{'\u00A0'}</span>
                 )}
-                {/* Wraps to two lines before it is cut; title holds the rest. */}
                 <h3 className="profile-event-title" title={title}>
                     {showAdminLink ? (
                         <a href={`/admin?tab=events&event=${encodeURIComponent(event.id)}`}
@@ -171,8 +155,6 @@ export const ProfilePage = () => {
     const navigate = useNavigate();
     const viewUid = searchParams.get('uid');
     const isViewingOther = !!viewUid && viewUid !== user?.uid;
-    // Settings are yours alone, so ?tab=settings on someone else's uid shows
-    // their profile.
     const settingsTab = !isViewingOther && searchParams.get('tab') === 'settings';
     const openTab = (tab: 'profile' | 'settings') => {
         const next = new URLSearchParams(searchParams);
@@ -192,11 +174,9 @@ export const ProfilePage = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [savingBanner, setSavingBanner] = useState(false);
     const [pendingBanner, setPendingBanner] = useState<File | null>(null);
-    // The URL that failed to load, so a new upload gets a fresh try.
     const [failedBanner, setFailedBanner] = useState<string | null>(null);
     const bannerInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
-    // null while the definitions for the badge ids are still being read.
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[] | null>(null);
     const [badgeLoadError, setBadgeLoadError] = useState(false);
     const [viewedLoadError, setViewedLoadError] = useState(false);
@@ -247,8 +227,6 @@ export const ProfilePage = () => {
 
     const viewerUid = user?.uid;
     useEffect(() => {
-        // getPublicProfile refuses signed-out callers; the page prompts for
-        // sign-in instead.
         if (!viewUid || !isViewingOther || !viewerUid) {
             setViewedProfile(null);
             setLoadingViewed(false);
@@ -429,8 +407,6 @@ export const ProfilePage = () => {
         if (e.key === 'Escape') cancelEditingName();
     };
 
-    // A render falls between auth settling and the fetch starting; keep the
-    // spinner through it rather than flash "not found".
     const awaitingViewed = isViewingOther && !!user && !viewedProfile && !viewedLoadError;
 
     if (loading || loadingViewed || awaitingViewed || eventsLoading) {
@@ -441,8 +417,6 @@ export const ProfilePage = () => {
         );
     }
 
-    // Other people's profiles are for signed-in visitors; a passport scan is
-    // the usual way here signed out.
     if (isViewingOther && !user) {
         return (
             <NoticeCard
@@ -501,15 +475,12 @@ export const ProfilePage = () => {
             title: viewedProfile!.title ?? '',
             titleCn: viewedProfile!.titleCn ?? '',
         };
-    // Private sections arrive empty. Your own profile is never filtered.
     const showBadges = isOwnProfile || viewedProfile!.visibility.badges;
     const showEvents = isOwnProfile || viewedProfile!.visibility.events;
     const showPassports = isOwnProfile || viewedProfile!.visibility.passports;
-    // Yours are read directly; someone else's come with their profile.
     const shelf = isOwnProfile ? passports : viewedProfile!.passports;
     const staffedSet = new Set(dp.eventStaffEvents);
     const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
-    // Each year's Sekai Beyond Con first, newest year on top; the rest stay newest first.
     const attendedEvents = pastEvents
         .filter(e => attendedSet.has(e.id))
         .sort((a, b) => (b.con?.year ?? 0) - (a.con?.year ?? 0));
@@ -517,8 +488,6 @@ export const ProfilePage = () => {
         .filter(b => dp.badges.includes(b.id))
         .sort((a, b) => (earnedDates[b.id]?.getTime() ?? 0) - (earnedDates[a.id]?.getTime() ?? 0));
 
-    // A badge whose definition is gone counts for nothing, so badges are only
-    // known empty once definitions load.
     const badgeState: SectionState = !showBadges ? 'private'
         : dp.badges.length === 0 ? 'empty'
             : badgeLoadError ? 'failed'
@@ -530,21 +499,15 @@ export const ProfilePage = () => {
         : passportsFailed ? 'failed'
             : shelf === null ? 'loading'
                 : shelf.length > 0 ? 'filled' : 'empty';
-    // Checked in with a ticket for an event still on, which joins the events
-    // only once archived: the events prompt says so rather than to check in.
     const checkedIn = !!ticketEvents?.some(e => e.tickets.some(t => t.redeemed && !t.voided));
     const states = [badgeState, passportState, eventState];
     const anyFilled = states.includes('filled');
     const allEmpty = states.every(s => s === 'empty');
-    // While a loading section could still leave the page empty, hold the
-    // spinner rather than draw sections the welcome card may replace.
     const settling = !anyFilled && states.includes('loading');
 
-    // A private section has no count, and an empty profile no row.
     const stat = (key: string, count: number | null, one: string, many: string, zh: string) =>
         ({key, count, label: isEnglish ? (count === 1 ? one : many) : zh});
     const stats = anyFilled ? [
-        // The id count stands in until the definitions arrive; they almost always agree.
         ...(showBadges
             ? [stat('badges', badgeDefs === null ? dp.badges.length : earnedBadges.length, 'Badge', 'Badges', '徽章')]
             : []),
@@ -553,12 +516,8 @@ export const ProfilePage = () => {
             : []),
         ...(showEvents ? [stat('events', attendedEvents.length, 'Event', 'Events', '活动')] : []),
     ] : [];
-    // A membership perk that staff+ keep without one.
     const canEdit = isOwnProfile && (isMember || hasPermission(profile!.group, 'staff'));
-    // Non-members can't upload a photo, but may remove one an admin gave them.
     const canRemovePhoto = isOwnProfile && isStorageUrl(profile?.photoURL);
-    // Same rule as the photo; a non-member only has a banner left over from a
-    // lapsed membership.
     const bannerURL = isOwnProfile ? profile!.bannerURL : viewedProfile!.bannerURL;
     const showBanner = !!bannerURL && bannerURL !== failedBanner;
     const bannerLabel = bannerURL
@@ -568,13 +527,8 @@ export const ProfilePage = () => {
     const longDate = (date: Date) => date.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
         year: 'numeric', month: 'long', day: 'numeric',
     });
-    // Only the owner sees membership dates; others get a bare isMember.
     const memberSince = isOwnProfile && isMember ? profile!.membershipStartedAt : null;
 
-    // Tickets sit above the collections: something live to carry to a door, and
-    // maybe the only card a new account has. No empty state: it appears once
-    // the server finds a ticket for an event still to come, and goes when that
-    // event ends.
     const ticketsCard = !isOwnProfile ? null
         : ticketsFailed ? (
             <ProfileCard compact>
@@ -806,8 +760,6 @@ export const ProfilePage = () => {
                                     </span>
                                 )}
                             </div>
-                            {/* Membership isn't a group, so it gets its own line; a
-                                president can be a member too. */}
                             {dp.isMember && (
                                 <div className="profile-meta">
                                     <span className="profile-member-chip">
@@ -824,9 +776,6 @@ export const ProfilePage = () => {
                                             <span className="profile-meta-item">
                                                 <FiClock aria-hidden="true"/>
                                                 {isEnglish ? 'Membership end: ' : '会员到期日期：'}
-                                                {/* The end is on the Pacific calendar, as admin shows
-                                                    it; the start is a moment, so it's in the viewer's
-                                                    zone. */}
                                                 {formatSiteTime(profile!.membershipExpiresAt!, isEnglish, {
                                                     year: 'numeric', month: 'long', day: 'numeric',
                                                 })}
@@ -849,8 +798,6 @@ export const ProfilePage = () => {
                         </ul>
                     )}
 
-                    {/* Only your own profile has tabs, on the header card so your
-                        name and photo stay put. */}
                     {isOwnProfile && (
                         <div className="profile-tabs">
                             <button

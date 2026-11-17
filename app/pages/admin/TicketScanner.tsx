@@ -8,25 +8,19 @@ import { QrScannerViewport } from './QrScannerViewport';
 import { isHometownTicketId } from './tickets/hometown';
 import { anonymousAttendeeName, ticketTypeClass, ticketTypeLabel } from './tickets/types';
 
-/** Who a ticket belongs to, as a result shows it. */
 interface ScannedTicket {
     ticketId: string;
     attendeeName: string;
     attendeeEmail: string;
     ticketType: string;
     hometown: boolean;
-    /** A HomeTown ticket missing from the imported list, let in with a warning. */
     unlisted: boolean;
-    /** A HomeTown ticket left out of the latest export: refunded or transferred, most likely. */
     missingFromHometown: boolean;
-    /** The staff note on the ticket, empty for none. */
     notes: string;
 }
 
-/** A result the operator should read before moving on, though the ticket got in. */
 const hasWarning = (ticket: ScannedTicket): boolean => ticket.unlisted || ticket.missingFromHometown;
 
-/** Something to read on an admitted ticket: a warning, or a note that isn't one. */
 const hasReading = (ticket: ScannedTicket): boolean => hasWarning(ticket) || ticket.notes !== '';
 
 type ScanStatus =
@@ -36,7 +30,6 @@ type ScanStatus =
     | (ScannedTicket & {
     kind: 'success';
     userCheckedIn: boolean;
-    /** When it went up. A fresh one restarts the countdown to clearing it. */
     shownAt: number
 })
     | (ScannedTicket & {
@@ -47,57 +40,31 @@ type ScanStatus =
 })
     | {kind: 'error'; reason: string; shownAt: number};
 
-/** A result on show, which clears itself after {@link showFor}. */
 type ShownStatus = Extract<ScanStatus, {shownAt: number}>;
 
 interface CachedRedemption extends ScannedTicket {
-    /** When the server's grace window for it closes, on this device's clock. */
     until: number;
     userCheckedIn: boolean;
 }
 
 const DEDUPE_MS = 3000;
 const CACHE_SIZE = 20;
-/**
- * How long a repeated result for the same code stays quiet: longer than a held
- * code's per-frame and DEDUPE_MS repeats plus the round trip, so it sounds
- * once.
- */
 const CUE_QUIET_MS = 5000;
-/** How long each result stays up before clearing itself for the next scan. */
 const CLEAR_AFTER_MS: Record<ShownStatus['kind'], number> = {
-    // An admitted ticket needs nothing more from the operator.
     success: 4000,
-    // A problem may need reading out to the attendee or acting on.
     already: 12000,
     error: 12000,
 };
-/** The last stretch of that, over which a result fades out. Matches the CSS. */
 const FADE_MS = 300;
-/**
- * How long a scan waits before saying it's still checking: a server that has
- * sat idle takes a few seconds to start, which shouldn't read as a freeze.
- */
 const SLOW_MS = 3000;
 
-/**
- * How long a result stays up. A ticket with a warning or a note got in, but
- * those are there to be read, so it stays up as long as a problem.
- */
 const showFor = (status: ShownStatus): number =>
     status.kind === 'success' && hasReading(status) ? CLEAR_AFTER_MS.already : CLEAR_AFTER_MS[status.kind];
 
-/**
- * Whether a result holds the line: until it clears or Next Scan is pressed, the
- * camera takes no other code, so the next person's ticket can't replace a
- * refusal or a warning before the operator has read it. A plain admission has
- * nothing to read.
- */
 const holdsLine = (status: ShownStatus): boolean => status.kind !== 'success' || hasReading(status);
 
 interface TicketScannerProps {
     eventId: string;
-    /** Core staff and above, who can import the list or change the setting themselves. */
     canManage: boolean;
     onRedeemed: () => void;
 }
@@ -111,10 +78,7 @@ export function TicketScanner({
     const lastScanRef = useRef<{ticketId: string; at: number} | null>(null);
     const redeemedCacheRef = useRef<CachedRedemption[]>([]);
     const lastCueRef = useRef<{key: string; at: number} | null>(null);
-    // A scan waiting on the server: nothing else is sent until it answers, so an
-    // earlier ticket's answer can't land over a later one's.
     const inFlightRef = useRef(false);
-    // Set with a result that holds the line (holdsLine), cleared when it goes.
     const holdingRef = useRef(false);
     const sound = useScanSound();
     const vibration = useScanVibration();
@@ -129,21 +93,16 @@ export function TicketScanner({
     const [leaving, setLeaving] = useState(false);
     const [slow, setSlow] = useState(false);
 
-    // Every result goes up through here, setting the hold in the same step, so
-    // no frame decoded before the re-render slips past it.
     const show = useCallback((next: ShownStatus) => {
         holdingRef.current = holdsLine(next);
         setStatus(next);
     }, []);
 
-    // Back to waiting for a code, with any hold released.
     const ready = useCallback((cameraActive: boolean) => {
         holdingRef.current = false;
         setStatus(cameraActive ? {kind: 'scanning'} : {kind: 'idle'});
     }, []);
 
-    // Once per showing of a code: a repeat inside CUE_QUIET_MS restarts the
-    // quiet.
     const cue = useCallback((outcome: ScanOutcome, code: string) => {
         const key = `${outcome}:${code}`;
         const now = Date.now();
@@ -160,9 +119,6 @@ export function TicketScanner({
         const now = Date.now();
         if (last && last.ticketId === ticketId && now - last.at < DEDUPE_MS) return;
 
-        // A ticket this device just let in reads as success without a round trip,
-        // but only inside the server's grace window; after it, a shared screenshot
-        // must get "already redeemed".
         const cached = redeemedCacheRef.current.find(c => c.ticketId === ticketId && now < c.until);
         if (cached) {
             const {until: _until, ...shown} = cached;
@@ -200,12 +156,8 @@ export function TicketScanner({
             } else {
                 const successData = {...scanned, userCheckedIn: !!d.userCheckedIn};
                 show({kind: 'success', ...successData, shownAt: Date.now()});
-                // Let in, but the operator should look up at the warning.
                 cue(hasWarning(scanned) ? 'issue' : 'success', ticketId);
 
-                // The server says how much of the window is left, as a duration so
-                // this phone's clock doesn't matter. Without it, the entry expires
-                // at once.
                 redeemedCacheRef.current = [
                     {...successData, until: now + (d.graceRemainingMs ?? 0)},
                     ...redeemedCacheRef.current.filter(c => c.ticketId !== ticketId),
@@ -242,14 +194,12 @@ export function TicketScanner({
             } else if (code === 'event-missing') {
                 reason = isEnglish ? 'Event not found.' : '活动不存在。';
             } else if (code === 'rate-limited') {
-                // Scans have a per-minute budget of their own, per account.
                 const ms = functionsErrorDetails<{retryAfterMs?: number}>(err)?.retryAfterMs;
                 const seconds = typeof ms === 'number' ? Math.max(1, Math.ceil(ms / 1000)) : null;
                 reason = isEnglish
                     ? `Too many scans from this account in the last minute. Wait ${seconds ? `${seconds} seconds` : 'a moment'}, then scan again.`
                     : `此账号最近一分钟内扫描次数过多。请${seconds ? `等待 ${seconds} 秒` : '稍候'}再扫描。`;
             } else if (err instanceof FirebaseError && err.code === 'functions/deadline-exceeded') {
-                // The server may still have let it in, which a rescan will say.
                 reason = isEnglish
                     ? 'No answer from the server. Check the connection and scan again. If it then shows as already redeemed by you, the first scan went through.'
                     : '服务器无响应。请检查网络后重新扫描。若随后显示已由你验证，说明第一次扫描已成功。';
@@ -266,10 +216,6 @@ export function TicketScanner({
         }
     }, [eventId, isEnglish, canManage, onRedeemed, cue, show]);
 
-    // Redeem a code for this event, warn on another event's, ignore the rest. A
-    // HomeTown QR is just its number, naming no event, so it's taken as this
-    // one's. Nothing is read while a scan is out or a result holds the line.
-    // Always false, to keep scanning.
     const onDecode = useCallback((raw: string): boolean => {
         if (inFlightRef.current || holdingRef.current) return false;
         const parsed = parseTicketUrl(raw);
@@ -294,8 +240,6 @@ export function TicketScanner({
         onDecode,
         onStart: () => {
             ready(true);
-            // On a phone the camera opens part below the fold; bring all of it,
-            // and its buttons, into view.
             viewportRef.current?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
         },
         onStartError: () => ready(false),
@@ -305,9 +249,6 @@ export function TicketScanner({
         logLabel: '[TicketScanner]',
     });
 
-    // A result clears itself for the next in line, keeping the cue state so a
-    // held code stays quiet. Each frame of a held code restarts the timer, so
-    // it clears once the code is put away.
     useEffect(() => {
         if (!('shownAt' in status)) return;
         const ms = showFor(status);
@@ -320,9 +261,6 @@ export function TicketScanner({
         };
     }, [status, scanner.cameraActive, ready]);
 
-    // On a phone the result lands under the camera, below the fold. Scrolled up
-    // only as far as it takes, so the camera stays in view above it; one already
-    // on screen doesn't move the page.
     useEffect(() => {
         if (status.kind === 'idle' || status.kind === 'scanning') return;
         resultRef.current?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
@@ -342,7 +280,6 @@ export function TicketScanner({
         if (!raw) return;
         const parsed = parseTicketUrl(raw);
         const ticketId = parsed?.ticketId ?? raw;
-        // Typed in on purpose, so it sounds even if the camera just read the same.
         lastCueRef.current = null;
         await handleTicket(ticketId);
         setManualTicketId('');
@@ -424,7 +361,6 @@ function parseTicketUrl(raw: string): {ticketId: string; eventId: string} | null
         const event = url.searchParams.get('event');
         if (ticket && event) return {ticketId: ticket, eventId: event};
     } catch {
-        // not a URL — caller falls back to raw string
     }
     return null;
 }
@@ -432,7 +368,6 @@ function parseTicketUrl(raw: string): {ticketId: string; eventId: string} | null
 function ResultBanner({status, leaving, slow, isEnglish}: {
     status: ScanStatus;
     leaving: boolean;
-    /** A scan still out after SLOW_MS. */
     slow: boolean;
     isEnglish: boolean
 }) {
@@ -523,12 +458,10 @@ function ResultBanner({status, leaving, slow, isEnglish}: {
     );
 }
 
-/** Who a result names: whatever they gave, else an unlisted HomeTown ticket's number. */
 const holderName = (ticket: ScannedTicket, isEnglish: boolean): string =>
     ticket.attendeeName || ticket.attendeeEmail
     || anonymousAttendeeName({hometown: ticket.hometown, ticketIds: [ticket.ticketId]}, isEnglish);
 
-/** The ticket's type, which an unlisted HomeTown ticket doesn't know yet, and where it was sold. */
 function TicketTags({ticket, isEnglish}: {ticket: ScannedTicket; isEnglish: boolean}) {
     return (
         <>
@@ -541,7 +474,6 @@ function TicketTags({ticket, isEnglish}: {ticket: ScannedTicket; isEnglish: bool
     );
 }
 
-/** The note staff left on the ticket in the admin panel, if any. */
 function TicketNote({ticket, isEnglish}: {ticket: ScannedTicket; isEnglish: boolean}) {
     if (!ticket.notes) return null;
     return (
@@ -552,10 +484,6 @@ function TicketNote({ticket, isEnglish}: {ticket: ScannedTicket; isEnglish: bool
     );
 }
 
-/**
- * A ring that runs down with a result's auto-clear. The radius makes the
- * circumference 100, which the CSS dashes by.
- */
 function Countdown({status}: {status: ShownStatus}) {
     return (
         <svg className="admin-tickets-scan-countdown" viewBox="0 0 36 36" aria-hidden="true">

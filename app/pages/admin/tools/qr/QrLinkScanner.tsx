@@ -5,6 +5,7 @@ import { type QrCode, qrHasSpot, qrIsSocial } from '~/lib/qrCodes';
 import { useQrScanner } from '~/lib/useQrScanner';
 import { QrScannerViewport } from '~/pages/admin/QrScannerViewport';
 import { refreshAfterSave, type ShowToast } from '../../utils';
+import { ToolHeader } from '../../ToolHeader';
 
 type LinkState = 'idle' | 'locating' | 'saving' | 'done' | 'error';
 
@@ -15,22 +16,16 @@ interface QrLinkScannerProps {
     showToast: ShowToast;
 }
 
-/** Pull a managed-code id out of a scanned `/qr?id=…` URL (or a bare id). */
 function parseQrId(raw: string): string | null {
     const text = raw.trim();
     try {
         const id = new URL(text).searchParams.get('id');
         if (id) return id;
     } catch {
-        // not a URL — fall through
     }
     return /^[A-Za-z0-9_-]{6,40}$/.test(text) ? text : null;
 }
 
-/**
- * Link a code by scanning it: point the phone at a printed code, match it to
- * yours, and pin it to your current location in one tap.
- */
 export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScannerProps) => {
     const {isEnglish} = useLanguage();
 
@@ -40,8 +35,6 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
     const [linkState, setLinkState] = useState<LinkState>('idle');
     const [linkError, setLinkError] = useState('');
 
-    // A scanned or typed value as one of your codes. True on any valid id, matched
-    // or not, which stops the camera; manual entry does the same.
     const resolve = useCallback((raw: string): boolean => {
         const id = parseQrId(raw);
         if (!id) return false;
@@ -126,12 +119,8 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
 
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
-                    {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
-                </button>
-                <h3 className="admin-tools-title">{isEnglish ? 'Link a Code by Scanning' : '扫码关联位置'}</h3>
-            </div>
+            <ToolHeader title={isEnglish ? 'Link a Code by Scanning' : '扫码关联位置'}
+                        back={isEnglish ? 'Back to QR Codes' : '返回二维码列表'} onBack={onBack}/>
 
             <p className="admin-helper-text admin-section-mb">
                 {isEnglish

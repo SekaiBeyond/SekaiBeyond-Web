@@ -14,7 +14,6 @@ export interface UpcomingEvent {
     location: string;
     locationCn: string;
     venueId: string;
-    /** Rooms of its venue it's in; none means the venue as a whole. */
     roomIds: string[];
     startAt: Date;
     endAt: Date;
@@ -29,7 +28,6 @@ export interface UpcomingEvent {
     published: boolean;
     paid: boolean;
     deleteAt: Date | null;
-    /** Set when this is a year's Sekai Beyond Con. */
     con: ConInfo | null;
 }
 
@@ -99,7 +97,6 @@ export function useAllUpcomingEvents(enabled: boolean = true): {
 } {
     const {items: upcomingEvents, loading} = adminCache.useItems(enabled);
 
-    // An admin edit also changes what the public site shows, so refresh both caches.
     const refresh = useCallback(async () => {
         await Promise.all([adminCache.refresh(), publishedCache.refresh()]);
     }, []);
@@ -107,7 +104,6 @@ export function useAllUpcomingEvents(enabled: boolean = true): {
     return {upcomingEvents, loading, refresh};
 }
 
-/** Fetch specific upcoming events by ID. Safe for event-staff users who lack collection-level read access. */
 export function useUpcomingEventsByIds(ids: string[]): {
     upcomingEvents: UpcomingEvent[];
     loading: boolean;
@@ -135,7 +131,6 @@ export function useUpcomingEventsByIds(ids: string[]): {
         }
     }, []);
 
-    // idsKey stands in for `ids`, whose identity can change every render.
     useEffect(() => {
         fetchById(ids);
     }, [idsKey]);

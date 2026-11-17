@@ -45,7 +45,6 @@ export function AttendeeModal({
     const originalType: TicketType = attendee?.tickets[0]?.type || 'normal';
     const [type, setType] = useState<TicketType>(originalType);
     const ticketNotes = new Set(attendee?.tickets.map(t => t.notes));
-    // The note every ticket has, or null when they differ.
     const originalNotes = ticketNotes.size > 1 ? null : ([...ticketNotes][0] ?? '');
     const [notes, setNotes] = useState(originalNotes ?? '');
     const [checkIn, setCheckIn] = useState(true);
@@ -64,10 +63,8 @@ export function AttendeeModal({
     const nameChanged = !!attendee && nameValid && trimmedName !== attendee.name;
     const countChanged = !!attendee && countValid && parsedCount !== attendee.ticketCount;
     const typeChanged = !!attendee && type !== originalType;
-    // Left blank over differing notes, each ticket keeps its own.
     const notesChanged = !!attendee && (originalNotes === null ? trimmedNotes !== '' : trimmedNotes !== originalNotes);
 
-    // An app order is never credited to an account (see apiLocked), so it isn't looked up.
     const [lookupEmail, setLookupEmail] = useState(
         attendee && !attendee.apiOrder ? attendee.email.trim().toLowerCase() : '');
     useEffect(() => {
@@ -85,7 +82,6 @@ export function AttendeeModal({
     const account = lookupEmail ? accountLinks.get(lookupEmail) : undefined;
     const checkingAccount = !!lookupEmail && account === undefined && !accountLookupFailed;
 
-    // HomeTown tickets and API orders aren't re-issued by email, so only warn about those matches for walk-ins.
     const duplicate = useMemo(() => {
         if (attendee || !emailValid) return null;
         const matches = existingAttendees.filter(a => a.email.toLowerCase() === trimmedEmail
@@ -98,7 +94,6 @@ export function AttendeeModal({
     }, [attendee, existingAttendees, trimmedEmail, emailValid, walkIn]);
 
     const hometownLocked = !!attendee?.hometown;
-    // The buyer holds these exact tickets in the seller's app.
     const apiLocked = !!attendee?.apiOrder;
 
     const canSave = !saving && nameValid && countValid && (attendee
@@ -157,7 +152,6 @@ export function AttendeeModal({
         }
         setSaving(true);
         try {
-            // Only override a duplicate confirmed above; one added elsewhere since load is skipped.
             const result = await callImportEventAttendees({
                 eventId,
                 attendees: [{
@@ -209,8 +203,6 @@ export function AttendeeModal({
                 name: trimmedName,
                 ticketCount: parsedCount,
                 type,
-                // Every ticket gets it, re-issued ones too, unless it's blank over
-                // differing notes, which each ticket keeps.
                 ...(originalNotes !== null || trimmedNotes !== '' ? {notes: trimmedNotes} : {}),
             });
             const {regenerated, notes: savedNotes} = result.data;
@@ -219,7 +211,6 @@ export function AttendeeModal({
             } else {
                 onSaved?.({
                     name: trimmedName,
-                    // Left out when each ticket kept its own.
                     ...(savedNotes !== undefined
                         ? {tickets: existing.tickets.map(t => ({...t, notes: savedNotes}))}
                         : {}),

@@ -3,13 +3,8 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { USE_EMULATORS } from '~/lib/firebase';
 import { emulatedGoogleToken, googleSignInAvailable, renderGoogleButton } from '~/lib/googleSignIn';
 
-/** The widest Google draws its button. */
 const MAX_WIDTH = 400;
 
-/**
- * Google's own sign-in button, or nothing if it isn't set up or won't load, as
- * email and password still work. `onToken` gets the ID token of whoever signs in.
- */
 export const GoogleButton = ({onToken}: {onToken: (idToken: string) => void}) => {
     const {isEnglish} = useLanguage();
     const containerRef = useRef<HTMLDivElement>(null);

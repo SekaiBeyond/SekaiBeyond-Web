@@ -7,6 +7,7 @@ import { localized } from '~/lib/localized';
 import { StatTile } from '../../StatTile';
 import { heatColor } from './heat';
 import { QrSpotsMap } from './QrSpotsMap';
+import { RefreshButton, ToolHeader } from '../../ToolHeader';
 
 type EventFilter = 'all' | 'none' | string;
 
@@ -36,7 +37,6 @@ export const QrDashboard = ({
     const {isEnglish} = useLanguage();
     const {platforms} = useSocialPlatforms();
     const [eventFilter, setEventFilter] = useState<EventFilter>('all');
-    const [refreshing, setRefreshing] = useState(false);
 
     const eventEnd = useMemo(() => {
         const m = new Map<string, Date>();
@@ -50,7 +50,6 @@ export const QrDashboard = ({
         return localized(isEnglish, e.title, e.titleCn);
     };
 
-    // Only events some code links to.
     const usedEventIds = useMemo(() => {
         const s = new Set<string>();
         for (const c of codes) if (c.eventId) s.add(c.eventId);
@@ -71,23 +70,11 @@ export const QrDashboard = ({
     const spotCount = filtered.filter(qrHasSpot).length;
     const activeCount = filtered.filter(c => qrIsActive(c, eventEnd.get(c.eventId) ?? null)).length;
 
-    const doRefresh = async () => {
-        setRefreshing(true);
-        try {
-            await onRefresh();
-        } finally {
-            setRefreshing(false);
-        }
-    };
-
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
-                <h3 className="admin-tools-title">{isEnglish ? 'QR Codes' : '二维码'}</h3>
+            <ToolHeader title={isEnglish ? 'QR Codes' : '二维码'}>
                 <div className="admin-btn-row">
-                    <button className="admin-toggle-btn admin-toggle-edit" onClick={doRefresh} disabled={refreshing}>
-                        {refreshing ? (isEnglish ? 'Loading...' : '加载中...') : (isEnglish ? 'Refresh' : '刷新')}
-                    </button>
+                    <RefreshButton onClick={onRefresh}/>
                     <button className="admin-toggle-btn admin-toggle-edit" onClick={onScan} type="button">
                         {isEnglish ? 'Scan' : '扫码'}
                     </button>
@@ -97,7 +84,7 @@ export const QrDashboard = ({
                         </button>
                     )}
                 </div>
-            </div>
+            </ToolHeader>
 
             {!readOnly && (
                 <button className="admin-qr-scan-banner admin-section-mb" onClick={onScanLink} type="button">

@@ -7,23 +7,17 @@ import type { ShowToast } from './utils';
 
 interface BanSectionProps {
     user: UserRecord;
-    /** Core-staff+ acting on someone below them, not themselves. Everyone else sees the status only. */
     canManage: boolean;
     onUpdated: (uid: string, changes: Partial<UserRecord>) => void;
     showToast: ShowToast;
 }
 
-/** How long a ban lasts: a number of days from now, to the end of a chosen day, or until lifted. */
 type BanTerm = {kind: 'days'; days: number} | {kind: 'date'} | {kind: 'lifted'};
 
 const QUICK_TERMS = [1, 7, 30];
 
 const DAY_MS = 86_400_000;
 
-/**
- * A ban keeps an account from signing in, to the site or any app, and signs
- * it out everywhere at once. Kept apart from the group, which it never changes.
- */
 export function BanSection({user, canManage, onUpdated, showToast}: BanSectionProps) {
     const {isEnglish} = useLanguage();
     const [editing, setEditing] = useState(false);
@@ -46,7 +40,6 @@ export function BanSection({user, canManage, onUpdated, showToast}: BanSectionPr
     };
 
     const startEditing = () => {
-        // Changing a ban in force starts from its terms.
         if (ban && active && ban.until) {
             setTerm({kind: 'date'});
             setDateInput(siteDay(ban.until));
@@ -58,11 +51,9 @@ export function BanSection({user, canManage, onUpdated, showToast}: BanSectionPr
         setEditing(true);
     };
 
-    /** The ban's end as the server takes it, null for until lifted, or undefined while a date is still to pick. */
     const untilFor = (): Date | null | undefined => {
         if (term.kind === 'lifted') return null;
         if (term.kind === 'days') return new Date(Date.now() + term.days * DAY_MS);
-        // To the end of the chosen day on the Pacific calendar, as membership is.
         return dateInput ? parseSiteTime(`${dateInput}T23:59:59`) : undefined;
     };
     const until = untilFor();

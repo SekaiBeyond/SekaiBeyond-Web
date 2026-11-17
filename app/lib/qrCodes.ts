@@ -9,20 +9,11 @@ export interface QrCode {
     label: string;
     labelCn: string;
     targetUrl: string;
-    /** Optional linked event — drives dashboard filtering and event-based expiry. */
     eventId: string;
-    /**
-     * [] means a location code. A social code is one URL with a QR link per
-     * platform (see {@link qrScanUrl}), tallied per platform in {@link
-     * platformScans}; the list can change, the kind can't.
-     */
     platforms: string[];
-    /** Per-platform scan tallies keyed by platform id (social codes only). */
     platformScans: Record<string, number>;
     expirationMode: QrExpirationMode;
-    /** Only set when expirationMode === 'date'. */
     expiresAt: Date | null;
-    /** Map spot. (0, 0) is the "unset" sentinel — use {@link qrHasSpot}. */
     lat: number;
     lng: number;
     spotLabel: string;
@@ -70,30 +61,19 @@ export function useQrCodes(): {qrCodes: QrCode[]; loading: boolean; refresh: () 
     return {qrCodes: items, loading, refresh};
 }
 
-/**
- * The stable link in a managed code's image. Social codes get one per platform;
- * `p` routes the scan to its tally.
- */
 export function qrScanUrl(id: string, origin: string, platform?: string): string {
     const base = `${origin}/qr?id=${encodeURIComponent(id)}`;
     return platform ? `${base}&p=${encodeURIComponent(platform)}` : base;
 }
 
-/** Social codes carry platform tags; location codes never do. */
 export function qrIsSocial(code: Pick<QrCode, 'platforms'>): boolean {
     return code.platforms.length > 0;
 }
 
-/** A spot is "set" only when both coords are finite and not the (0, 0) sentinel. */
 export function qrHasSpot(code: Pick<QrCode, 'lat' | 'lng'>): boolean {
     return hasCoordinates(code.lat, code.lng);
 }
 
-/**
- * Whether a code would still redirect, for admin display. `eventEndAt` is the
- * linked event's end (null if unknown or archived), used only for event-based
- * expiry.
- */
 export function qrIsActive(code: QrCode, eventEndAt: Date | null): boolean {
     const now = new Date();
     if (code.expirationMode === 'date') return code.expiresAt ? code.expiresAt > now : false;
@@ -101,5 +81,4 @@ export function qrIsActive(code: QrCode, eventEndAt: Date | null): boolean {
     return true;
 }
 
-/** Scan history for one code — backs the trend chart. */
 export const fetchQrScans = (id: string): Promise<ScanHistory> => fetchScans('qrCodes', id);

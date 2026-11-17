@@ -8,7 +8,6 @@ export type TicketType =
     | 'guest'
     | 'vendor';
 
-/** Mirrors TICKET_TYPES in functions/src/utils/tickets.ts, which reads any other as normal. */
 export const TICKET_TYPES: {value: TicketType; labelEn: string; labelCn: string}[] = [
     {value: 'normal', labelEn: 'Normal', labelCn: '普通'},
     {value: 'early-bird', labelEn: 'Early Bird', labelCn: '早鸟'},
@@ -26,15 +25,9 @@ export const ticketTypeLabel = (type: TicketType | string, isEnglish: boolean): 
     return isEnglish ? tt.labelEn : tt.labelCn;
 };
 
-/** The tag class colouring a type, as "admin-tickets-tag-type-comp-ticket". */
 export const ticketTypeClass = (type: TicketType | string): string =>
     `admin-tickets-tag-type-${(type || 'normal').toLowerCase().replace(/\s+/g, '-')}`;
 
-/**
- * Who a nameless, emailless attendee is: a HomeTown ticket by its number. Kept
- * here, not in helpers, so the claim page can use it without the admin's
- * dependencies.
- */
 export const anonymousAttendeeName = (a: Pick<AttendeeData, 'hometown' | 'ticketIds'>, isEnglish: boolean): string =>
     a.hometown
         ? `HomeTown #${a.ticketIds[0] ?? ''}`
@@ -48,7 +41,6 @@ export interface TicketData {
     redeemedAt: Date | null;
     redeemedByName: string;
     voided: boolean;
-    /** A staff comment, empty for none. */
     notes: string;
 }
 
@@ -59,10 +51,6 @@ export interface AttendeeData {
     ticketCount: number;
     emailSent: boolean;
     emailScheduled: boolean;
-    /**
-     * An API order whose own email was being sent and never settled: it may
-     * have gone, so Send Unsent passes it by.
-     */
     emailSending: boolean;
     emailSentAt: Date | null;
     createdAt: Date;
@@ -70,19 +58,13 @@ export interface AttendeeData {
     ticketIds: string[];
     walkIn: boolean;
     hometown: boolean;
-    /** A HomeTown ticket let in at the door while missing from the imported list. */
     unlisted: boolean;
-    /** A listed HomeTown ticket left out of a later export. */
     missingFromHometown: boolean;
     hometownSeenAt: Date | null;
     hometownOrderId: string;
-    /** Sold in another app and issued through the ticket API: never re-issued, nor emailed from here unless it asked. */
     apiOrder: boolean;
-    /** An API order that asked for its tickets to be emailed from here. */
     apiSendEmail: boolean;
-    /** The seller's own order number. */
     apiOrderId: string;
-    /** The API key that placed it, named as it was then. */
     apiKeyName: string;
 }
 

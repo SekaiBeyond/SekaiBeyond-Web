@@ -10,11 +10,6 @@ import {
 } from '~/lib/parkingStatus';
 import { uwLotTypeLabel } from '~/lib/uwParking';
 
-/**
- * The parking guide's copy in both site languages, in one table so the short
- * phrases most of the page is built from stay in step. Placeholders in braces are
- * filled by `t`.
- */
 const EN = {
     back: 'Back to Home',
     backCon: 'Back to Con',
@@ -311,7 +306,6 @@ function makeText(isEnglish: boolean) {
         return text;
     };
 
-    /** Minutes since midnight as a clock time: "11 am", "4:30 pm"; 24-hour "11:00" in Chinese. */
     const time = (minutes: number): string => {
         if (minutes >= DAY_MINUTES) return isEnglish ? 'midnight' : '24:00';
         const h = Math.floor(minutes / 60), m = minutes % 60;
@@ -321,7 +315,6 @@ function makeText(isEnglish: boolean) {
     };
     const range = (start: number, end: number) => `${time(start)}${isEnglish ? ' – ' : '–'}${time(end)}`;
 
-    /** A YYYY-MM-DD date: "Sat, Oct 24" / "10月24日 周六". */
     const date = (iso: string): string => {
         const [y, m, d] = iso.split('-').map(Number);
         const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
@@ -330,7 +323,6 @@ function makeText(isEnglish: boolean) {
 
     const money = (n: number) => Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
 
-    /** When an event rate is in effect: ", 6 am – 8 pm" / ", all day". */
     const pricingWhen = (p: {start: string | null; end: string | null}): string => {
         if (!p.start || !p.end) return t('allDay');
         const [sh, sm] = p.start.split(':').map(Number), [eh, em] = p.end.split(':').map(Number);
@@ -346,15 +338,12 @@ function makeText(isEnglish: boolean) {
         return t(`st_${p.from}>${p.to}` as TextKey, {t: time(p.at)});
     };
 
-    /** "$5/hr · $21/day", "$7 flat". */
     const rates = (list: Rate[]): string => list.map(r => t(`rate_${r.unit}`, {p: money(r.amount)})).join(' · ');
 
-    /** When a rate applies, by UW's rate periods: "Weekdays 6 am – 4 pm". */
     const rateWhen = (rate: Rate): string => rate.unit === 'night'
         ? t('rateNightWhen', {w: range(...NIGHT_RATE_HOURS.weekday), s: range(...NIGHT_RATE_HOURS.saturday)})
         : t('rateDayWhen', {r: range(...DAY_RATE_HOURS)});
 
-    /** A lot's non-free hours on a day: "6 am – 9 pm", or "permits only 6 am – 4 pm, pay 4 – 9 pm". */
     const hours = (day: LotStatus['day']): string => {
         const paid = day.filter(s => s.segment !== 'free');
         if (paid.length === 0) return t('free');
@@ -366,7 +355,6 @@ function makeText(isEnglish: boolean) {
             .join(isEnglish ? ', ' : '，');
     };
 
-    /** "12 accessible stalls". */
     const accessibleStalls = (n: number) => n === 1 ? t('adaStall') : t('adaStalls', {n});
 
     const lotType = (type: string) => uwLotTypeLabel(type, isEnglish);

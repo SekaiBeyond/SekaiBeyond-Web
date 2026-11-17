@@ -1,21 +1,8 @@
-/*
- * Sekai Beyond Con page (/con).
- *
- * Every class here is `sbc-` prefixed on purpose: the con page reuses the global
- * brand tokens and `.btn` styles from this folder, but its own layout classes
- * would otherwise collide with the main site's `.hero`, `.section`, `.navbar`,
- * `.countdown-*`, and `.footer-*` rules.
- *
- * Tokens live on `.sbc-page` rather than `:root` for the same reason — the
- * `--sbc-night-*` family only exists because this page has a dark video hero.
- */
-
 .sbc-page {
     --sbc-night-900: #12122a;
     --sbc-night-800: #1a1a2e;
     --sbc-gold: #feca57;
     --sbc-heading: #3f4450;
-    /* The one rule colour: card edges, dividers, and the schedule's hour lines. */
     --sbc-line: rgba(74, 81, 96, 0.12);
 
     --sbc-radius-card: 20px;
@@ -23,12 +10,10 @@
 
     --sbc-gradient-hero-title: linear-gradient(135deg, #ffffff 0%, #ffe2ee 45%, #ffd49c 100%);
 
-    /* The site's body greys are under 4.5:1 on white; this page is mostly reading. */
     --color-text-body: #5d6270;
     --color-text-secondary: #737885;
 }
 
-/* Every card on the page is one of these: white, a hairline edge, a soft shadow. */
 .sbc-ticket-card,
 .sbc-schedule,
 .sbc-hall-card,
@@ -39,9 +24,6 @@
     box-shadow: var(--shadow-soft);
 }
 
-/* Buttons — only the variants the main site does not already have */
-
-/* Glass, for sitting on top of the hero video. Used with `.btn`. */
 .sbc-btn-ghost {
     background: rgba(255, 255, 255, 0.12);
     color: #fff;
@@ -61,13 +43,10 @@
     font-size: 14px;
 }
 
-/* The site's 3px outline is built for the hero; on white cards it out-shouts the copy. */
 .sbc-page .btn-secondary {
     border-width: 2px;
     box-shadow: none;
 }
-
-/* Navbar — transparent over the hero video, solid once you scroll past it */
 
 .sbc-navbar {
     position: fixed;
@@ -217,7 +196,6 @@
     color: var(--color-primary);
 }
 
-/* Drawer-only controls; revealed at the mobile breakpoints below. */
 .sbc-nav-links-cta,
 .sbc-nav-links-home {
     display: none;
@@ -227,11 +205,9 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    /* The logo is nowrap, so without this the shared switcher gets crushed. */
     flex-shrink: 0;
 }
 
-/* The shared language switcher is built for the white navbar; make it read on video. */
 .sbc-navbar:not(.sbc-navbar--solid) .sbc-lang-slot .language-switcher {
     color: #fff;
 }
@@ -261,8 +237,6 @@
     transform: scale(1.08);
 }
 
-/* Hero — a self-hosted loop as the backdrop */
-
 .sbc-hero {
     position: relative;
     min-height: 100vh;
@@ -282,7 +256,6 @@
     inset: 0;
     z-index: -2;
     overflow: hidden;
-    /* Clicks and taps belong to the content above, never to the player. */
     pointer-events: none;
 }
 
@@ -308,13 +281,11 @@
     position: absolute;
     inset: 0;
     z-index: -1;
-    /* Dark all the way down — the hero ends on a crisp edge, not a fade. */
     background: linear-gradient(180deg, rgba(18, 18, 42, 0.82) 0%, rgba(18, 18, 42, 0.55) 45%,
     rgba(22, 33, 62, 0.78) 100%),
     radial-gradient(ellipse at center, rgba(18, 18, 42, 0.15) 0%, rgba(18, 18, 42, 0.7) 100%);
 }
 
-/* Soft floating colour blobs, echoing the bubbles on the main site hero. */
 .sbc-hero-sparks {
     position: absolute;
     inset: 0;
@@ -436,7 +407,6 @@
     font-weight: 500;
 }
 
-/* The venue name opens Google Maps; the ↗ marks the link, underlined on hover. */
 .sbc-hero-meta-link {
     display: inline-flex;
     align-items: center;
@@ -505,8 +475,6 @@
     }
 }
 
-/* On a short laptop screen the hero already overflows, so the scroll cue would
-   only crowd the buttons. */
 @media (max-height: 760px) {
     .sbc-hero {
         padding-bottom: 64px;
@@ -600,13 +568,6 @@
     max-width: 1300px;
     margin: 0 auto;
     padding: var(--sbc-section-pad-block) 40px;
-    /*
-     * Anchor jumps land on the section header, not on the section's top edge.
-     * Clearing only the navbar leaves the whole top padding — plus a sliver of
-     * the section above — still on screen, which reads as a jump that stopped
-     * short. Subtracting the padding back out puts every header 94px down the
-     * viewport, 28px clear of the ~66px solid navbar, at every breakpoint.
-     */
     scroll-margin-top: calc(94px - var(--sbc-section-pad-block));
 }
 
@@ -635,7 +596,6 @@
     color: var(--color-text-secondary);
 }
 
-/* Two paragraphs side by side; they stack once the page narrows. */
 .sbc-about-text {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -649,7 +609,6 @@
     color: var(--color-text-body);
 }
 
-/* Plain text on the page, not cards: nothing here is clickable. */
 .sbc-highlight-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -681,18 +640,10 @@
     color: var(--color-text-body);
 }
 
-/* Schedule, as the run-of-show grid it's transcribed from: a column per room, a clock
-   down the side, each item as tall as it runs.
-
-   One CSS grid of five-minute rows, each item spanning its slots. Rows are
-   `minmax(slot, auto)`, so an item with more copy than time stretches its rows rather
-   than clipping, and the shared rows keep the clock true across columns. */
 .sbc-schedule {
     padding: 28px 24px;
 }
 
-/* Columns keep a readable width and scroll sideways; picking one room in the
-   filter fits anywhere. */
 .sbc-grid-scroll {
     overflow-x: auto;
     overscroll-behavior-x: contain;
@@ -709,8 +660,6 @@
     --sbc-grid-slot: 7px;
 
     display: grid;
-    /* Track counts come from the data, so the template is inline; these widths
-       stay here for the breakpoints. */
     min-width: min-content;
 }
 
@@ -725,7 +674,6 @@
     border-bottom: 2px solid var(--sbc-accent-ink);
 }
 
-/* The clock stays put while the rooms scroll under it. */
 .sbc-grid-corner,
 .sbc-grid-time {
     position: sticky;
@@ -743,14 +691,12 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* Lifted half a line to sit on its hour rule. */
 .sbc-grid-time > span {
     display: block;
     margin-top: -0.6em;
     white-space: nowrap;
 }
 
-/* Hour rules stop at the gutter. */
 .sbc-grid-hour {
     grid-column: 2 / -1;
     border-top: 1px dashed var(--sbc-line);
@@ -785,8 +731,6 @@
     color: var(--sbc-heading);
 }
 
-/* Read aloud, never drawn: the column header says the room, but is screens away
-   for a screen reader. */
 .sbc-sr-only {
     position: absolute;
     width: 1px;
@@ -798,9 +742,6 @@
     white-space: nowrap;
 }
 
-/* Room accents. Rooms pick one in admin; the palette is fixed so every colour
-   stays legible on the card. The grid and the filter both read these two
-   variables. Keep in sync with ROOM_ACCENTS in app/lib/conContent.ts. */
 .sbc-accent--pink {
     --sbc-accent-tint: rgba(255, 107, 157, 0.16);
     --sbc-accent-ink: #d94a7c;
@@ -831,9 +772,6 @@
     --sbc-accent-ink: #5a616f;
 }
 
-/* Room filter: one room narrows the grid to a single column and that room's hours,
-   which fits a phone without a second layout. Styled off `aria-pressed`, so look
-   and announced state can't drift. */
 .sbc-schedule-filter,
 .sbc-vendor-row-filter {
     display: flex;
@@ -846,7 +784,6 @@
     padding: 8px 16px;
     border: 1.5px solid transparent;
     border-radius: var(--sbc-pill);
-    /* The "all rooms" chip wears no accent, so both fall back to neutral. */
     background: var(--sbc-accent-tint, rgba(122, 129, 144, 0.14));
     color: var(--sbc-accent-ink, #5a616f);
     font-family: inherit;
@@ -869,7 +806,6 @@
     outline-offset: 2px;
 }
 
-/* Announced but unscheduled: listed under the grid. */
 .sbc-schedule-tba {
     margin-top: 30px;
     padding-top: 26px;
@@ -896,8 +832,6 @@
     background: var(--sbc-accent-tint);
 }
 
-/* Maid café: the café's poster beside its theme, room and hours, then a poster
-   per maid. All at 17:22 (US Letter), the shape they're cropped to on upload. */
 .sbc-cafe {
     display: grid;
     grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
@@ -934,7 +868,6 @@
     font-size: 3.4rem;
 }
 
-/* A poster is a button that opens it full size. */
 .sbc-poster-btn {
     padding: 0;
     border: 0;
@@ -1027,7 +960,6 @@
     color: var(--sbc-heading);
 }
 
-/* Flex rather than grid so a short last row sits centred under the full ones. */
 .sbc-maid-grid {
     display: flex;
     flex-wrap: wrap;
@@ -1067,7 +999,6 @@
     }
 }
 
-/* The poster viewer. Above the navbar (1000) and the preview banner (1001). */
 .sbc-viewer {
     position: fixed;
     inset: 0;
@@ -1155,13 +1086,6 @@
     right: 20px;
 }
 
-/* Artist alley: the hall floor plan, a panel naming whoever is at the picked
-   table, and a directory below. The geometry is one CSS grid in convention/hall.ts;
-   each item carries grid lines for both orientations, and the container query
-   below picks the pair.
-
-   Sized by its container, since the admin editor shows the plan in a narrower
-   column. */
 .sbc-hall-card {
     padding: 24px 24px 18px;
 }
@@ -1229,8 +1153,6 @@
     border-color: var(--color-primary);
 }
 
-/* The plan carries its own tokens, since the admin panel isn't under
-   `.sbc-page`. */
 .sbc-hall {
     --sbc-hall-wall: #8d93a1;
     --sbc-hall-door: #2fb3c4;
@@ -1251,16 +1173,12 @@
     grid-row: var(--l-row);
 }
 
-/* The wall is the floor's border, as thick as hall.ts's wall tracks, so a door on
-   a wall track lies on it. */
 .sbc-hall-floor {
     border: 4px solid var(--sbc-hall-wall);
     border-radius: 10px;
     background: #fffafc;
 }
 
-/* A teal stretch of wall, slightly thicker so it reads as a doorway, inset to
-   clear the corners. */
 .sbc-hall-door {
     border-radius: 4px;
     background: var(--sbc-hall-door);
@@ -1296,7 +1214,6 @@
     color: var(--sbc-hall-pink);
 }
 
-/* Open floor, not a structure: hatched, with a dashed edge. */
 .sbc-hall-landmark--cheer {
     border: 1.5px dashed rgba(217, 106, 44, 0.45);
     background: repeating-linear-gradient(
@@ -1349,7 +1266,6 @@
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.2s ease;
 }
 
-/* Clear of the fixed navbar when the directory scrolls a table into view. */
 button.sbc-hall-table {
     cursor: pointer;
     scroll-margin-block: 110px;
@@ -1371,7 +1287,6 @@ button.sbc-hall-table:hover {
     opacity: 0.25;
 }
 
-/* Lifted above its neighbours so the ring is not clipped by the next table over. */
 .sbc-hall-table[aria-pressed='true'] {
     position: relative;
     z-index: 1;
@@ -1387,8 +1302,6 @@ button.sbc-hall-table:hover {
     outline-offset: 2px;
 }
 
-/* North up. Fixed-height tracks so phone tables are tappable; capped width so a
-   tablet's plan isn't two screens tall. */
 @container sbc-hall (max-width: 759px) {
     .sbc-hall-grid {
         grid-template-columns: var(--p-cols);
@@ -1411,7 +1324,6 @@ button.sbc-hall-table:hover {
         transform: rotate(-90deg);
     }
 
-    /* Turned with the plan: the end walls now run across the page. */
     .sbc-hall-door[data-wall='end'] {
         margin: 0 8px;
     }
@@ -1528,7 +1440,6 @@ button.sbc-hall-table:hover {
     color: var(--color-primary);
 }
 
-/* Shared by the panel under the plan and every directory entry. */
 .sbc-table-code {
     flex: none;
     min-width: 2.9em;
@@ -1554,8 +1465,6 @@ button.sbc-hall-table:hover {
     font-weight: 400;
 }
 
-/* Four rows side by side, as in the hall; narrower, one row at a time behind the
-   chips. */
 .sbc-vendor-directory {
     container: sbc-directory / inline-size;
     margin-top: 28px;
@@ -1700,7 +1609,6 @@ button.sbc-hall-table:hover {
     gap: 12px;
 }
 
-/* Cards stretch to one height so the Reserve buttons line up. */
 .sbc-ticket-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1714,7 +1622,6 @@ button.sbc-hall-table:hover {
     padding: 34px 28px 28px;
 }
 
-/* The second pixel of edge as a ring, so content aligns with its neighbours'. */
 .sbc-ticket-card--featured {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 1px var(--color-primary), var(--shadow-card);
@@ -1873,7 +1780,6 @@ button.sbc-hall-table:hover {
     font-weight: 700;
 }
 
-/* One card with the questions ruled off inside it, rather than a card each. */
 .sbc-faq-list {
     max-width: 820px;
     margin: 0 auto;
@@ -1897,7 +1803,6 @@ button.sbc-hall-table:hover {
     list-style: none;
 }
 
-/* Hide the native disclosure triangle in both engines. */
 .sbc-faq-question::-webkit-details-marker {
     display: none;
 }
@@ -1933,7 +1838,6 @@ button.sbc-hall-table:hover {
     transform: rotate(45deg);
 }
 
-/* Keep the closing callout on the same measure as the questions above it. */
 .sbc-faq-list + .sbc-callout {
     max-width: 820px;
     margin-inline: auto;
@@ -1962,7 +1866,6 @@ button.sbc-hall-table:hover {
     border-radius: 4px;
 }
 
-/* One centred column: name, who runs it, links, socials, then the small print. */
 .sbc-footer {
     margin-top: 40px;
     padding: 56px 24px 28px;
@@ -2075,7 +1978,6 @@ button.sbc-hall-table:hover {
         display: flex;
     }
 
-    /* Keep the toggle and language switcher clickable above the drawer. */
     .sbc-nav-actions {
         position: relative;
         z-index: 2;
@@ -2139,7 +2041,6 @@ button.sbc-hall-table:hover {
         border-top: 1px solid rgba(255, 107, 157, 0.15);
     }
 
-    /* The drawer carries a home link, so the bar drops its own. */
     .sbc-nav-back {
         display: none;
     }
@@ -2242,7 +2143,6 @@ button.sbc-hall-table:hover {
         padding: 22px 16px;
     }
 
-    /* Tighter columns and a shorter hour, so one or two rooms fit a phone. */
     .sbc-grid {
         --sbc-grid-gutter: 72px;
         --sbc-grid-column: 148px;
@@ -2278,7 +2178,6 @@ button.sbc-hall-table:hover {
         padding-top: 36px;
     }
 
-    /* Two to a row: one poster a screen tall is a lot of scrolling to see a line-up. */
     .sbc-maid-grid {
         gap: 24px 14px;
     }
@@ -2291,7 +2190,6 @@ button.sbc-hall-table:hover {
         font-size: 0.95rem;
     }
 
-    /* The arrows move under the poster, out of the way of a thumb on its edges. */
     .sbc-viewer {
         padding: 72px 12px 88px;
     }
@@ -2369,7 +2267,6 @@ button.sbc-hall-table:hover {
         grid-template-columns: 1fr;
     }
 
-    /* The drawer already carries a full-width ticket button. */
     .sbc-nav-ticket-btn {
         display: none;
     }
@@ -2382,9 +2279,6 @@ button.sbc-hall-table:hover {
     }
 }
 
-/* For staff previewing a switched-off con page. At the bottom: the fixed navbar
-   would cover it at the top, and pushing the navbar down would mean hard-coding
-   the banner's height. */
 .sbc-preview-banner {
     position: fixed;
     left: 0;
@@ -2400,8 +2294,6 @@ button.sbc-hall-table:hover {
     letter-spacing: 0.3px;
 }
 
-/* CSS can't measure the banner, so this clearance is fixed and the banner's
-   copy is kept to one line on desktop, two on a phone. */
 .sbc-page--preview .go-to-top {
     bottom: 76px;
 }
@@ -2412,7 +2304,6 @@ button.sbc-hall-table:hover {
     }
 }
 
-/* The public face of an unpublished con page. */
 .sbc-unpublished {
     display: flex;
     align-items: center;
@@ -2438,7 +2329,6 @@ button.sbc-hall-table:hover {
     color: var(--color-primary);
 }
 
-/* Outside `.sbc-page`, so only base.css's tokens apply. */
 .sbc-unpublished-title {
     margin: 0 0 12px;
     font-family: var(--font-display);
@@ -2453,7 +2343,6 @@ button.sbc-hall-table:hover {
     color: var(--color-text-body);
 }
 
-/* Share card — a local-only photo editor */
 .sbc-lineup-section {
     max-width: 1180px;
 }
@@ -2462,8 +2351,6 @@ button.sbc-hall-table:hover {
     display: none;
 }
 
-/* The preview fills a column stretched to the controls' height; the controls get
-   the wider share. */
 .sbc-lineup-editor {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -2481,8 +2368,6 @@ button.sbc-hall-table:hover {
 
 .sbc-lineup-preview {
     position: relative;
-    /* A zero basis so it doesn't add height; the cap keeps it 4:5 in a narrow
-       column. */
     flex: 1 1 0;
     min-height: 0;
     max-height: calc(100cqi * 5 / 4);
@@ -2569,7 +2454,6 @@ button.sbc-hall-table:hover {
     box-shadow: var(--shadow-soft);
 }
 
-/* The buttons take their labels' width; the copy gets the rest. */
 .sbc-lineup-upload-card {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -2581,7 +2465,6 @@ button.sbc-hall-table:hover {
     background: rgba(255, 107, 157, 0.045);
 }
 
-/* Too narrow for both side by side, so the buttons drop below the copy. */
 @container (max-width: 520px) {
     .sbc-lineup-upload-card {
         grid-template-columns: minmax(0, 1fr);
@@ -2823,14 +2706,12 @@ button.sbc-hall-table:hover {
     padding: 0;
 }
 
-/* Seven fonts plus the upload tile: two rows of four, or four of two on phones. */
 .sbc-lineup-font-options {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
 }
 
-/* Each option is written in its own font (sized inline), so the choice is made by eye. */
 .sbc-lineup-font-option {
     display: flex;
     align-items: center;
@@ -2927,7 +2808,6 @@ button.sbc-hall-table:hover {
         gap: 16px;
     }
 
-    /* Stacked, nothing sets the column's height, so the preview sizes from its width. */
     .sbc-lineup-preview {
         flex: none;
         width: min(100%, 340px);

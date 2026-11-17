@@ -13,10 +13,6 @@ interface EventStaffSectionProps {
     readOnly?: boolean;
     onCountChange?: (count: number) => void;
     onAttendeeRemoved?: () => void;
-    /**
-     * Opens the user in Users Management. Left out for event staff, who can't
-     * open that tab, so a row opens the public profile instead.
-     */
     onLookupUser?: (uid: string) => void;
 }
 
@@ -30,16 +26,12 @@ export function EventStaffSection({
                                   }: EventStaffSectionProps) {
     const {isEnglish} = useLanguage();
     const {profile} = useAuth();
-    // The event's own staff can't read accounts, and are shown less of each.
     const viewer = profile && hasPermission(profile.group, 'staff') ? 'staff' : 'event-staff';
     const [staffList, setStaffList] = useState<UserRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [loaded, setLoaded] = useState(false);
     const [busyUid, setBusyUid] = useState<string | null>(null);
 
-    // From an effect, not inside a list update, where setting the parent's state
-    // happens mid-render. Only a list that loaded, so a failed load leaves the
-    // parent's count as it was.
     useEffect(() => {
         if (loaded) onCountChange?.(staffList.length);
     }, [loaded, staffList.length, onCountChange]);
@@ -69,7 +61,6 @@ export function EventStaffSection({
         return () => {
             stale = true;
         };
-        // Not keyed on isEnglish: a language toggle shouldn't refetch.
     }, [eventId, viewer, showToast]);
 
     const addStaff = async (user: UserRecord) => {
@@ -151,7 +142,6 @@ export function EventStaffSection({
                         <UserRow
                             key={u.uid}
                             user={u}
-                            // A new tab, so the event stays open behind the profile.
                             onClick={() => onLookupUser
                                 ? onLookupUser(u.uid)
                                 : window.open(`/profile?uid=${u.uid}`, '_blank', 'noopener')}
@@ -160,7 +150,7 @@ export function EventStaffSection({
                                 <button
                                     className="admin-toggle-btn admin-toggle-revoke"
                                     onClick={(e) => {
-                                        e.stopPropagation(); // the row behind it opens the user
+                                        e.stopPropagation();
                                         void removeStaff(u);
                                     }}
                                     onKeyDown={(e) => e.stopPropagation()}

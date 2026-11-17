@@ -28,8 +28,6 @@ export function usePolicy(): {policy: Policy; loading: boolean; failed: boolean;
     return {policy, loading, failed: error !== null, refresh};
 }
 
-// Admin-written, but sanitized since it goes into the page as raw HTML. `align`
-// is how marked emits a column's alignment.
 const POLICY_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     allowedTags: [...sanitizeHtml.defaults.allowedTags, 'del', 'img'],
     allowedAttributes: {
@@ -41,7 +39,5 @@ const POLICY_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     allowedSchemes: ['http', 'https', 'mailto'],
 };
 
-// `breaks` keeps a single newline as a line break, so plain-text policy reads
-// as typed.
 export const renderPolicyMarkdown = (content: string): string =>
     sanitizeHtml(marked.parse(content, {async: false, gfm: true, breaks: true}), POLICY_SANITIZE_OPTIONS);

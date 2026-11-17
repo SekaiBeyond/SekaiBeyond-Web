@@ -9,17 +9,12 @@ import type { ParkingText } from './text';
 const UW_EVENT_CALENDAR_URL = 'https://transportation.uw.edu/park/events/calendar';
 
 interface LotListProps {
-    /** The event, on its guide; none for right now. */
     event: GuideEvent | null;
-    /** What the guide is showing: right now, or the event's hours on `shownDay`. */
     parkingWindow: ParkingWindow;
-    /** The event's days from today on, which its guide can switch between. */
     days: EventDay[];
     shownDay: EventDay | null;
     onShowDay: (day: EventDay) => void;
-    /** None for the whole campus. */
     venue: Venue | null;
-    /** The event's own venue, when the visitor is looking at another one. */
     eventVenue: Venue | null;
     venueName: (venue: Venue) => string;
     eventPricing: UwEventPricing[];
@@ -27,7 +22,6 @@ interface LotListProps {
     visibleViews: LotView[];
     query: string;
     onQuery: (query: string) => void;
-    /** The filters to show, which leave out "free" while no lot is. */
     offeredFilters: LotFilter[];
     filters: ReadonlySet<LotFilter>;
     onToggleFilter: (filter: LotFilter) => void;
@@ -38,7 +32,6 @@ interface LotListProps {
     tx: ParkingText;
 }
 
-/** "Sat, Oct 24 · 11 am – 5 pm", or both days for an event that runs past midnight. */
 function EventWhen({event, tx}: {event: GuideEvent; tx: ParkingText}) {
     const startDate = event.start.slice(0, 10), startMin = clockMinutes(event.start.slice(11, 16));
     if (!event.end) return <><strong>{tx.date(startDate)}</strong> · {tx.time(startMin)}</>;
@@ -54,10 +47,8 @@ function EventWhen({event, tx}: {event: GuideEvent; tx: ParkingText}) {
 const eventTitle = (event: GuideEvent, tx: ParkingText) =>
     tx.isEnglish ? event.title.en || event.title.zh : event.title.zh || event.title.en;
 
-// Past this many days, the switch is a menu rather than a row of buttons.
 const MAX_DAY_BUTTONS = 3;
 
-/** Switches an event's guide between the event's days, each named by its date. */
 function DaySwitch({days, shown, onShow, tx}: {
     days: EventDay[];
     shown: EventDay | null;
@@ -95,7 +86,6 @@ function DaySwitch({days, shown, onShow, tx}: {
     );
 }
 
-/** The guide's list view: the event on its guide or else today's UW event-rate warnings, the suggested lots, then every lot. */
 export const LotList = (props: LotListProps) => {
     const {
         event,
@@ -120,13 +110,10 @@ export const LotList = (props: LotListProps) => {
         onSelectVenue,
         tx
     } = props;
-    // Nearest on foot first, as `views` come.
     const picks = views.filter(v => v.suggested);
-    // Today's UW event pricing, off an event's guide; on one, the lots' statuses already show it.
     const banners = event ? [] : eventPricing.filter(p => p.date === parkingWindow.date);
     const name = venue ? venueName(venue) : '';
 
-    // Hovering a lot in the list lights up its pin and shows its card on the map.
     const hoverProps = (code: string) => ({
         onPointerEnter: (e: PointerEvent) => {
             if (e.pointerType === 'mouse') onHot(code);

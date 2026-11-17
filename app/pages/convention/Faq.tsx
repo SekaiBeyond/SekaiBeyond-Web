@@ -6,10 +6,6 @@ import { SectionHeader } from '~/pages/convention/SectionHeader';
 
 const POLICY_WORD = {en: 'Policy', zh: '政策'};
 
-/**
- * Links each mention of the Policy page in an answer. Case-sensitive, so a
- * passing "policy" stays plain.
- */
 const linkPolicy = (text: string, word: string) =>
     text.split(word).flatMap((part, i) => i === 0 ? [part] : [
         <Link key={i} className="sbc-faq-policy-link" to="/policy">{word}</Link>,
@@ -26,7 +22,6 @@ export const Faq = () => {
             <SectionHeader title={{en: 'FAQ', zh: '常见问题'}}/>
 
             <div className="sbc-faq-list">
-                {/* By position: two entries may share a question. */}
                 {content.faq.map((entry, i) => (
                     <details key={i} className="sbc-faq-item">
                         <summary className="sbc-faq-question">
@@ -38,7 +33,6 @@ export const Faq = () => {
                 ))}
             </div>
 
-            {/* Each way to reach us is a site config setting; with neither set there is nothing to offer. */}
             {(config.contactEmail || config.socialLinks.discord) && (
                 <div className="sbc-callout">
                     <div>

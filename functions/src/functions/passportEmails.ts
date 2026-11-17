@@ -34,39 +34,17 @@ import {
     reserveQuotaInTxn,
     rollbackQuotaReservation,
 } from "../utils/quota";
-import { recordDoc, recordRef } from "../utils/records";
+import { performer, recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, type ResendEnvelope, ResendSendError, sendEmails } from "../utils/resendClient";
 import { validateDocId, validateEmail, validateStr } from "../utils/validation";
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 
-/**
- * Passports sent by email rather than printed: each address on an admin's list
- * gets a passport of its own, minted from one design, with its key in an email
- * from the one saved template. There is no sticker; once claimed, the holder
- * reaches the passport's page from their profile shelf.
- *
- * The address stays on the passport as `sentTo`, which the admin screens show
- * and search, and use to point out anyone already sent one of the design.
- * Nothing here refuses a repeat: someone who bought two is listed twice. An
- * account with another address is warned before activating one (see
- * claimPassportWithKey).
- */
-
 const templateRef = () => db.collection("passportEmailTemplate").doc("default");
 
-/**
- * A key email that carries neither the key nor its link would be a passport no
- * one can claim.
- */
 const carriesKey = (template: EmailTemplateDoc): boolean =>
     [template.subject, template.bodyHtml].some(t =>
         t.search(ACTIVATION_CODE_PLACEHOLDER) !== -1 || t.search(ACTIVATE_URL_PLACEHOLDER) !== -1);
 
-/**
- * Everything in a key email but the key, which fillActivationKey adds. False
- * for the subject line, where entities would show literally and the cover has
- * no place.
- */
 function renderKeyEmail(
     template: string,
     data: {recipientEmail: string; design: MintingDesign; contactEmail: string},
@@ -74,13 +52,9 @@ function renderKeyEmail(
 ): string {
     const sub = htmlContext ? escapeHtml : (s: string) => s;
     const {design} = data;
-    // A real <img>, since email clients ignore CSS backgrounds. Nothing for a
-    // design without cover art.
     const cover = htmlContext && design.coverImageUrl
         ? `<img src="${escapeHtml(design.coverImageUrl)}" alt="${escapeHtml(design.name)}" width="200" style="display:block;margin:0 auto;width:200px;max-width:60%;height:auto;border:0;border-radius:8px;"/>`
         : "";
-    // Function replacements throughout: a replacement string would read $&, $'
-    // and $$ in a name as patterns.
     return template
         .replace(/{{\s*recipientEmail\s*}}/g, () => sub(data.recipientEmail))
         .replace(/{{\s*designName\s*}}/g, () => sub(design.name))
@@ -91,19 +65,6 @@ function renderKeyEmail(
         .replace(CONTACT_EMAIL_PLACEHOLDER, () => sub(data.contactEmail));
 }
 
-/**
- * Mint one passport per listed address and email each its key, up to
- * MAX_EMAIL_COUNT a call; the client splits longer lists. An address listed
- * twice gets two passports, each in an email of its own.
- *
- * What the daily cap leaves room for goes now, the overflow joins
- * /scheduledMail as sendTicketEmails' does, and anything past the queue's cap
- * comes back in `deferred`, minting nothing, for another day. Those whose email
- * Resend refused come back in `failed`. Only passports whose email went or is
- * queued are kept, so a failed address can simply be sent again.
- *
- * An optional note, such as why they were sent, is given to each passport.
- */
 export const emailPassports = onCall(
     {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB", secrets: [RESEND_API_KEY]},
     async (request) => {
@@ -115,7 +76,6 @@ export const emailPassports = onCall(
         if (!Array.isArray(input.emails) || input.emails.length < 1 || input.emails.length > MAX_EMAIL_COUNT) {
             throw new HttpsError("invalid-argument", `emails must hold between 1 and ${MAX_EMAIL_COUNT} addresses.`);
         }
-        // Lowercased, and kept as often as listed: one passport each.
         const recipients = input.emails.map(e => validateEmail(e, "email"));
         const note = validatePassportNote(input.note);
 
@@ -130,9 +90,6 @@ export const emailPassports = onCall(
         }
         const contactEmail = await contactEmailFor(template);
 
-        // The daily cap, gated as in sendTicketEmails: re-anchored against the
-        // provider first, then a pre-check that only refuses when both the cap
-        // and the queue are full; the transaction below has the final word.
         await syncProviderUsage();
         const {sentToday, dailyCap} = await computeEmailQuota();
         const queueCapacity = Math.max(0, RESEND_QUEUE_CAP - await getScheduledMailQueueDepth());
@@ -148,8 +105,6 @@ export const emailPassports = onCall(
             passportDesignName: design.name,
             passportYear: design.year,
         };
-        // Reserved in a transaction with the records, so two sends can't both
-        // spend the same slots.
         const {sendCount, queueCount, sendAuditRef, queueAuditRef} = await db.runTransaction(async (txn) => {
             const {sentToday: freshSent, dailyCap: freshCap, reserved} = await computeEmailQuotaInTxn(txn);
             const sendCount = Math.min(recipients.length, Math.max(0, freshCap - freshSent));
@@ -180,19 +135,12 @@ export const emailPassports = onCall(
             const html = renderKeyEmail(template.bodyHtml, fields, true);
             const {passportId, key, write, noteWrite} = mintPassport(design, seen, by, {
                 sentTo: email,
-                // Set ahead of the send: a passport whose email doesn't go is
-                // deleted below.
                 emailSentAt: queued ? null : FieldValue.serverTimestamp(),
-                // The admin screens say "Queued" until scheduledMailDrain
-                // ships it.
                 emailScheduled: queued,
             }, note);
             ops.push(write);
             if (noteWrite) ops.push(noteWrite);
             if (queued) {
-                // Without the key: the drain fills it in from passportSecrets,
-                // so the queue, which core staff can read, never holds one, and
-                // a key reissued meanwhile is the one that goes.
                 ops.push(batch => batch.set(db.collection("scheduledMail").doc(), {
                     type: "passport",
                     envelope: {to: email, subject, html},
@@ -210,20 +158,14 @@ export const emailPassports = onCall(
             }
         });
 
-        // Two writes a passport, one its note and one a queued email stay
-        // within one batch (MAX_EMAIL_COUNT), so this lands whole or not at all.
         try {
             await commitInChunks(ops);
         } catch (err) {
-            // Nothing has gone out, so nothing is kept.
             if (sendCount > 0) await rollbackQuotaReservation(sendCount);
             await Promise.all([sendAuditRef?.delete(), queueAuditRef?.delete()]);
             throw err;
         }
 
-        // One Resend call, all or nothing; the pre-charge is rolled back on
-        // failure unless a quota header came back, which resendClient has
-        // already recorded.
         let sentCount = 0;
         if (outgoing.length > 0) {
             try {
@@ -234,8 +176,6 @@ export const emailPassports = onCall(
                 if (!headerArrived) await rollbackQuotaReservation(sendCount);
             }
         }
-        // A passport whose email didn't go is deleted, key and all: no one has
-        // seen its key, and its address is free to be sent one again.
         const unsent = outgoing.slice(sentCount);
         if (unsent.length > 0) {
             try {
@@ -257,7 +197,6 @@ export const emailPassports = onCall(
         return {sentCount, queuedCount: queueCount, deferred, failed: unsent.map(u => u.email)};
     });
 
-/** Save the one key email template. Core staff and up, like the ticket template. */
 export const updatePassportEmailTemplate = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
@@ -272,8 +211,7 @@ export const updatePassportEmailTemplate = onCall({maxInstances: 10}, async (req
             updatedBy: uid,
         }, {merge: true});
         txn.set(recordRef(), recordDoc("passport-email-template-update", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
         }));
         return {saved: true};
     });

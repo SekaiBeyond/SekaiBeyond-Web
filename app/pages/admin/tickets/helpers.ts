@@ -106,10 +106,6 @@ export const mapAttendeeDoc = (
     };
 };
 
-/**
- * Why the server refused to send ticket emails, as a warning to show, or null
- * for any other failure.
- */
 export const sendRefusal = (err: unknown, isEnglish: boolean): string | null => {
     switch (functionsErrorCode(err)) {
         case 'no-template':
@@ -128,33 +124,19 @@ export const sendRefusal = (err: unknown, isEnglish: boolean): string | null => 
 const hometownStatus = (a: Pick<AttendeeData, 'hometown' | 'unlisted' | 'missingFromHometown'>) =>
     !a.hometown ? '' : a.unlisted ? 'unlisted' : a.missingFromHometown ? 'missing' : 'listed';
 
-/** Who removing an attendee removes. Never a HomeTown ticket: those are voided, not removed. */
 export const attendeeLabel = (a: Pick<AttendeeData, 'name' | 'email'>, isEnglish: boolean): string => {
     if (a.name && a.email) return isEnglish ? `${a.name} (${a.email})` : `${a.name}（${a.email}）`;
     return a.name || a.email || (isEnglish ? 'this walk-in guest' : '这位现场来宾');
 };
 
-/**
- * A walk-in whose every live ticket is checked in: a ticket email would carry
- * nothing they can use, so Send Unsent passes them by and they don't count as
- * unsent. Mirrors isCheckedInWalkIn in functions/src/utils/tickets.ts.
- */
 export const checkedInWalkIn = (a: Pick<AttendeeData, 'walkIn' | 'tickets'>): boolean => {
     const live = a.tickets.filter(t => !t.voided);
     return a.walkIn && live.length > 0 && live.every(t => t.redeemed);
 };
 
-/**
- * HomeTown and the seller's app deliver their own tickets, so no email goes
- * from here, unless an API order asked for one.
- */
 export const ticketsSentElsewhere = (a: Pick<AttendeeData, 'hometown' | 'apiOrder' | 'apiSendEmail'>): boolean =>
     a.hometown || (a.apiOrder && !a.apiSendEmail);
 
-/**
- * Each type the attendee's tickets hold, with how many, in ticket order: one
- * type for most, more once a single ticket's type is changed.
- */
 export const ticketTypeCounts = (a: Pick<AttendeeData, 'tickets'>): [TicketType, number][] => {
     const counts = new Map<TicketType, number>();
     for (const t of a.tickets) counts.set(t.type || 'normal', (counts.get(t.type || 'normal') ?? 0) + 1);
@@ -188,8 +170,6 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
                 a.email,
                 a.name,
                 String(a.ticketCount),
-                // Unknown for an unlisted HomeTown ticket until an import lists it.
-                // Mixed types are each counted, as "Student ×2; VIP ×1".
                 a.unlisted ? ''
                     : types.length === 1 ? ticketTypeLabel(types[0][0], true)
                         : types.map(([type, n]) => `${ticketTypeLabel(type, true)} ×${n}`).join('; '),
@@ -201,7 +181,6 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
                 a.walkIn ? 'yes' : 'no',
                 a.hometown ? (a.ticketIds[0] ?? '') : '',
                 hometownStatus(a),
-                // Numbered by ticket when there's more than one to tell apart.
                 a.tickets
                     .map((t, i) => t.notes && (a.tickets.length > 1 ? `#${i + 1}: ${t.notes}` : t.notes))
                     .filter(Boolean)
@@ -210,11 +189,6 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
         }),
     );
 
-/**
- * Whether an event's emailTemplate doc holds a template to send. Mirrors
- * savedTemplate in functions, which refuses a blank subject or body: no default
- * stands in for it.
- */
 export const isTemplateSaved = (data: {subject?: unknown; bodyHtml?: unknown} | undefined): boolean =>
     typeof data?.subject === 'string' && data.subject.trim() !== ''
     && typeof data.bodyHtml === 'string' && data.bodyHtml.trim() !== '';
@@ -231,8 +205,6 @@ export const escapeHtml = (s: string): string => s
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-// Mirrors renderTicketQrBlock on the server, with placeholders for the QRs and
-// a wallet button that goes nowhere.
 const sampleTicketBlock = (walletButton: boolean) => [
     {label: 'General Admission', color: '#ff6b9d', id: 'ticket-uuid-1'},
     {label: 'VIP', color: '#f39c12', id: 'ticket-uuid-2'},
@@ -263,7 +235,6 @@ const fillSample = (
         year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
         timeZoneName: 'shortGeneric',
     });
-    // Function replacements, as on the server, so a `$` in the title isn't read as a pattern.
     return text
         .replace(/{{\s*attendeeEmail\s*}}/g, () => 'sample@example.com')
         .replace(/{{\s*attendeeName\s*}}/g, () => 'Sample Attendee')

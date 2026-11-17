@@ -6,17 +6,9 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { openRedeemModal } from '~/components/RedeemModal';
 import { useUpcomingEvents } from '~/lib/upcomingEvents';
 
-/**
- * What /profile builds its collections from: a card per section, the one-line
- * note shown instead of a grid, and the welcome card for a brand-new account.
- */
-
-/** A titled section of the profile, with its count beside the title. */
 export const ProfileCard = ({title, count, compact, children}: {
     title?: string;
-    /** Left off for a section with nothing to count, or nothing shown. */
     count?: number;
-    /** A section holding only a note rather than a grid. */
     compact?: boolean;
     children: ReactNode;
 }) => (
@@ -31,17 +23,14 @@ export const ProfileCard = ({title, count, compact, children}: {
     </section>
 );
 
-/** An icon in a soft rounded tile — the leading mark of a note or a welcome step. */
 const IconTile = ({icon: Icon, muted}: {icon: IconType; muted?: boolean}) => (
     <span className={`profile-icon-tile${muted ? ' profile-icon-tile--muted' : ''}`} aria-hidden="true">
         <Icon/>
     </span>
 );
 
-/** What a section says when it has no grid to show: empty, private, or failed. */
 export const ProfileCardNote = ({icon, muted, action, children}: {
     icon: IconType;
-    /** Grey rather than pink, for a state the viewer can't do anything about. */
     muted?: boolean;
     action?: ReactNode;
     children: ReactNode;
@@ -53,7 +42,6 @@ export const ProfileCardNote = ({icon, muted, action, children}: {
     </div>
 );
 
-/** A pill-shaped link or button for a note or a welcome step. */
 const ProfileAction = ({to, onClick, children}: {to?: string; onClick?: () => void; children: ReactNode}) =>
     to
         ? <Link to={to} className="profile-action">{children}</Link>
@@ -63,24 +51,14 @@ type CollectionKind = 'events' | 'badges' | 'passports';
 
 interface CollectionPrompt {
     icon: IconType;
-    /** The welcome step's heading. */
     title: string;
-    /** How this collection fills up — also the tail of that section's empty note. */
     how: string;
-    /** The section's empty note opens with this. */
     none: string;
     action: ReactNode;
 }
 
-/**
- * How each of your collections fills up, and the button that starts it.
- * `checkedIn`: you're checked in at an event still on, which only shows up here
- * once it wraps up, so the events prompt says that rather than to check in.
- */
 function useCollectionPrompts(checkedIn: boolean): Record<CollectionKind, CollectionPrompt> {
     const {isEnglish} = useLanguage();
-    // With nothing scheduled the home page hides its upcoming section, so point
-    // at past events instead.
     const {hasActive} = useUpcomingEvents();
 
     return {
@@ -136,7 +114,6 @@ function useCollectionPrompts(checkedIn: boolean): Record<CollectionKind, Collec
     };
 }
 
-/** Your own empty section: what it is waiting for, and the button that starts it. */
 const OwnEmptyNote = ({kind, checkedIn}: {kind: CollectionKind; checkedIn: boolean}) => {
     const prompt = useCollectionPrompts(checkedIn)[kind];
     return (
@@ -146,13 +123,8 @@ const OwnEmptyNote = ({kind, checkedIn}: {kind: CollectionKind; checkedIn: boole
     );
 };
 
-/** Where a section of the profile stands, which decides what its card holds. */
 export type SectionState = 'loading' | 'failed' | 'private' | 'empty' | 'filled';
 
-/**
- * One collection: its grid under a counted title, or a single note. Your own
- * empty one says how to fill it.
- */
 export const ProfileSection = ({
                                    kind,
                                    title,
@@ -171,16 +143,11 @@ export const ProfileSection = ({
     state: SectionState;
     count: number;
     own: boolean;
-    /** You're checked in at an event still on; see useCollectionPrompts. */
     checkedIn?: boolean;
-    /** Leads the note on someone else's empty section. */
     icon?: IconType;
-    /** Someone else's empty section. */
     none?: string;
-    /** Someone else's private section. */
     hidden?: string;
     failed?: string;
-    /** The grid, drawn only once the section is filled. */
     children: ReactNode;
 }) => (
     <ProfileCard title={title} count={state === 'filled' ? count : undefined} compact={state !== 'filled'}>
@@ -195,10 +162,6 @@ export const ProfileSection = ({
 
 const WELCOME_ORDER: CollectionKind[] = ['events', 'badges', 'passports'];
 
-/**
- * A brand-new account's profile: one card of the three ways in, gone once any
- * of them has something.
- */
 export const ProfileWelcome = ({checkedIn = false}: {checkedIn?: boolean}) => {
     const {isEnglish} = useLanguage();
     const prompts = useCollectionPrompts(checkedIn);

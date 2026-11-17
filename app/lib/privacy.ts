@@ -1,7 +1,3 @@
-/**
- * Profile sections switchable on /profile's Settings tab. Mirrors
- * `PROFILE_SECTIONS` in functions/src/utils/visibility.ts.
- */
 const PROFILE_SECTIONS = ['badges', 'events', 'passports'] as const;
 
 type ProfileSection = (typeof PROFILE_SECTIONS)[number];
@@ -10,7 +6,6 @@ export type ProfileVisibility = Record<ProfileSection, boolean>;
 
 export type PrivacyKey = 'passportPage' | ProfileSection;
 
-/** The stored map, with anything unset visible: only an explicit `false` hides a section. */
 export const readVisibility = (raw: unknown): ProfileVisibility => {
     const stored = (raw ?? {}) as Record<string, unknown>;
     return Object.fromEntries(PROFILE_SECTIONS.map(section => [section, stored[section] !== false])) as ProfileVisibility;
@@ -67,7 +62,6 @@ export const PRIVACY_ROWS: PrivacyRow[] = [
     },
 ];
 
-/** How one switch's current state reads, for a surface that only displays it. */
 export const privacyStateLabel = (row: PrivacyRow, visible: boolean, isEnglish: boolean): string =>
     isEnglish ? (visible ? row.on.en : row.off.en) : (visible ? row.on.zh : row.off.zh);
 

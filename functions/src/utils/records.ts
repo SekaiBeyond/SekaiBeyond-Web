@@ -2,11 +2,6 @@ import { FieldValue } from "firebase-admin/firestore";
 import { recordExpiresAt } from "./config";
 import { db } from "./firebase";
 
-/**
- * Every record type the functions write, grouped like the Records tab's
- * categories. Mirrors RECORD_CATEGORIES in app/pages/admin/types.ts; a type
- * missing there shows as its raw slug.
- */
 export type RecordType =
     | "group-assign"
     | "title-set"
@@ -128,16 +123,12 @@ export type RecordType =
     | "app-delete"
     | "scheduled-mail-drain";
 
-/** What a record says besides its type. Mirrors ActivityRecord in app/pages/admin/types.ts. */
 export interface RecordFields {
-    /** Left out when the system acts: TTL deletions and the mail drain. */
     performedBy?: string;
     performedByName?: string;
-    /** Null when a claimed passport being deleted names no holder. */
     targetUid?: string | null;
     targetName?: string;
     targetEmail?: string;
-    /** An email change: the address it moved off. `targetEmail` is the new one. */
     oldEmail?: string;
     eventId?: string;
     eventTitle?: string;
@@ -147,19 +138,15 @@ export interface RecordFields {
     venueId?: string;
     venueName?: string;
     qrLabel?: string;
-    /** Null on a bulk passport action, which only counts what it touched. */
     passportId?: string | null;
     passportYear?: number | null;
     passportDesignName?: string;
     passportCount?: number;
-    /** A passport-claim on an account with another address: where it was emailed. */
     passportSentTo?: string;
     platformLabel?: string;
     conSection?: string;
     configSections?: string[];
-    /** How many visitor lots a parking sync left the guide with. */
     lotCount?: number;
-    /** Event check-in codes only: badge and staff codes are core-staff+, and all staff read records. */
     code?: string;
     oldGroup?: string;
     newGroup?: string;
@@ -174,62 +161,37 @@ export interface RecordFields {
     newName?: string;
     oldType?: string;
     newType?: string;
-    /** Why a staff grant or its attendance change happened. */
     reason?: "staff-assignment" | "staff-code";
     addedCount?: number;
     replacedCount?: number;
     sentCount?: number;
-    /** A walk-in's tickets, and whether they were checked in as they were added. */
     ticketCount?: number;
     checkedIn?: boolean;
-    /** HomeTown tickets admitted unlisted at the door that an import then found. */
     confirmedCount?: number;
-    /**
-     * A HomeTown import that updated existing tickets: how many changed, and how
-     * many listed ones the file left out.
-     */
     updatedCount?: number;
     missingCount?: number;
-    /**
-     * A HomeTown purchase time sync: tickets given their order's time, and
-     * orders in the file with no ticket here.
-     */
     syncedCount?: number;
     unmatchedCount?: number;
-    /** Whether unlisted HomeTown tickets are now admitted. */
     enabled?: boolean;
-    /**
-     * The API key a key record is about, or that placed an order: its name and
-     * the hint of it the Apps tool shows. Never the key.
-     */
     apiKeyName?: string;
     apiKeyHint?: string;
-    /** The seller's own number for an order placed through the API. */
     apiOrderId?: string;
-    /** The app an app record is about (see utils/apps.ts), and its name then. */
     appId?: string;
     appName?: string;
-    /** An account link (see utils/appLinks.ts): the app's user's name, as the app gave it. */
     appUserName?: string;
-    /**
-     * An account-app-unlink nobody asked for, by what ended the link: undoing
-     * an email change (only links made since, each disowned as undoAppLink
-     * disowns one), or, with no hold, deleting the account or removing the
-     * app. Absent for an unlink from Settings or the app.
-     */
     linkEndedBy?: "email-undo" | "account-deleted" | "app-removed";
-    /** A ban: when it runs out, "" for one until lifted, and staff's note on why. */
     banUntil?: string;
     banReason?: string;
 }
 
-/** Where a new record goes. A fixed `id` makes a retried write land on the same record. */
 export function recordRef(id?: string): FirebaseFirestore.DocumentReference {
     const records = db.collection("records");
     return id ? records.doc(id) : records.doc();
 }
 
-/** A record's data, stamped with when it was written and when it expires. */
+export const performer = (uid: string, snap: FirebaseFirestore.DocumentSnapshot) =>
+    ({performedBy: uid, performedByName: (snap.data()?.displayName as string | undefined) ?? ""});
+
 export function recordDoc(type: RecordType, fields: RecordFields) {
     return {
         type,

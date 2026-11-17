@@ -3,36 +3,22 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "./auth";
 import { deletionExpiresAt } from "./config";
 import { db } from "./firebase";
-import { recordDoc, type RecordFields, recordRef, type RecordType } from "./records";
+import { performer, recordDoc, type RecordFields, recordRef, type RecordType } from "./records";
 import { validateDocId } from "./validation";
 
-/**
- * Deleting a badge, an event or an account sets `deleteAt` instead, and the
- * TTL policy on it (firestore.indexes.json) deletes the doc once the cooldown
- * has passed. Until then the deletion can be cancelled.
- */
-
-/** Whether a doc's deletion cooldown is running. */
 export function deletionPending(data: FirebaseFirestore.DocumentData): boolean {
     return !!data.deleteAt && data.deleteAt.toMillis() > Date.now();
 }
 
-/** A kind of doc core staff delete with a cooldown. */
 export interface Deletable {
     collection: string;
-    /** The request field naming the doc. */
     idField: string;
     notFound: string;
     requested: RecordType;
     cancelled: RecordType;
-    /** What the deletion's records say of the doc. */
     describe: (id: string, data: FirebaseFirestore.DocumentData) => RecordFields;
 }
 
-/**
- * Reads the doc a deletion request names, as core staff, and applies `change`
- * to it with its record.
- */
 async function changeDeletion(
     request: CallableRequest,
     kind: Deletable,
@@ -53,8 +39,7 @@ async function changeDeletion(
 
         txn.update(ref, {deleteAt});
         txn.set(recordRef(), recordDoc(recordType, {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             ...kind.describe(id, data),
         }));
     });

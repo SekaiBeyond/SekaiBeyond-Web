@@ -80,8 +80,6 @@ export const EventSection = ({content, loading, showToast, readOnly}: SectionPro
                         disabled={readOnly}
                     >
                         <option value="">{isEnglish ? '— Select the con’s event —' : '— 选择漫展对应的活动 —'}</option>
-                        {/* An archived or deleted event still shows as the current value,
-                            or the select would read blank. */}
                         {draft.upcomingEventId && !eventsLoading && !linked && (
                             <option value={draft.upcomingEventId}>
                                 {isEnglish ? '(Archived or deleted event)' : '（已归档或删除的活动）'}
@@ -146,8 +144,6 @@ const ClipField = ({url, uploading, disabled, onPick, onClear, readOnly}: ClipFi
             </div>
 
             {url ? (
-                // Looping like the hero, so the loop point, invisible in a still,
-                // can be checked.
                 <video className="admin-video-cover-preview" src={url} muted loop autoPlay playsInline/>
             ) : (
                 <p className="admin-helper-text admin-mt-4">
@@ -165,8 +161,6 @@ const ClipField = ({url, uploading, disabled, onPick, onClear, readOnly}: ClipFi
                             disabled={disabled}
                             onChange={e => {
                                 const file = e.target.files?.[0];
-                                // Cleared so picking the same file again still
-                                // fires a change.
                                 e.target.value = '';
                                 if (file) onPick(file);
                             }}
@@ -195,7 +189,6 @@ export const HeroVideoSection = ({content, loading, showToast, readOnly}: Sectio
     const {videoMb} = useUploadLimits();
     const editor = useSectionEditor('heroVideo', content.heroVideo, loading, showToast);
     const {draft, setDraft} = editor;
-    /** True while the clip uploads; Save waits for it rather than going out without it. */
     const [busy, setBusy] = useState(false);
 
     const uploadClip = async (file: File) => {
@@ -203,8 +196,6 @@ export const HeroVideoSection = ({content, loading, showToast, readOnly}: Sectio
         setBusy(true);
         try {
             showToast(isEnglish ? 'Uploading clip...' : '正在上传视频...', 'warning');
-            // Time-stamped: the published page serves the old URL until this saves,
-            // and overwriting it would swap the live clip early.
             const url = await callUploadConVideo(file, `con/hero-${Date.now().toString(36)}.webm`);
             setDraft(prev => ({...prev, webm: url}));
             showToast(isEnglish ? 'Clip uploaded.' : '视频已上传。', 'success');
@@ -317,7 +308,6 @@ export const RoomsSection = ({content, loading, showToast, readOnly}: SectionPro
     const update = (index: number, next: ConContent['rooms'][number]) =>
         setDraft(prev => replaceAt(prev, index, next));
 
-    /** How many schedule items point at a room — deleting one is not free. */
     const usageOf = (id: string) =>
         content.schedule.filter(item => item.room === id).length;
 

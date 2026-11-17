@@ -2,19 +2,10 @@ import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import { cornersOf, type JsQRFn, loadJsQR, type QrCorners } from './qrDecode';
 
 interface UseQrScannerOptions {
-    /**
-     * Called with each decoded payload: return `true` once handled to stop the
-     * camera, `false` to keep scanning. `corners` locate the code on
-     * `canvasRef`, which still holds its frame.
-     */
     onDecode: (raw: string, corners: QrCorners) => boolean;
-    /** Message shown when the camera can't be started (permissions, no device, …). */
     cameraErrorMessage: string;
-    /** Prefix for console error logs, e.g. '[TicketScanner]'. */
     logLabel: string;
-    /** Runs when the camera starts — use it to reset caller-owned scan state. */
     onStart?: () => void;
-    /** Runs if the camera fails to start, after the error message is set. */
     onStartError?: () => void;
 }
 
@@ -27,24 +18,15 @@ export interface QrScanner {
     stopCamera: () => void;
 }
 
-/**
- * A back-camera QR scanning loop with jsQR, owning the camera from getUserMedia
- * through the rAF decode loop to teardown. Callers render
- * `videoRef`/`canvasRef` and decide what a payload means.
- */
 export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const rafRef = useRef<number | null>(null);
-    // Bumped by every stop, so a start still waiting on the camera knows it was
-    // called off.
     const sessionRef = useRef(0);
     const startingRef = useRef(false);
     const jsQRRef = useRef<JsQRFn | null>(null);
 
-    // So the rAF loop never reads a stale closure and the callbacks stay
-    // stable.
     const optionsRef = useRef(options);
     optionsRef.current = options;
 
@@ -65,7 +47,7 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     }, []);
 
     const tick = useCallback(() => {
-        if (!streamRef.current) return; // stopped
+        if (!streamRef.current) return;
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const jsQR = jsQRRef.current;
@@ -80,7 +62,7 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
                     ctx.drawImage(video, 0, 0, w, h);
                     const code = jsQR(ctx.getImageData(0, 0, w, h).data, w, h);
                     if (code?.data && optionsRef.current.onDecode(code.data, cornersOf(code.location))) {
-                        stopCamera(); // handled: tear down and stop the loop
+                        stopCamera();
                         return;
                     }
                 }
@@ -90,8 +72,6 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     }, [stopCamera]);
 
     const startCamera = useCallback(async () => {
-        // One start at a time: a second press during getUserMedia would open a
-        // stream nothing stops.
         if (streamRef.current || startingRef.current) return;
         startingRef.current = true;
         const session = sessionRef.current;
@@ -117,14 +97,11 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
             }
             video.srcObject = stream;
             await video.play();
-            // A stop during play() has already shut the stream.
             if (stopped()) return;
             setCameraActive(true);
             rafRef.current = requestAnimationFrame(tick);
         } catch (err) {
-            // Stopped while starting: whatever failed was cut short, not broken.
             if (stopped()) return;
-            // A stream that opened but won't play must not stay on, or block the next start.
             stopCamera();
             console.error(`${optionsRef.current.logLabel} camera error`, err);
             setCameraError(optionsRef.current.cameraErrorMessage);
@@ -134,7 +111,6 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
         }
     }, [tick, stopCamera]);
 
-    // Unmounting stops the camera, and with it any start still in flight.
     useEffect(() => stopCamera, [stopCamera]);
 
     return {videoRef, canvasRef, cameraActive, cameraError, startCamera, stopCamera};

@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type AttendeeAccount, callGetAttendeeAccounts } from '~/lib/firebase';
 
-/** Mirrors ACCOUNT_LOOKUP_MAX on the server. */
 const LOOKUP_CHUNK = 500;
 
 export type AccountLink = AttendeeAccount | null;
 
-/**
- * Resolves which ticket emails belong to registered accounts, caching answers
- * across renders so growing lists only query newly seen addresses.
- * An email absent from `links` is unchecked; null means no account.
- */
 export function useAccountLinks(eventId: string, emails: string[]): {
     links: Map<string, AccountLink>;
-    /** Set when a lookup fails, with the error to show the code of. */
     failed: {error: unknown} | null;
 } {
     const cache = useRef(new Map<string, AccountLink>());
@@ -28,7 +21,6 @@ export function useAccountLinks(eventId: string, emails: string[]): {
     );
     const wantedKey = wanted.join(',');
 
-    // eventId authorises the lookup, and the caller may not be staff on a new one.
     useEffect(() => {
         cache.current = new Map();
         setLinks(new Map());
@@ -61,7 +53,6 @@ export function useAccountLinks(eventId: string, emails: string[]): {
         return () => {
             stale = true;
         };
-        // wantedKey stands in for `wanted`, whose identity changes every render.
     }, [eventId, wantedKey]);
 
     return {links, failed};

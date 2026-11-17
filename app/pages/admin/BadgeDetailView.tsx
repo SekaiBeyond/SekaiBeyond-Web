@@ -59,11 +59,9 @@ export const emptyBadgeForm: BadgeForm = {
     creatorUser: null, createdByName: '', createdByLink: '',
 };
 
-/** A typed creator link must be a web address; a picked account needs none. */
 export const badgeCreatorLinkValid = (form: BadgeForm): boolean =>
     !!form.creatorUser || !form.createdByLink.trim() || isValidHttpUrl(form.createdByLink.trim());
 
-/** What a form saves, with the creator taken from the picked account if there is one. */
 export const badgeFormFields = (form: BadgeForm, imageUrl: string) => ({
     name: form.name.trim(),
     nameCn: form.nameCn.trim(),
@@ -100,15 +98,12 @@ export const BadgeDetailView = ({
     const [badgeHolderLastDoc, setBadgeHolderLastDoc] = useState<DocumentSnapshot | null>(null);
     const [hasMoreBadgeHolders, setHasMoreBadgeHolders] = useState(false);
 
-    // Edit badge state
     const [editingBadgeDef, setEditingBadgeDef] = useState(false);
     const [editForm, setEditForm] = useState<BadgeForm>(emptyBadgeForm);
     const [savingBadgeDef, setSavingBadgeDef] = useState(false);
 
-    // Delete state
     const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
 
-    // Activation codes state
     const [badgeActivationCodes, setBadgeActivationCodes] = useState<BadgeActivationCode[]>([]);
     const [loadingActivationCodes, setLoadingActivationCodes] = useState(false);
     const [generatingActivationCode, setGeneratingActivationCode] = useState(false);
@@ -486,7 +481,6 @@ export const BadgeDetailView = ({
                     </button>
                 )}
 
-                {/* Activation Codes — hidden in read-only mode (staff cannot read that collection) */}
                 {!readOnly && (
                     <>
                         <h4 className="admin-badges-title admin-section-mt">

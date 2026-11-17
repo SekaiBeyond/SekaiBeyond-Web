@@ -19,23 +19,19 @@ import { AccessibleBadge, RatesLine, StatusPill, walkText } from './parts';
 import type { ParkingText } from './text';
 
 const ATTRIBUTION = 'UW Transportation Services · UW Facilities GIS';
-// Clicking a lot zooms to at least this.
 const LOT_ZOOM = 17;
 
 export type HoverTarget = {kind: 'lot'; code: string; pinned: boolean} | {kind: 'venue'; id: string};
 
 export interface ParkingMapApi {
-    /** Centers a lot, zooming in if the map is further out. */
     focusLot: (code: string) => void;
 }
 
 interface ParkingMapProps {
     ref: Ref<ParkingMapApi>;
     views: LotView[];
-    /** Lots the search and filters leave; the rest are hidden unless suggested or selected. */
     visibleCodes: ReadonlySet<string>;
     venues: Venue[];
-    /** None for the whole campus. */
     venue: Venue | null;
     outline: VenueOutline | null;
     eventVenueId: string;
@@ -43,17 +39,14 @@ interface ParkingMapProps {
     hotCode: string | null;
     hover: HoverTarget | null;
     setHover: Dispatch<SetStateAction<HoverTarget | null>>;
-    /** Right now, or the event's hours on the day shown. */
     parkingWindow: ParkingWindow;
     onOpenLot: (code: string) => void;
     onSelectVenue: (id: string) => void;
     tx: ParkingText;
 }
 
-/** Whether the guide is in the stacked layout parking.css switches to at 1024px. */
 export const narrowScreen = () => window.matchMedia('(max-width: 1024px)').matches;
 
-// Extra room around the framed points, and on desktop room on the left for the legend.
 const fitPadding = (): PaddingOptions => narrowScreen()
     ? {top: 80, bottom: 70, left: 50, right: 50}
     : {top: 100, bottom: 110, left: 240, right: 100};
@@ -68,7 +61,6 @@ function boundsAround(points: Point[], marginLng: number, marginLat: number): Ln
     ];
 }
 
-/** The venue with its suggested lots, or its three nearest when it has none; every lot without a venue. */
 function venueBounds(venue: Venue | null, views: LotView[]): LngLatBoundsLike | null {
     const picks = views.filter(v => v.suggested);
     const framed = !venue ? views : picks.length > 0 ? picks : views.slice(0, 3);
@@ -82,7 +74,6 @@ interface OutlineData {
     features: {type: 'Feature'; properties: object; geometry: {type: 'MultiPolygon'; coordinates: Point[][][]}}[];
 }
 
-/** The venue's building as GeoJSON, rings unflattened from how Firestore stores them. */
 function outlineData(outline: VenueOutline | null): OutlineData {
     if (!outline) return {type: 'FeatureCollection', features: []};
     const coordinates = outline.polygons.map(rings => Object.keys(rings)
@@ -117,9 +108,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
         className: 'parking-hover-popup',
         focusAfterOpen: false,
     });
-    // How the last pin was reached: a tap shows its card first, a click or Enter opens it.
     const lastPointer = useRef('mouse');
-    // The map's own handlers outlive renders, so they read the props through this.
     const latest = useRef(props);
     latest.current = props;
 
@@ -140,12 +129,10 @@ export const ParkingMap = (props: ParkingMapProps) => {
         },
     }));
 
-    // The map and its handlers, made once.
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
         const {views: firstViews, venues: allVenues, venue: firstVenue} = latest.current;
-        // Panning stops a little past campus: every lot and venue, with room to spare.
         const points: Point[] = [
             ...firstViews.map(v => [v.lot.lng, v.lot.lat] as Point),
             ...allVenues.filter(v => hasCoordinates(v.lat, v.lng)).map(v => [v.lng, v.lat] as Point),
@@ -158,13 +145,11 @@ export const ParkingMap = (props: ParkingMapProps) => {
             minZoom: 14,
         });
         if (!created) {
-            // The list beside the map still works.
             setFailed(true);
             return;
         }
 
         created.on('load', () => {
-            // The venue's highlight goes over the buildings but under the labels.
             const beforeId = firstLabelAboveBuildings(created);
             created.addSource('venue-outline', {type: 'geojson', data: outlineData(null)});
             created.addLayer({
@@ -176,17 +161,13 @@ export const ParkingMap = (props: ParkingMapProps) => {
                 paint: {'line-color': '#ff6b9d', 'line-width': 2.5},
             }, beforeId);
             setStyleReady(true);
-            // The container can settle to its final size after the map is made, which
-            // cut off the edge of the first framing; frame it again now it has.
             created.resize();
             const bounds = venueBounds(latest.current.venue, latest.current.views);
             if (bounds) created.fitBounds(bounds, {padding: fitPadding(), duration: 0});
-            // A link to a lot opens on it.
             const linked = latest.current.views.find(v => v.lot.code === latest.current.selectedCode);
             if (linked) created.jumpTo({center: [linked.lot.lng, linked.lot.lat], zoom: LOT_ZOOM});
         });
 
-        // A click on the map itself lets go of a card a tap pinned open.
         onBackgroundClick(created, () => latest.current.setHover(h => h?.kind === 'lot' && h.pinned ? null : h));
         trackLabelZoom(created, container);
 
@@ -198,7 +179,6 @@ export const ParkingMap = (props: ParkingMapProps) => {
         };
     }, []);
 
-    // Lot pins and venue stars, rendered into the markers' wrappers below.
     const {elements: lotElements} = useMarkerElements(map, views.map(v => ({
         key: v.lot.code,
         lng: v.lot.lng,
@@ -210,7 +190,6 @@ export const ParkingMap = (props: ParkingMapProps) => {
         markers: venueMarkers
     } = useMarkerElements(map, mappedVenues.map(v => ({key: v.id, ...v})));
 
-    // Stacking and visibility live on the wrapper, the element MapLibre stacks.
     useEffect(() => {
         for (const view of views) {
             const element = lotElements[view.lot.code];
@@ -228,7 +207,6 @@ export const ParkingMap = (props: ParkingMapProps) => {
         }
     }, [venueElements, venueMarkers, venue?.id]);
 
-    // Switching venue moves the highlight and reframes the map.
     useEffect(() => {
         if (!map || !styleReady) return;
         (map.getSource('venue-outline') as GeoJSONSource | undefined)?.setData(outlineData(outline));
@@ -240,7 +218,6 @@ export const ParkingMap = (props: ParkingMapProps) => {
         fitVenue();
     }, [venue?.id]);
 
-    // The hover card follows `hover`; a pinned one takes clicks, a passing one lets them through.
     useEffect(() => {
         if (!map || !card) return;
         const at = hover?.kind === 'lot'
@@ -271,7 +248,6 @@ export const ParkingMap = (props: ParkingMapProps) => {
             <div ref={containerRef} className="parking-map"/>
             {failed && <div className="parking-map-failed">{tx.t('mapFailed')}</div>}
 
-            {/* Click-through, so markers behind it stay usable. */}
             <div className="parking-map-legend">
                 <div className="parking-map-legend-title">
                     {isNow ? tx.t('legendNow') : tx.t('legendEvent', {d: tx.date(parkingWindow.date)})}
@@ -341,7 +317,6 @@ export const ParkingMap = (props: ParkingMapProps) => {
                             }}
                             onBlur={() => leave(h => h.kind === 'lot' && h.code === lot.code)}
                             onClick={() => {
-                                // A tap shows the card first; a second tap, or its Details button, opens the lot.
                                 if (touchLike() && !(hover?.kind === 'lot' && hover.pinned && hover.code === lot.code)) {
                                     showLot(lot.code, true);
                                     return;
@@ -429,7 +404,6 @@ export const ParkingMap = (props: ParkingMapProps) => {
     );
 };
 
-/** The quick card a lot shows on hover, focus or a first tap. */
 const LotCard = ({view, pinned, onDetails, isNow, tx}: {
     view: LotView;
     pinned: boolean;

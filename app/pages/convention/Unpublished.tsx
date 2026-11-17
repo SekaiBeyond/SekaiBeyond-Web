@@ -1,10 +1,6 @@
 import { Link } from 'react-router';
 import { useT } from '~/pages/convention/i18n';
 
-/**
- * What the public sees while the con page is off. Says nothing about the
- * line-up, date or venue, which are usually why it's off.
- */
 export const Unpublished = () => {
     const t = useT();
 

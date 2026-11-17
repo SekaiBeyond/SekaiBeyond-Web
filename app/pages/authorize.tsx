@@ -7,25 +7,12 @@ import { appNameIn } from '~/lib/appLinks';
 import { APP_ID_RE, callGetAppSignInInfo, callIssueAppCode, errorSuffix, functionsErrorCode, } from '~/lib/firebase';
 import { stillWaitingText, useStillWaiting } from '~/lib/useStillWaiting';
 
-/** The random value an app sends, to tell the sign-in it gets back is the one it asked for. */
 const STATE_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
-/** The base64url SHA-256 of the code verifier the app keeps (PKCE's S256, the one method taken). */
 const CODE_CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
 
 type Info = {nameEn: string; nameCn: string; iconUrl: string; maintainerNames: string[]};
 
-/**
- * Sign in with Sekai Beyond: where a registered app (see
- * functions/src/utils/apps.ts) sends people, as
- * /authorize?app=…&state=…&code_challenge=…&code_challenge_method=S256[&redirect_uri=…].
- * It says which app it is and what it will see of them, and Continue hands the
- * app a one-time code, with the same state, at one of the places registered
- * for it. The app trades the code for the sign-in at /api/v1/token, with the
- * verifier only it holds, so what's in the address bar can't sign anyone in.
- * Nothing happens until Continue, so a link alone can't sign anyone in to an
- * app.
- */
 export const AuthorizePage = () => {
     const {isEnglish} = useLanguage();
     const {user, profile, loading, signIn, signOut} = useAuth();
@@ -37,9 +24,7 @@ export const AuthorizePage = () => {
     const linkOk = APP_ID_RE.test(appId) && STATE_RE.test(rawState) && CODE_CHALLENGE_RE.test(codeChallenge)
         && searchParams.get('code_challenge_method') === 'S256';
 
-    // Null while loading; 'bad-link' when the app or the place to hand back to isn't registered.
     const [info, setInfo] = useState<Info | 'bad-link' | 'error' | null>(null);
-    // From Continue until the app's own page takes over, the wait for its page included.
     const [busy, setBusy] = useState(false);
     const stillWaiting = useStillWaiting(busy);
     const [error, setError] = useState('');
@@ -67,8 +52,6 @@ export const AuthorizePage = () => {
         setError('');
         try {
             const {data} = await callIssueAppCode({appId, redirectUri, codeChallenge});
-            // In the fragment, which never reaches a server. Replaced, so Back
-            // doesn't return here.
             window.location.replace(`${data.redirectUri}#${new URLSearchParams({code: data.code, state: rawState})}`);
         } catch (err) {
             setError((isEnglish ? 'Couldn’t sign you in. Please try again.' : '登录失败，请重试。') + errorSuffix(err, isEnglish));
@@ -78,7 +61,6 @@ export const AuthorizePage = () => {
 
     const appName = info && typeof info === 'object' ? appNameIn(info, appId, isEnglish) : '';
     const iconUrl = info && typeof info === 'object' ? info.iconUrl : '';
-    // "A, B, and C" / "A、B和C".
     const maintainers = info && typeof info === 'object'
         ? new Intl.ListFormat(isEnglish ? 'en' : 'zh', {type: 'conjunction'}).format(info.maintainerNames)
         : '';
@@ -137,7 +119,6 @@ export const AuthorizePage = () => {
                                     : `它看不到您的邮箱或密码。您在 ${appName} 中能做什么由 ${appName} 决定。`}
                             </p>
                             {error && <p className="redeem-error-text">{error}</p>}
-                            {/* Not disabled while it waits, which would drop the focus from it; proceed lets one through. */}
                             <button onClick={() => void proceed()} className="profile-sign-in-btn" aria-disabled={busy}>
                                 {busy
                                     ? <><span className="spinner-inline"

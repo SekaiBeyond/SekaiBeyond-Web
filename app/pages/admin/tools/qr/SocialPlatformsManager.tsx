@@ -8,6 +8,7 @@ import {
 } from '~/lib/firebase';
 import { type SocialPlatform, useSocialPlatforms } from '~/lib/socialPlatforms';
 import { refreshAfterSave, type ShowToast } from '../../utils';
+import { ToolHeader } from '../../ToolHeader';
 
 interface PlatformDraft {
     label: string;
@@ -29,11 +30,6 @@ interface SocialPlatformsManagerProps {
     readOnly?: boolean;
 }
 
-/**
- * Manages the platform list behind per-platform QR tracking. Until the defaults
- * are seeded the list is read-only; "Customize defaults" seeds them all at
- * once, so adding one platform can't replace the defaults in the picker.
- */
 export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: SocialPlatformsManagerProps) => {
     const {isEnglish} = useLanguage();
     const {platforms, customized, refresh} = useSocialPlatforms();
@@ -131,12 +127,8 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
 
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
-                    {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
-                </button>
-                <h3 className="admin-tools-title">{isEnglish ? 'Social Platforms' : '社交平台'}</h3>
-            </div>
+            <ToolHeader title={isEnglish ? 'Social Platforms' : '社交平台'}
+                        back={isEnglish ? 'Back to QR Codes' : '返回二维码列表'} onBack={onBack}/>
 
             <p className="admin-helper-text admin-section-intro">
                 {isEnglish

@@ -17,19 +17,13 @@ import {
 
 interface WalletPassSectionProps {
     event: UpcomingEvent;
-    /** The stored settings, null while they load. */
     settings: WalletPassSettings | null;
-    /** Passes made for the event and not revoked. */
     passCount: number;
     loadFailed: boolean;
     readOnly: boolean;
     showToast: ShowToast;
 }
 
-/**
- * How the event's Add to Wallet passes look, beside a preview. Read when each
- * pass is made, so a change reaches passes made after it.
- */
 export function WalletPassSection({
                                       event,
                                       settings,
@@ -43,7 +37,6 @@ export function WalletPassSection({
     const [draft, setDraft] = useState<WalletPassSettings | null>(null);
     const [saving, setSaving] = useState(false);
 
-    // Filled from the stored settings once they load, then left to the form.
     useEffect(() => {
         if (settings && !draft) setDraft(settings);
     }, [settings, draft]);
@@ -66,7 +59,6 @@ export function WalletPassSection({
         update({notes: draft.notes.map((n, j) => j === i ? {...n, ...changes} : n)});
 
     const unchanged = sameWalletPassSettings(draft, settings);
-    // A line with a label and no text isn't kept.
     const textless = draft.notes.some(n => n.label.trim() && !n.value.trim());
 
     const save = async () => {

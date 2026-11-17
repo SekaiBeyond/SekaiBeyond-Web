@@ -6,7 +6,6 @@ import { type ShowToast, WEBP_QUALITY } from './utils';
 interface ImageCropModalProps {
     imageSource: File | string;
     aspect: number;
-    /** Width of the cropped image in pixels; its height follows from the aspect. */
     outputWidth?: number;
     onConfirm: (cropped: File) => void;
     onCancel: () => void;
@@ -47,8 +46,6 @@ export const ImageCropModal = ({
         if (isString) {
             img.crossOrigin = "anonymous";
         }
-        // A superseded load must not report: under StrictMode the first run's URL is
-        // revoked before its image loads, and its error would stick.
         let stale = false;
         img.onload = () => {
             if (stale) return;

@@ -3,14 +3,12 @@ export interface NavLink {
     href: string;
     labelEn: string;
     labelCn: string;
-    /** Route used instead of scrolling to `href` once the target page is published. */
     publishedRoute?: string;
 }
 
 export const resolveNavHref = (link: NavLink, published: boolean): string =>
     published && link.publishedRoute ? link.publishedRoute : link.href;
 
-/** A link's label, in the singular for Upcoming Events when there's only one. */
 export const navLinkLabel = (link: NavLink, isEnglish: boolean, singleUpcoming: boolean): string =>
     link.id === 'upcoming' && singleUpcoming && isEnglish
         ? 'Upcoming Event'

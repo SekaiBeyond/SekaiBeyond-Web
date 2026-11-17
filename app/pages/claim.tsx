@@ -41,9 +41,7 @@ interface TicketInfo {
     attendeeEmail: string;
     eventTitle: string;
     hometown: boolean;
-    /** A HomeTown ticket missing from the imported list, let in with a warning. */
     unlisted: boolean;
-    /** A HomeTown ticket left out of the latest export: refunded or transferred, most likely. */
     missingFromHometown: boolean;
     userCheckedIn: boolean;
     redeemedBy?: string;
@@ -62,11 +60,8 @@ export const ClaimPage = () => {
     const [state, setState] = useState<ClaimState>('loading');
     const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
     const [ticketInfo, setTicketInfo] = useState<TicketInfo | null>(null);
-    // The event a HomeTown ticket refused here belongs to.
     const [otherEventTitle, setOtherEventTitle] = useState('');
     const [retryCount, setRetryCount] = useState(0);
-    // Whether there is a profile, not the object: a claim refreshes it, and
-    // re-running on the new one would claim again.
     const hasProfile = !!profile;
 
     useEffect(() => {
@@ -182,7 +177,6 @@ export const ClaimPage = () => {
         );
     }
 
-    // What a door is told when the link reaches someone who can't redeem it.
     const showAtDoor = (
         <>
             <h2>{isEnglish ? 'Show This at the Door' : '请在入场时出示此二维码'}</h2>
@@ -192,7 +186,6 @@ export const ClaimPage = () => {
         </>
     );
 
-    // The event and who the ticket is for, whichever way the scan went.
     const ticketHolder = ticketInfo && (
         <>
             {ticketInfo.eventTitle && (
@@ -304,7 +297,6 @@ export const ClaimPage = () => {
                                 : (isEnglish ? '✓ Ticket Redeemed' : '✓ 门票已验证')}
                         </h2>
                         {ticketHolder}
-                        {/* The scanner's warnings, for a code read with a phone's camera. */}
                         {ticketInfo.unlisted ? (
                             <p className="admin-helper-text admin-tickets-edit-warning">
                                 {isEnglish

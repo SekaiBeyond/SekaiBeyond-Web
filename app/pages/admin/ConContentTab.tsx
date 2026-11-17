@@ -10,14 +10,6 @@ import { VendorsSection } from './ConVendorsSection';
 import { InPersonSalesSection, TicketFeeSection, TicketsSection, } from './ConTicketsSections';
 import { FaqSection } from './ConFaqSection';
 
-/**
- * Editor for /con's copy, saved to the staff-only `conContent/draft` (mirrored
- * to `conContent/main` while published) and read through
- * `app/lib/conContent.ts`. Each section saves only its own field, so two
- * editors can't clobber each other. The con's name, About, nav links and room
- * colours stay in code.
- */
-
 interface ConContentTabProps {
     showToast: ShowToast;
     readOnly?: boolean;
@@ -37,7 +29,6 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
         );
     }
 
-    // Editing now would save blank defaults over what's stored.
     if (failed) {
         return (
             <div className="admin-section">

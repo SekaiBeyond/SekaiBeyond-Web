@@ -3,24 +3,8 @@ import { Timestamp } from "firebase-admin/firestore";
 import { accountPepper } from "./credentials";
 import { db } from "./firebase";
 
-/**
- * The codes that prove someone holds an address, CODE_LENGTH digits each. One
- * doc per purpose and address in emailCodes, so a new code replaces the last,
- * and they're stored hashed with the pepper. A code is used up by the action it
- * was for, and dies after CODE_ATTEMPTS wrong tries, so guessing one is 5 in a
- * hundred million per code.
- *
- * Eight digits rather than six because an address can be sent a new code as
- * often as SENDS_PER_WINDOW allows, each with its own tries, and a right guess
- * at a password code signs in: at six, asking and guessing for months on end
- * came to a real chance at one account, and nothing but the day's mail held it
- * back. A limit on wrong tries across codes would have done as well, and let
- * anyone lock an address out of its codes by spending it.
- */
-
 export type CodePurpose = "signup" | "password" | "email-change";
 
-/** Mirrored by EMAIL_CODE_LENGTH in app/lib/firebase.ts, which the code fields go by. */
 export const CODE_LENGTH = 8;
 export const CODE_TTL_MINUTES = 10;
 export const CODE_ATTEMPTS = 5;
@@ -28,7 +12,6 @@ const MIN_GAP_MS = 60_000;
 const WINDOW_MS = 60 * 60_000;
 const SENDS_PER_WINDOW = 5;
 
-/** Names the code for `purpose` at `email`, here and in the limits on checking it. */
 export const emailCodeKey = (purpose: CodePurpose, email: string): string =>
     createHash("sha256").update(`${purpose}|${email}`).digest("hex");
 
@@ -39,17 +22,11 @@ function codeRef(purpose: CodePurpose, email: string): FirebaseFirestore.Documen
 const hashCode = (email: string, code: string): string =>
     createHmac("sha256", accountPepper()).update(`${email}|${code}`).digest("hex");
 
-/** A code just issued, and the doc it replaced, if any, for withdrawEmailCode to put back. */
 interface IssuedCode {
     code: string;
     previous: FirebaseFirestore.DocumentData | null;
 }
 
-/**
- * A fresh code for `email`, or null when too many have gone to it lately. The
- * limits count against the address, not whoever's asking, so nobody can have it
- * flooded.
- */
 export async function issueEmailCode(purpose: CodePurpose, email: string): Promise<IssuedCode | null> {
     const ref = codeRef(purpose, email);
     const code = String(randomInt(0, 10 ** CODE_LENGTH)).padStart(CODE_LENGTH, "0");
@@ -69,20 +46,12 @@ export async function issueEmailCode(purpose: CodePurpose, email: string): Promi
             windowStart,
             sends: sends + 1,
             validUntil: now + CODE_TTL_MINUTES * 60_000,
-            // Outlives the code, or the limits above would reset with it.
             expiresAt: Timestamp.fromMillis(now + WINDOW_MS),
         });
         return {code, previous: data ?? null};
     });
 }
 
-/**
- * Takes back a code whose email never went, putting back the doc it replaced: its
- * code may be in its owner's inbox and still good, and anyone can ask for a new
- * one, so deleting it would let a failed send cost the owner theirs. The address
- * can ask again at once, as the doc put back was sent over MIN_GAP_MS ago. A doc
- * that has moved on since, to another code, is left alone.
- */
 export async function withdrawEmailCode(purpose: CodePurpose, email: string, issued: IssuedCode): Promise<void> {
     const ref = codeRef(purpose, email);
     await db.runTransaction(async (txn) => {
@@ -93,14 +62,8 @@ export async function withdrawEmailCode(purpose: CodePurpose, email: string, iss
     });
 }
 
-/**
- * Whether `code` is the live one for `email`, using it up if so. Call it last,
- * once everything else about the request has been checked, so a mistake
- * elsewhere doesn't cost the holder their code.
- */
 export async function consumeEmailCode(purpose: CodePurpose, email: string, code: string): Promise<boolean> {
     const ref = codeRef(purpose, email);
-    // Decided inside and acted on after, as throwing would undo the attempt count.
     return db.runTransaction(async (txn) => {
         const data = (await txn.get(ref)).data();
         if (!data?.codeHash || Date.now() > data.validUntil || data.attempts >= CODE_ATTEMPTS) return false;

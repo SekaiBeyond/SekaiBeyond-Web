@@ -14,10 +14,8 @@ import {
 import { isGarage, useUwParking, type UwLot, uwLotGlyph, uwLotTypeLabel } from '~/lib/uwParking';
 import { DEFAULT_ZOOM, hasCoordinates, localizedVenueName, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
 
-/** Which marker's popup is currently open on the overview map: a venue by ID, a lot by UW code. */
 type MapSelection = {kind: 'venue' | 'lot'; id: string};
 
-/** One row in the combined venue + parking-lot search dropdown. */
 interface SearchItem {
     kind: 'venue' | 'lot';
     id: string;
@@ -25,15 +23,9 @@ interface SearchItem {
     meta: string;
     badgeType: 'venue' | 'garage' | 'lot';
     badgeChar: string;
-    /** False when the item has no coordinates — picking it jumps to its list card instead. */
     mappable: boolean;
 }
 
-
-/**
- * Search over every venue and UW lot. A mappable pick focuses the map; a venue without
- * coordinates jumps to its card.
- */
 interface LocationSearchProps {
     items: SearchItem[];
     onPick: (item: SearchItem) => void;
@@ -115,19 +107,11 @@ const LocationSearch = ({items, onPick, isEnglish}: LocationSearchProps) => {
     );
 };
 
-
-// Picking a location from the search zooms to at least this.
 const FOCUS_ZOOM = 16.5;
 
-/**
- * The Locations tab's overview map, drawn with the parking guide's pins: every venue
- * (star) and UW visitor lot (P / G). Selecting a venue highlights its suggested lots,
- * and its popup jumps to its card.
- */
 interface LocationsMapProps {
     venues: Venue[];
     onShowVenue: (venueId: string) => void;
-    /** Jump to the card AND open its inline edit form. */
     onEditVenue: (venueId: string) => void;
     readOnly?: boolean;
 }
@@ -139,7 +123,6 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
     const containerRef = useRef<HTMLDivElement>(null);
     const [map, setMap] = useState<MapLibreMap | null>(null);
     const [failed, setFailed] = useState(false);
-    // Until the admin moves the map, it keeps framing everything as venues and lots arrive.
     const userMoved = useRef(false);
     const {popup, content: popupContent} = usePopup(map, {
         closeButton: true,
@@ -152,13 +135,11 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
     const lots = parking.lots;
     const mappableVenues = venues.filter(v => hasCoordinates(v.lat, v.lng));
     const unmappedCount = venues.length - mappableVenues.length;
-    // Venues and lots load after the first render; the map's container only exists once there are some.
     const empty = venues.length === 0 && lots.length === 0;
 
     const selectedVenue = selected?.kind === 'venue'
         ? mappableVenues.find(v => v.id === selected.id) ?? null
         : null;
-    // The selected venue's suggested lots get the parking guide's highlight treatment.
     const suggestedCodes = useMemo(
         () => new Set(selectedVenue?.suggestedLots.map(s => s.code) ?? []),
         [selectedVenue],
@@ -182,7 +163,6 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
         created.on('movestart', e => {
             if ('originalEvent' in e && e.originalEvent) userMoved.current = true;
         });
-        // A click on the map itself closes the open popup.
         onBackgroundClick(created, () => setSelected(null));
         trackLabelZoom(created, container);
         setMap(created);
@@ -192,7 +172,6 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
         };
     }, [empty]);
 
-    // Frame everything that has coordinates.
     const points = [...mappableVenues, ...lots];
     const pointsKey = points.map(p => `${p.lng},${p.lat}`).join(';');
     useEffect(() => {
@@ -213,8 +192,6 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
     const {elements: lotElements} = useMarkerElements(
         map, lots.map(l => ({key: l.code, lng: l.lng, lat: l.lat})));
 
-    // Stacking lives on the wrappers MapLibre stacks; the selected venue's
-    // bigger star sits higher to stay centred.
     useEffect(() => {
         for (const [id, element] of Object.entries(venueElements)) {
             const current = selectedVenue?.id === id;
@@ -229,7 +206,6 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
         }
     }, [lotElements, selected, suggestedCodes]);
 
-    // The popup follows the selection; closing it with its × clears the selection.
     const selectedPoint = selected?.kind === 'venue'
         ? mappableVenues.find(v => v.id === selected.id)
         : selected ? lots.find(l => l.code === selected.id) : undefined;
@@ -279,7 +255,6 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
 
     const pickSearchItem = (item: SearchItem) => {
         if (!item.mappable) {
-            // Nothing to focus on the map — send the admin straight to the venue's card.
             onShowVenue(item.id);
             return;
         }

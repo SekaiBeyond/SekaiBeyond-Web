@@ -18,29 +18,18 @@ const LANDMARK_LABELS: Record<LandmarkKind, Localized> = {
 };
 
 interface HallMapProps {
-    /** Who is at each table. A table missing from it is open, and drawn only with `pickOpen`. */
     vendors: ReadonlyMap<string, Vendor>;
     selected: string | null;
     onSelect: (table: string) => void;
-    /** Mouse hover only, for a preview that does not pin anything. */
     onHover?: (table: string | null) => void;
-    /** While a search is running, the tables it found; the rest are dimmed. */
     matches?: ReadonlySet<string> | null;
-    /** Draws open tables and lets them be picked — the admin panel fills them in from here. /con leaves them off. */
     pickOpen?: boolean;
     label: string;
 }
 
-/**
- * The hall floor plan (see hall.ts), shared by /con and the admin editor.
- * Tables are out of the tab order: the vendor directory (on /con) or each
- * table's input (in admin) is the keyboard route, and sixty extra tab stops
- * would only be in the way. They stay named for screen readers.
- */
 export const HallMap = ({vendors, selected, onSelect, onHover, matches, pickOpen, label}: HallMapProps) => {
     const t = useT();
 
-    // Touch fires pointerenter too, and its hover would stick until the next tap.
     const hover = (table: string | null) => (e: PointerEvent) => {
         if (e.pointerType === 'mouse') onHover?.(table);
     };

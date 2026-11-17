@@ -25,19 +25,12 @@ const CODE_FIELD = {
 const codePlaceholder = (isEnglish: boolean) =>
     isEnglish ? `${EMAIL_CODE_LENGTH}-digit code` : `${EMAIL_CODE_LENGTH} 位验证码`;
 
-/** How the account signs in, which the Account and Connected Accounts cards both show. */
 export interface SignInState {
-    /** Null until first loaded. */
     methods: SignInMethods | null;
-    /** The last load failed. */
     failed: boolean;
     reload: () => Promise<void>;
 }
 
-/**
- * How the signed-in account signs in, loaded once for the Settings tab: a
- * password set in one card is what lets Google be unbound in the other.
- */
 export function useSignInMethods(): SignInState {
     const {user} = useAuth();
     const [methods, setMethods] = useState<SignInMethods | null>(null);
@@ -60,7 +53,6 @@ export function useSignInMethods(): SignInState {
     return {methods, failed, reload};
 }
 
-/** The busy flag and error line every form here shares. */
 function useFormAction() {
     const {isEnglish} = useLanguage();
     const [busy, setBusy] = useState(false);
@@ -92,7 +84,6 @@ const FormActions = ({busy, submitLabel, onCancel}: {busy: boolean; submitLabel:
     );
 };
 
-/** A code to the new address, then the code back: proof it's theirs before the account moves onto it. */
 const EmailForm = ({onDone, onCancel, showToast}: {onDone: () => void; onCancel: () => void; showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const language = isEnglish ? 'en' : 'zh';
@@ -155,7 +146,6 @@ const EmailForm = ({onDone, onCancel, showToast}: {onDone: () => void; onCancel:
     );
 };
 
-/** A code to the account's address, in place of an old password it may not have. */
 const PasswordForm = ({email, onDone, onCancel, showToast}: {
     email: string;
     onDone: () => void;
@@ -246,12 +236,6 @@ const Row = ({title, help, state, action, children}: {
     </div>
 );
 
-/**
- * An account due to be deleted, which says so and, when the account asked for it
- * itself, has the way to stop it: the email that goes out sends its owner here,
- * for when the asking was done with a stolen sign-in. One staff asked for only
- * staff can cancel.
- */
 const DeletionRow = ({deleteAt, ownRequest, showToast}: {
     deleteAt: Date;
     ownRequest: boolean;
@@ -299,12 +283,6 @@ const DeletionRow = ({deleteAt, ownRequest, showToast}: {
     );
 };
 
-/**
- * /profile's Settings tab: the account's address and password. Google and
- * linked apps are the Connected Accounts card's (ProfileConnectionsSection).
- * Everything here is enforced server-side, the month between email changes
- * included; the buttons only spare someone a refused call.
- */
 export const ProfileAccountSection = ({signIn, showToast}: {signIn: SignInState; showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const {user, profile} = useAuth();

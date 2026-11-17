@@ -6,79 +6,37 @@ import { localized } from './localized';
 
 export type PassportStatus = 'unclaimed' | 'claimed';
 
-/**
- * A physical passport. The doc id is the public code on the sticker, and so the
- * URL: /p/<id>.
- *
- * Binding is permanent: `ownerUid` and `claimedAt` are written once, by the
- * claim, so the scan URL is a stable address for a person. Unclaimed stock can
- * be deleted in bulk; a claimed passport only from its own admin page.
- */
 export interface Passport {
     id: string;
     designId: string;
-    /** The design's year, copied at generation — a design's year never changes. */
     year: number;
     status: PassportStatus;
     ownerUid: string | null;
     claimedAt: Date | null;
-    /** Days of membership this passport grants on claim: its design's term, copied at generation. */
     termDays: number;
     createdAt: Date | null;
     createdByName: string;
-    /** When the current activation key was minted — bumped by a key reissue. */
     keyIssuedAt: Date | null;
     keyReissueCount: number;
-    /** The address its key was emailed to; blank for printed stock. */
     sentTo: string;
-    /** When the key email went; null while it waits in the queue. */
     emailSentAt: Date | null;
-    /** Waiting in the overflow queue for the daily cap to reopen. */
     emailScheduled: boolean;
-    /**
-     * The activating account's address, kept since the redeem warning; null
-     * unclaimed or activated before. Compared with `sentTo` by claimedElsewhere.
-     */
     claimedEmail: string | null;
-    /**
-     * Staff's note, such as why it was made; blank without one. Kept in
-     * passportNotes, and blank where a passport is read without it.
-     */
     note: string;
 }
 
-/** What a shelf card on /profile shows, all someone else's profile carries. */
 export type ShelfPassport = Pick<Passport, 'id' | 'designId' | 'year' | 'claimedAt'>;
 
-/**
- * What a passport is printed from: its name and cover art. A year can have
- * several designs, with distinct names in both languages.
- */
 export interface PassportDesign {
     id: string;
-    /** Set on creation and fixed after. */
     year: number;
     name: string;
-    /** Optional; the English name stands in when it's blank. */
     nameCn: string;
     coverImageUrl: string;
-    /**
-     * Optional art for the outside, shown while the public page is shut. The
-     * cover art stands in when blank.
-     */
     outerCoverImageUrl: string;
-    /**
-     * Days of membership its passports grant, copied onto each at generation.
-     */
     termDays: number;
 }
 
-/**
- * One scanned sticker, resolved for anyone, keyed by the printed code, never by
- * uid. The owner's uid is only for linking to their profile; `isOwner` is
- * decided server-side. Mirrors getPassportPublicProfile in
- * functions/src/functions/passports.ts.
- */
 export type PassportPublicProfile =
     | {status: 'invalid'}
     | {status: 'private'}
@@ -90,7 +48,6 @@ export type PassportPublicProfile =
     isOwner: boolean;
     hidden: boolean;
     owner: {
-        /** For the link to their profile, which still requires signing in. */
         uid: string;
         displayName: string;
         photoURL: string;
@@ -126,8 +83,6 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
 const noteOf = (data: Record<string, any> | undefined): string =>
     typeof data?.note === 'string' ? data.note : '';
 
-// A handful of public documents that rarely change; the public passport page
-// reads them signed out.
 const designCache = createCollectionCache<PassportDesign>('passportDesigns', docSnap => {
     const data = docSnap.data();
     return {
@@ -141,14 +96,12 @@ const designCache = createCollectionCache<PassportDesign>('passportDesigns', doc
     };
 });
 
-/** Newest year first, then by name within a year. */
 export function usePassportDesigns(): {
     designs: PassportDesign[];
     loading: boolean;
     refresh: () => Promise<void>;
 } {
     const {items, loading, refresh} = designCache.useItems();
-    // Memoized: consumers use it in effect dependencies.
     const designs = useMemo(
         () => [...items].sort((a, b) => b.year - a.year || a.name.localeCompare(b.name)),
         [items],
@@ -161,11 +114,9 @@ export const passportStatusLabel = (status: PassportStatus, isEnglish: boolean):
     return isEnglish ? 'Unclaimed' : '未激活';
 };
 
-/** A passport's name, its design's. Blank while designs load. */
 export const passportName = (design: PassportDesign | undefined, isEnglish: boolean): string =>
     !design ? '' : localized(isEnglish, design.name, design.nameCn);
 
-/** Date and time as the admin passport screens show it, with the caller's blank. */
 export const passportDateTime = (date: Date | null, isEnglish: boolean, blank: string): string =>
     date
         ? date.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
@@ -173,17 +124,9 @@ export const passportDateTime = (date: Date | null, isEnglish: boolean, blank: s
         })
         : blank;
 
-/** The URL encoded on the sticker, and the only address a passport ever has. */
 export const passportScanUrl = (id: string, origin: string): string =>
     `${origin}/p/${encodeURIComponent(id)}`;
 
-/**
- * For an emailed passport activated on an account with another address, that
- * address ("" for an account without one); null when it matches, when it isn't
- * emailed or activated, or until it's known. One activated before addresses
- * were kept goes by its holder's address now, `holderEmail`, undefined while
- * that loads.
- */
 export function claimedElsewhere(passport: Passport, holderEmail: string | undefined): string | null {
     if (passport.status !== 'claimed' || !passport.sentTo) return null;
     const email = passport.claimedEmail ?? holderEmail;
@@ -191,11 +134,6 @@ export function claimedElsewhere(passport: Passport, holderEmail: string | undef
     return email.toLowerCase() === passport.sentTo.toLowerCase() ? null : email;
 }
 
-/**
- * Every passport from one design, with its note, newest first, for the admin
- * dashboard. Filtered and counted client-side: hundreds of docs, and one
- * equality filter needs no composite index. Staff only, for the notes.
- */
 export async function fetchPassportsByDesign(designId: string): Promise<Passport[]> {
     const db = getFirebaseDb();
     const [snap, notes] = await Promise.all([
@@ -208,10 +146,6 @@ export async function fetchPassportsByDesign(designId: string): Promise<Passport
         .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
 }
 
-/**
- * One passport by its printed code, with its note. Null when there is no such
- * passport. Staff only, for the note.
- */
 export async function fetchPassport(id: string): Promise<Passport | null> {
     const db = getFirebaseDb();
     const code = normalizePassportCode(id);
@@ -222,12 +156,6 @@ export async function fetchPassport(id: string): Promise<Passport | null> {
     return snap.exists() ? {...toPassport(snap), note: noteOf(noteSnap.data())} : null;
 }
 
-/**
- * Passports whose note holds `text` anywhere, in any case, across designs, with
- * their notes, for the admin search: up to PASSPORT_SEARCH_LIMIT, newest first.
- * Firestore can't search within text, so every note is read, a read each, which
- * a few hundred passports keep cheap. Staff only, for the notes.
- */
 export async function fetchPassportsByNote(text: string): Promise<Passport[]> {
     const needle = text.trim().toLowerCase();
     if (!needle) return [];
@@ -237,16 +165,11 @@ export async function fetchPassportsByNote(text: string): Promise<Passport[]> {
         .filter(({note}) => note.toLowerCase().includes(needle))
         .slice(0, PASSPORT_SEARCH_LIMIT);
     const snaps = await Promise.all(matches.map(({id}) => getDoc(doc(db, 'passports', id))));
-    // A note whose passport has since been deleted has nothing to show.
     return snaps
         .flatMap((snap, i) => snap.exists() ? [{...toPassport(snap), note: matches[i].note}] : [])
         .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
 }
 
-/**
- * Emailed passports whose address starts with `prefix`, across designs, for the
- * admin search. Without notes, which fetchPassportsByNote reads for the search.
- */
 export async function fetchPassportsSentTo(prefix: string): Promise<Passport[]> {
     const start = prefix.trim().toLowerCase();
     if (!start) return [];
@@ -260,51 +183,24 @@ export async function fetchPassportsSentTo(prefix: string): Promise<Passport[]> 
     return snap.docs.map(toPassport);
 }
 
-/**
- * Everything one account owns, for staff looking at it. Staff only: an
- * account's own shelf comes from getMyPassports (useOwnPassports).
- */
 export async function fetchPassportsByOwner(uid: string): Promise<Passport[]> {
     const snap = await getDocs(query(collection(getFirebaseDb(), 'passports'), where('ownerUid', '==', uid)));
     return snap.docs.map(toPassport).sort((a, b) =>
         b.year - a.year || (b.claimedAt?.getTime() ?? 0) - (a.claimedAt?.getTime() ?? 0));
 }
 
-// Typed by hand, so dashes, spaces and case are folded away. Mirrors
-// normalizeCode in functions/src/utils/passports.ts.
 export const normalizePassportCode = (raw: string): string =>
     raw.replace(/[\s-]+/g, '').toUpperCase();
 
 export const PASSPORT_ID_LENGTH = 10;
-/**
- * Mirrors MAX_GENERATE_COUNT in functions/src/utils/passports.ts, which
- * enforces it.
- */
 export const MAX_PASSPORT_GENERATE = 200;
-/** What a new design's term starts at. */
 export const DEFAULT_PASSPORT_TERM_DAYS = 365;
-/**
- * Mirrors MAX_DELETE_COUNT in functions/src/utils/passports.ts, which enforces
- * it.
- */
 export const MAX_PASSPORT_DELETE = 200;
-/**
- * Mirrors MAX_EMAIL_COUNT in functions/src/utils/passports.ts, which enforces
- * it: the addresses one emailPassports call takes.
- */
 export const MAX_PASSPORT_EMAIL = 100;
-/**
- * Mirrors MAX_KEY_EXPORT_COUNT in functions/src/utils/passports.ts, which
- * enforces it.
- */
 export const MAX_PASSPORT_KEY_EXPORT = 500;
-/** Mirrors MAX_GRANT_DAYS in functions/src/utils/membership.ts, which enforces it. */
 export const MAX_PASSPORT_TERM_DAYS = 3650;
-/** Mirrors PASSPORT_NOTE_MAX in functions/src/utils/passports.ts, which enforces it. */
 export const PASSPORT_NOTE_MAX = 500;
-/** Passports one address or note search lists. */
 const PASSPORT_SEARCH_LIMIT = 50;
-/** Ambiguous glyphs (O/0, I/1/L) are absent by construction — see CODE_ALPHABET. */
 const CODE_CHAR = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]*$/;
 
 export const isPassportCodeShape = (raw: string, length: number): boolean => {

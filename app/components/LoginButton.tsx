@@ -4,7 +4,6 @@ import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { openRedeemModal } from '~/components/RedeemModal';
 
-/** The least space kept between the dropdown and the right edge of the screen. */
 const DROPDOWN_EDGE_GAP = 12;
 
 export const LoginButton = () => {
@@ -14,8 +13,6 @@ export const LoginButton = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // The dropdown is centred under the avatar, but shifted left as far as it
-    // needs to be so it doesn't run off the right edge of the screen.
     useLayoutEffect(() => {
         if (!isOpen) return;
         const place = () => {

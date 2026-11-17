@@ -2,7 +2,6 @@ import { doc, getDoc } from 'firebase/firestore';
 import { createValueCache } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
-// Mirrors SOCIAL_LINK_PATTERNS in functions/src/functions/admin.ts.
 export const SOCIAL_LINK_KEYS = ['discord', 'instagram', 'bilibili', 'xiaohongshu', 'linkedin', 'github'] as const;
 export type SocialLinkKey = typeof SOCIAL_LINK_KEYS[number];
 export type SocialLinks = Record<SocialLinkKey, string>;
@@ -34,7 +33,6 @@ export interface TeamMemberConfig {
     roleCn: string;
     imageUrl: string;
     isHonorary?: boolean;
-    /** When `uid` is set, follow the linked account's live title / photoURL. */
     useAccountRole?: boolean;
     useAccountPhoto?: boolean;
 }

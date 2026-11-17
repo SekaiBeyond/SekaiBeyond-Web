@@ -3,13 +3,8 @@ import { type AttendeeData, type ParsedRow, type ParseError, TICKET_TYPES, type 
 
 const MAX_IMPORT_ROWS = 1000;
 
-/** Folds a type cell so that "Early Bird", "early_bird" and "earlybird" read alike. */
 const foldType = (raw: string) => raw.toLowerCase().replace(/[\s_-]+/g, '');
 
-/**
- * Every spelling of a type: the stored value, both panel labels, and "comp".
- * Anything else imports as normal.
- */
 const TYPE_BY_NAME = new Map<string, TicketType>([
     ...TICKET_TYPES.flatMap(tt =>
         [tt.value, tt.labelEn, tt.labelCn].map(name => [foldType(name), tt.value] as const)),
@@ -91,7 +86,6 @@ export const parseFile = async (file: File) => {
     return {fields, records};
 };
 
-/** Which of an existing attendee's fields a row would change. All false for a new one. */
 export const rowChanges = (r: ParsedRow) => ({
     name: r.existingName !== undefined && r.existingName !== r.name,
     count: r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount,
@@ -209,8 +203,6 @@ export const validateRows = (
     const deduped = new Map<string, ParsedRow>();
     for (const r of parsedRows) deduped.set(r.email, r);
 
-    // Changed existing rows first (they need a decision), then new rows, then
-    // unchanged ones.
     const rank = (r: ParsedRow): number => {
         if (r.action === 'add') return 1;
         const changes = rowChanges(r);

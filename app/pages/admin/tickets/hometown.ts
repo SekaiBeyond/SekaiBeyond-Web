@@ -3,10 +3,6 @@ import { parseSiteTime } from '~/lib/siteTime';
 import { EMAIL_RE } from './helpers';
 import type { ParseError, TicketType } from './types';
 
-/**
- * A HomeTown ticket number: its QR holds just these 12 digits, with no event or
- * signature. Mirrors functions/src/utils/tickets.ts.
- */
 const HOMETOWN_TICKET_RE = /^\d{12}$/;
 
 export const isHometownTicketId = (raw: string): boolean => HOMETOWN_TICKET_RE.test(raw);
@@ -32,10 +28,8 @@ export interface HometownTicketRow {
 
 const foldHeader = (raw: string) => raw.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** A HomeTown export's first sheet, its rows keyed by header. */
 const readSheet = async (file: File) => {
     const XLSX = await import('xlsx/dist/xlsx.mini.min.js');
-    // Raw, so ticket and order numbers stay as strings rather than becoming numbers.
     const workbook = XLSX.read(await file.arrayBuffer(), {type: 'array', raw: true});
     const sheet = workbook.Sheets[workbook.SheetNames[0] ?? ''];
     const records = sheet
@@ -137,7 +131,6 @@ export const parseHometownFile = async (file: File, isEnglish: boolean): Promise
 
 export interface HometownOrderRow {
     orderId: string;
-    /** When the order was placed, as an ISO string. */
     orderedAt: string;
 }
 
@@ -146,7 +139,6 @@ const ORDER_HEADERS = {
     time: ['time', 'ordertime', 'orderdate', 'date'],
 } as const;
 
-/** The zones HomeTown may stamp an order's time with, as offsets from UTC. */
 const ZONE_OFFSETS: Record<string, string> = {
     PST: '-08:00', PDT: '-07:00',
     MST: '-07:00', MDT: '-06:00',
@@ -161,11 +153,6 @@ const ORDER_TIME_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-/**
- * An order list's time, as "10/24/2026 4:58 PM PDT", as the moment it names in
- * ISO form. One without a zone is read on the site's clock. Null for anything
- * else, a zone it doesn't know included.
- */
 const parseHometownOrderTime = (raw: string): string | null => {
     const match = ORDER_TIME_RE.exec(raw.trim());
     if (!match) return null;
@@ -186,11 +173,6 @@ const parseHometownOrderTime = (raw: string): string | null => {
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
-/**
- * Reads HomeTown's order list export (Order List, one row per order), for when
- * each order was placed: the guest list has no times. A row whose time can't be
- * read is an error and left out.
- */
 export const parseHometownOrderFile = async (file: File, isEnglish: boolean): Promise<{
     orders: HometownOrderRow[];
     errors: ParseError[];
@@ -198,7 +180,6 @@ export const parseHometownOrderFile = async (file: File, isEnglish: boolean): Pr
 }> => {
     const {records, column} = await readSheet(file);
     const cols = {orderId: column(ORDER_HEADERS.orderId), time: column(ORDER_HEADERS.time)};
-    // The guest list has an Order ID column too, but no times.
     if (column(HEADERS.ticketId) || !cols.orderId || !cols.time) {
         return {
             orders: [],
@@ -259,10 +240,8 @@ export const parseHometownOrderFile = async (file: File, isEnglish: boolean): Pr
     return {orders, errors, warnings};
 };
 
-/** Times one call waits out the rate limit before giving up. */
 const RATE_LIMIT_RETRIES = 3;
 
-/** `call`, made again once the window reopens if the rate limit refuses it. */
 export const retryRateLimited = async <T>(call: () => Promise<T>): Promise<T> => {
     for (let attempt = 0; ; attempt++) {
         try {

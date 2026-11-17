@@ -2,10 +2,8 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
-import { recordDoc, recordRef } from "../utils/records";
+import { performer, recordDoc, recordRef } from "../utils/records";
 
-// The built-in platforms for seedSocialPlatforms. Keep in sync with
-// DEFAULT_SOCIAL_PLATFORMS in app/lib/socialPlatforms.ts.
 const DEFAULT_SOCIAL_PLATFORMS = [
     {id: "instagram", label: "Instagram", order: 0},
     {id: "x", label: "X (Twitter)", order: 1},
@@ -26,11 +24,6 @@ function validateOrder(value: unknown): number {
     return value;
 }
 
-/**
- * Create or update a social platform: a traffic-source tag for tracked QR
- * codes, one code per platform for the same URL so scans compare click-through.
- * Read client-side, written only here.
- */
 export const saveSocialPlatform = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
@@ -54,8 +47,7 @@ export const saveSocialPlatform = onCall({maxInstances: 10}, async (request) => 
             txn.set(ref, data);
         }
         txn.set(recordRef(), recordDoc(platformId ? "social-platform-edit" : "social-platform-create", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             platformLabel: label,
         }));
         return {id: docId};
@@ -74,18 +66,13 @@ export const deleteSocialPlatform = onCall({maxInstances: 10}, async (request) =
 
         txn.delete(ref);
         txn.set(recordRef(), recordDoc("social-platform-delete", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            ...performer(uid, callerSnap),
             platformLabel: snap.data()?.label ?? platformId,
         }));
         return {deleted: true};
     });
 });
 
-/**
- * Write the built-in defaults so admins can edit them. Only missing ids are
- * created, so re-running keeps customisations.
- */
 export const seedSocialPlatforms = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);

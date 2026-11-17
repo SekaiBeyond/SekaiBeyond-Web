@@ -5,21 +5,9 @@ import { downloadBlob } from '~/lib/download';
 import { buildZip, type ZipEntry } from '~/lib/zip';
 import { canvasToPng, useQrCanvasBatch } from '../tools/qr/qrExport';
 
-/**
- * Print-shop exports for a set of passports: the CSV pairing stickers with key
- * slips, and the sticker artwork. Every PNG prints the passportId under the QR,
- * so a scuffed sticker can still be typed into /p/<code>.
- */
-
-/**
- * Half the QR tool's export size: stickers are printed a couple of centimetres
- * wide, by the hundred per ZIP. {@link LABEL_HEIGHT} is proportioned against it,
- * so it defines the sticker layout.
- */
 const QR_SIZE = 512;
 const LABEL_HEIGHT = 96;
 
-/** One passport's sticker: the QR over its printed code, on white. */
 async function composePassportPng(source: HTMLCanvasElement, passportId: string): Promise<Uint8Array<ArrayBuffer>> {
     const canvas = document.createElement('canvas');
     canvas.width = source.width;
@@ -35,8 +23,6 @@ async function composePassportPng(source: HTMLCanvasElement, passportId: string)
     ctx.fillStyle = '#000000';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Wide letter-spacing keeps the code readable at sticker size; the alphabet
-    // already avoids O/0 and I/1/L.
     ctx.font = `600 ${Math.round(labelArea * 0.42)}px ui-monospace, "SF Mono", Menlo, Consolas, monospace`;
     ctx.letterSpacing = '0.12em';
     ctx.fillText(passportId, canvas.width / 2, source.height + labelArea * 0.44);
@@ -44,12 +30,6 @@ async function composePassportPng(source: HTMLCanvasElement, passportId: string)
     return new Uint8Array(await (await canvasToPng(canvas)).arrayBuffer());
 }
 
-/**
- * Sticker PNG export. Render {@link node}, call {@link request} with the ids,
- * and watch {@link progress}. One id downloads a PNG, more a ZIP. The off-screen
- * rendering is {@link useQrCanvasBatch}'s; this is only the sticker and the
- * packaging.
- */
 export const usePassportPngExport = (onFailure: () => void): {
     request: (ids: string[], filename: string) => void;
     progress: {done: number; total: number} | null;
@@ -81,9 +61,6 @@ export const usePassportPngExport = (onFailure: () => void): {
     };
 };
 
-/**
- * The print shop's pairing list, from the generator or a selection's Keys CSV.
- */
 export function buildPassportCsv(
     rows: {passportId: string; activationCode: string}[],
     origin: string,
@@ -94,7 +71,6 @@ export function buildPassportCsv(
     );
 }
 
-/** Public ids only — safe to re-export at any time. */
 export function buildPassportIdCsv(ids: string[], origin: string): Blob {
     return buildCsv(
         ['passportId', 'scanUrl'],

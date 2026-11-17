@@ -6,20 +6,13 @@ import type { ParkingText } from './text';
 
 interface VenueSwitcherProps {
     venues: Venue[];
-    /** '' for the whole campus. */
     selectedId: string;
-    /** The venue of the event the guide is showing, tagged "This event". */
     eventVenueId: string;
-    /** The nearest suggested lot per venue, for each option's second line. */
     suggestionFor: (venue: Venue) => {code: string; walk: {seconds: number} | null} | null;
     onSelect: (id: string) => void;
     tx: ParkingText;
 }
 
-/**
- * Searchable venue picker in the guide's header, with the whole campus as one of the
- * options.
- */
 export const VenueSwitcher = ({venues, selectedId, eventVenueId, suggestionFor, onSelect, tx}: VenueSwitcherProps) => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -37,13 +30,11 @@ export const VenueSwitcher = ({venues, selectedId, eventVenueId, suggestionFor, 
         : venues;
     const showCampus = !q || tx.t('allCampus').toLowerCase().includes(q);
 
-    // Escape hands focus back to the trigger.
     useDismiss(open, containerRef, byEscape => {
         setOpen(false);
         if (byEscape) triggerRef.current?.focus();
     });
 
-    // Open: focus the search box. Closed: clear it.
     useEffect(() => {
         if (open) inputRef.current?.focus();
         else setQuery('');
@@ -54,7 +45,6 @@ export const VenueSwitcher = ({venues, selectedId, eventVenueId, suggestionFor, 
         setOpen(false);
     };
 
-    // "UW building HUB · 🅿️ N22, 2 min walk", from whatever the venue has set up.
     const optionMeta = (v: Venue): string => {
         const parts: string[] = [];
         if (v.buildingCode) parts.push(tx.t('venueCode', {c: v.buildingCode}));

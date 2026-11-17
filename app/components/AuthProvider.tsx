@@ -22,7 +22,6 @@ import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
 import { openSignInModal } from '~/lib/signInModal';
 import { currentSessionId, sessionEnded, signInMovedOn, watchOwnSession } from '~/lib/sessions';
 
-// `group` is a role ladder only; membership lives in membershipExpiresAt.
 export type UserGroup = 'user' | 'staff' | 'core-staff' | 'president';
 
 export const USER_GROUPS: UserGroup[] = ['user', 'staff', 'core-staff', 'president'];
@@ -41,7 +40,6 @@ export const GROUP_LABELS: Record<UserGroup, {en: string; zh: string}> = {
     'president': {en: 'President', zh: '社长'},
 };
 
-// Anything unknown reads as the base group, so GROUP_LEVEL is never undefined.
 export function normalizeGroup(raw: unknown): UserGroup {
     return raw === 'staff' || raw === 'core-staff' || raw === 'president' ? raw : 'user';
 }
@@ -101,16 +99,12 @@ export interface UserProfile {
     group: UserGroup;
     membershipExpiresAt: Date | null;
     membershipStartedAt: Date | null;
-    /** Opt-out for the public passport page at /p/:passportId. Default false. */
     hidePassportPage: boolean;
-    /** Which sections other people are shown. Anything unset is visible. */
     profileVisibility: ProfileVisibility;
     title?: string;
     titleCn?: string;
     eventStaffEvents: string[];
-    /** When the account is due to be deleted, or null when it isn't. */
     deleteAt: Date | null;
-    /** Who asked for that: the account itself, or the staff member's uid. "" when not due. */
     deletionRequestedBy: string;
 }
 
@@ -151,23 +145,13 @@ interface AuthContextType {
     profile: UserProfile | null;
     isMember: boolean;
     loading: boolean;
-    /** True once Firebase Auth resolves, before the Firestore profile finishes loading. */
     authReady: boolean;
     cachedPhotoURL: string;
-    /** This device's row in the device list, once known. */
     sessionId: string | null;
-    /** Opens the sign-in modal. */
     signIn: () => void;
-    /**
-     * Signs in with the token an account call answered with. Done once the
-     * account's profile is in too, so whoever waits on it hands over to a page
-     * that already shows them signed in. Throws if the sign-in didn't hold.
-     */
     signInWithToken: (token: string) => Promise<void>;
     signOut: () => Promise<void>;
-    /** Signs out every device on the account, this one too. Throws, still signed in, if that fails. */
     signOutEverywhere: () => Promise<void>;
-    /** Moves this device onto the new sign-in a password change answers with. */
     replaceSession: (token: string) => Promise<void>;
     refreshProfile: () => Promise<void>;
     updateProfile: (updates: {
@@ -183,7 +167,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const PHOTO_CACHE_KEY = 'profilePhoto';
 
-// Stored with the uid so a different account on this device never shows it.
 function readCachedPhoto(uid: string): string {
     try {
         const cached = JSON.parse(localStorage.getItem(PHOTO_CACHE_KEY) ?? 'null');
@@ -227,7 +210,6 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
     const [cachedPhotoURL, setCachedPhotoURL] = useState('');
     const [sessionId, setSessionId] = useState<string | null>(null);
     const stopWatchingSession = useRef<(() => void) | null>(null);
-    // The profile load the latest auth state change set off, for a sign-in to wait on.
     const profileLoad = useRef<Promise<void>>(Promise.resolve());
 
     useEffect(() => {
@@ -243,8 +225,6 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
 
                     const data = userSnap.data();
                     if (!data) {
-                        // A login with no account behind it: one that's been
-                        // deleted. Every account exists before its first login.
                         await firebaseSignOut();
                         return;
                     }
@@ -256,9 +236,6 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     clearCachedPhoto();
                 }
             } catch (error) {
-                // A sign-in that has been signed out, or never listed itself in
-                // time, can't read even its own profile (liveSession in
-                // firestore.rules), so it signs out rather than sit half in.
                 if (firebaseUser && error instanceof FirebaseError && error.code === 'permission-denied'
                     && await sessionEnded()) {
                     await firebaseSignOut();
@@ -277,11 +254,8 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         return () => unsubscribe();
     }, []);
 
-    // Bumped to watch the sign-in another tab has moved this browser on to, which
-    // arrives in the same user object, so nothing else here would notice it.
     const [sessionGeneration, setSessionGeneration] = useState(0);
 
-    // Waits for the profile, as there's no device list for a login with no account.
     const hasProfile = !!profile;
     useEffect(() => {
         if (!user || !hasProfile) {
@@ -296,8 +270,6 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
             }
             await firebaseSignOut();
         };
-        // The live user when it's this account, so a sign-in that has moved on is
-        // what's watched even if `user` is an older object for the same account.
         const live = getFirebaseAuth().currentUser;
         void currentSessionId(live?.uid === user.uid ? live : user).then(id => {
             if (stale || !id) return;
@@ -313,22 +285,14 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
 
     const signIn = () => openSignInModal();
 
-    // Firebase tells its listeners about the new user before the sign-in
-    // settles, so by then the load to wait on is this account's. A profile that
-    // can't be read still leaves them signed in, so that isn't a failure here.
     const signInWithToken = async (token: string) => {
         await firebaseSignInWithToken(token);
         await profileLoad.current.catch(() => {
         });
-        // Signed straight back out: an account that has gone, or a sign-in the
-        // server has already ended.
         if (!getFirebaseAuth().currentUser) throw new Error('The sign-in didn’t hold.');
     };
 
     const signOut = async () => {
-        // Stops watching first, or the removed row would be put back. Signing
-        // out goes ahead if the call fails, leaving the row to sign out from
-        // another device.
         stopWatchingSession.current?.();
         await callEndOwnSession().catch(() => {
         });
@@ -337,17 +301,12 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
     };
 
     const signOutEverywhere = async () => {
-        // This device's row is ended with the rest, so its watcher may sign it
-        // out before the call answers; signing out again does no harm.
         await callEndAllSessions();
         stopWatchingSession.current?.();
         await firebaseSignOut();
         setProfile(null);
     };
 
-    // The same uid signing in again fires no auth state change, so the new user
-    // is set here, which starts watching the new session. The old row is ended
-    // after: this device is the one that would notice.
     const replaceSession = async (token: string) => {
         const oldSessionId = sessionId;
         stopWatchingSession.current?.();

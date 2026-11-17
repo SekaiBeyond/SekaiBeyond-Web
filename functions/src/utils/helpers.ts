@@ -32,7 +32,6 @@ export function validateCodeInTransaction(data: {
         throw new HttpsError("failed-precondition", "This code is inactive.", {code: "inactive"});
     }
 
-    // parseSiteTime also reads a zoneless datetime-local bound, as Pacific.
     const now = new Date();
     if (data.activeFrom && parseSiteTime(data.activeFrom) > now) {
         throw new HttpsError("failed-precondition", "This code is not active yet.", {code: "not-active-yet"});
@@ -48,13 +47,10 @@ export function validateCodeInTransaction(data: {
     }
 }
 
-/** A Firestore Timestamp as an ISO string, or null for anything else, a missing field included. */
 export const isoOrNull = (t: unknown): string | null => t instanceof Timestamp ? t.toDate().toISOString() : null;
 
-/** One write for commitInChunks to put in a batch. */
 export type BatchOp = (batch: FirebaseFirestore.WriteBatch) => void;
 
-/** Deletes of `docs`, for commitInChunks. */
 export const deleteOps = (docs: {ref: FirebaseFirestore.DocumentReference}[]): BatchOp[] =>
     docs.map(doc => batch => batch.delete(doc.ref));
 
@@ -66,7 +62,6 @@ export async function commitInChunks(ops: BatchOp[]): Promise<void> {
         try {
             await batch.commit();
         } catch (err) {
-            // Earlier chunks have committed, so the data is now partial: logged for cleanup.
             console.error(
                 `commitInChunks: batch ${i / BATCH_LIMIT + 1} of ${Math.ceil(ops.length / BATCH_LIMIT)} failed after previous chunks committed.`,
                 err

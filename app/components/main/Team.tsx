@@ -7,7 +7,6 @@ import { localized } from "~/lib/localized";
 export const Team = () => {
     const {isEnglish} = useLanguage();
     const {config, loading} = useSiteConfig();
-    // Linked-account fields are resolved via callable since users docs aren't publicly readable.
     const [resolvedMembers, setResolvedMembers] = useState<TeamMemberConfig[] | null>(null);
 
     useEffect(() => {

@@ -12,12 +12,9 @@ const EMPTY: EmailTemplate = {subject: '', bodyHtml: '', updatedAt: null};
 type TemplateFields = Pick<EmailTemplate, 'subject' | 'bodyHtml'>;
 
 interface UseEmailTemplateOptions {
-    /** The template's doc. */
     path: string;
-    /** What the fields start from while nothing is saved. Never sent in its place. */
     defaultSubject: string;
     defaultBody: string;
-    /** Saves the fields; they read as saved once it resolves. */
     write: (template: TemplateFields) => Promise<unknown>;
     showToast: ShowToast;
     onUnsavedChange: (unsaved: boolean) => void;
@@ -25,7 +22,6 @@ interface UseEmailTemplateOptions {
 
 type EmailTemplateState = ReturnType<typeof useEmailTemplate>;
 
-/** A stored email template being edited: read once, then saved through `write`. */
 export function useEmailTemplate({
                                      path,
                                      defaultSubject,
@@ -36,7 +32,6 @@ export function useEmailTemplate({
                                  }: UseEmailTemplateOptions) {
     const {isEnglish} = useLanguage();
     const [template, setTemplate] = useState<EmailTemplate>(EMPTY);
-    // What's stored, for the dirty check and the saved status.
     const [saved, setSaved] = useState<EmailTemplate>(EMPTY);
     const [loading, setLoading] = useState(true);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -59,7 +54,6 @@ export function useEmailTemplate({
                     setTemplate(stored);
                     setSaved(stored);
                 } else {
-                    // The default to start from, unsaved, so Save stays enabled.
                     setTemplate({subject: defaultSubject, bodyHtml: defaultBody, updatedAt: null});
                     setSaved(EMPTY);
                 }
@@ -80,7 +74,6 @@ export function useEmailTemplate({
         return () => {
             cancelled = true;
         };
-        // Not keyed on isEnglish: a toggle would reload over unsaved edits.
     }, [path, defaultSubject, defaultBody, showToast]);
 
     const isDirty = template.subject !== saved.subject || template.bodyHtml !== saved.bodyHtml;
@@ -124,7 +117,6 @@ export function useEmailTemplate({
     return {template, setTemplate, saved, loading, loadFailed, saving, isDirty, isAtDefault, resetToDefault, save};
 }
 
-/** "Mar 3, 2026, 04:05 PM": when a template was last saved. */
 export const formatSavedAt = (date: Date, isEnglish: boolean): string =>
     date.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
         year: 'numeric', month: 'short', day: 'numeric',
@@ -134,11 +126,9 @@ export const formatSavedAt = (date: Date, isEnglish: boolean): string =>
 interface EmailTemplateFieldsProps {
     editor: EmailTemplateState;
     readOnly?: boolean;
-    /** The template filled in for a sample recipient, worked out only when the preview opens. */
     renderPreview: (template: EmailTemplate) => {subject: string; html: string};
 }
 
-/** The subject and body, Save, Preview and Reset to Default. */
 export function EmailTemplateFields({editor, readOnly = false, renderPreview}: EmailTemplateFieldsProps) {
     const {isEnglish} = useLanguage();
     const [showPreview, setShowPreview] = useState(false);

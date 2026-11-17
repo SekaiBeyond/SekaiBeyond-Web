@@ -9,8 +9,6 @@ export const QrRedirectPage = () => {
     const [searchParams] = useSearchParams();
     const id = searchParams.get('id');
 
-    // Managed codes carry a stable `id`, social ones also `p` for the platform
-    // tally. Anything without an `id` is expired.
     if (id) return <ManagedQrRedirect id={id} platform={searchParams.get('p') ?? ''}/>;
     return <ExpiredCard isError={false}/>;
 };
@@ -62,7 +60,6 @@ const ManagedQrRedirect = ({id, platform}: {id: string; platform: string}) => {
     return <ExpiredCard isError={status === 'error'}/>;
 };
 
-/** The dead-end card for a scan that resolved to nothing. */
 export const ExpiredCard = ({isError}: {isError: boolean}) => {
     const {isEnglish} = useLanguage();
     const title = isError

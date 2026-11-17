@@ -14,14 +14,12 @@ export const Navigation = () => {
     const {ticketUrl} = useConListing().listing;
     const ended = useConEnded();
     const links = useConNavLinks();
-    // No Get Tickets once the con is over.
     const showTickets = !!ticketUrl && !ended;
     const [menuOpen, setMenuOpen] = useState(false);
 
     const solid = useScrolledPast(80);
     const activeSection = useActiveSection(SECTION_IDS);
 
-    // Keep the page from scrolling behind the full-screen mobile menu.
     useEffect(() => {
         document.body.style.overflow = menuOpen ? 'hidden' : '';
         return () => {
@@ -38,8 +36,6 @@ export const Navigation = () => {
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [menuOpen]);
 
-    // The open mobile drawer is white, so the bar goes opaque with it or the
-    // logo turns white-on-white.
     const opaque = solid || menuOpen;
 
     return (

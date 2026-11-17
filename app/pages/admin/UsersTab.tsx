@@ -24,7 +24,8 @@ import type { PastEvent } from '~/lib/pastEvents';
 import type { BadgeDef } from '~/lib/badges';
 import { isBanActive, type UserRecord } from './types';
 import { UserRow } from './UserRow';
-import { buildUserListQuery, docToUserRecord, searchUsers, type ShowToast } from './utils';
+import { buildUserListQuery, docToUserRecord, type ShowToast } from './utils';
+import { UserSearchInput, useUserSearch } from './useUserSearch';
 import { PhotoSourceTag, UserDetailView } from './UserDetailView';
 
 const PAGE_SIZE = 10;
@@ -35,7 +36,6 @@ interface UsersTabProps {
     badgeDefsError: boolean;
     user: User;
     profile: UserProfile;
-    /** Opens one of the user's passports in the Passports tab. */
     onOpenPassport: (passportId: string) => void;
     showToast: ShowToast;
     readOnly?: boolean;
@@ -45,7 +45,6 @@ export interface UsersTabHandle {
     lookupUserByUid: (uid: string) => Promise<void>;
 }
 
-/** A row's tags, the same in search results and the recent list. */
 const UserTags = ({user, pendingDeletion}: {user: UserRecord; pendingDeletion: boolean}) => {
     const {isEnglish} = useLanguage();
     return (
@@ -84,28 +83,23 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                                        readOnly = false,
                                                                    }, ref) => {
     const {isEnglish} = useLanguage();
-    const [searchQuery, setSearchQuery] = useState('');
     const [selectedGroup, setSelectedGroup] = useState<UserGroup | ''>('');
     const [membersOnly, setMembersOnly] = useState(false);
-    const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
     const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
-    const [searching, setSearching] = useState(false);
-    const [hasSearched, setHasSearched] = useState(false);
+    const search = useUserSearch(() =>
+        showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error'));
     const [recentUsers, setRecentUsers] = useState<UserRecord[]>([]);
     const [lastRecentSnap, setLastRecentSnap] = useState<QueryDocumentSnapshot | null>(null);
     const [loadingRecent, setLoadingRecent] = useState(false);
     const [hasMoreRecent, setHasMoreRecent] = useState(true);
     const [pendingDeletionUids, setPendingDeletionUids] = useState<Set<string>>(new Set());
 
-    // So a page requested under old filters is dropped when it lands.
     const recentGenRef = useRef(0);
 
-    // Merged into each list's current copy, so two edits in flight don't undo
-    // each other, and a landing edit doesn't pull the admin back into the user.
     const applyUserUpdate = (uid: string, changes: Partial<UserRecord>) => {
         const merge = (u: UserRecord) => u.uid === uid ? {...u, ...changes} : u;
         setSelectedUser(prev => prev && merge(prev));
-        setSearchResults(prev => prev.map(merge));
+        search.setResults(prev => prev.map(merge));
         setRecentUsers(prev => prev.map(merge));
     };
 
@@ -119,8 +113,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             }
             const record = docToUserRecord(userSnap);
             setSelectedUser(record);
-            setSearchResults([]);
-            setSearchQuery('');
+            search.clear();
+            search.setQuery('');
         },
     }));
 
@@ -159,7 +153,6 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             }
         };
         loadRecentUsers().catch(() => {
-            // The list stays as it was; Load More or a filter change tries again.
         });
     }, [selectedGroup, membersOnly]);
 
@@ -184,18 +177,10 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         }
     };
 
-    const runSearch = async () => {
-        if (!searchQuery.trim()) return;
-        setSearching(true);
+    const runSearch = () => {
+        if (!search.query.trim()) return;
         setSelectedUser(null);
-        try {
-            setSearchResults(await searchUsers(searchQuery, selectedGroup, membersOnly));
-        } catch {
-            showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error');
-        } finally {
-            setSearching(false);
-            setHasSearched(true);
-        }
+        void search.run(selectedGroup, membersOnly);
     };
 
     return (
@@ -205,8 +190,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     value={selectedGroup}
                     onChange={(e) => {
                         setSelectedGroup(e.target.value as UserGroup | '');
-                        setSearchResults([]);
-                        setHasSearched(false);
+                        search.clear();
                     }}
                     className="admin-input admin-select"
                 >
@@ -217,40 +201,27 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                         </option>
                     ))}
                 </select>
-                {/* Membership is separate from role, so it filters separately. */}
                 <label className="admin-members-filter">
                     <input
                         type="checkbox"
                         checked={membersOnly}
                         onChange={(e) => {
                             setMembersOnly(e.target.checked);
-                            setSearchResults([]);
-                            setHasSearched(false);
+                            search.clear();
                         }}
                     />
                     {isEnglish ? 'Members only' : '仅会员'}
                 </label>
-                <input
-                    type="text"
+                <UserSearchInput
+                    search={search}
+                    onSearch={runSearch}
                     placeholder={isEnglish ? 'Search by email or name...' : '输入邮箱或姓名搜索...'}
-                    value={searchQuery}
-                    onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setHasSearched(false);
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && runSearch()}
-                    className="admin-input"
                 />
-                <button onClick={runSearch} disabled={searching} className="admin-btn admin-btn--cta">
-                    {searching
-                        ? (isEnglish ? 'Searching...' : '搜索中...')
-                        : (isEnglish ? 'Search' : '搜索')}
-                </button>
             </div>
 
-            {searchResults.length > 0 && !selectedUser && (
+            {search.results.length > 0 && !selectedUser && (
                 <div className="admin-results">
-                    {searchResults.map((u) => (
+                    {search.results.map((u) => (
                         <UserRow key={u.uid} user={u} onClick={() => setSelectedUser(u)}>
                             <UserTags user={u} pendingDeletion={pendingDeletionUids.has(u.uid)}/>
                             <span className="admin-user-badge-count">
@@ -261,11 +232,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 </div>
             )}
 
-            {searchResults.length === 0 && !searching && hasSearched && (
+            {search.results.length === 0 && !search.searching && search.hasSearched && (
                 <p className="admin-no-results">{isEnglish ? 'No users found.' : '未找到用户。'}</p>
             )}
 
-            {!selectedUser && searchResults.length === 0 && (
+            {!selectedUser && search.results.length === 0 && (
                 <div className="admin-recent-users">
                     <h4 className="admin-badges-title">
                         {membersOnly

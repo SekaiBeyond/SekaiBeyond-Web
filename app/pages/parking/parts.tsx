@@ -9,16 +9,11 @@ export const StatusPill = ({status, tx}: {status: LotStatus; tx: ParkingText}) =
     <span className={`parking-status parking-s-${status.kind}`}>{tx.status(status)}</span>
 );
 
-/** A ♿ on the corner of a lot's icon when UW lists accessible stalls there, saying how many to screen readers. */
 export const AccessibleBadge = ({lot, tx}: {lot: UwLot; tx: ParkingText}) => {
     const n = accessibleStalls(lot);
     return n > 0 ? <span className="parking-ada-badge" role="img" aria-label={tx.accessibleStalls(n)}>♿</span> : null;
 };
 
-/**
- * "💲 $5/hr · $21/day", or "💲 During your event: $5/hr · $21/day" on an event's guide: what a
- * visitor pays then; nothing when they don't pay, or can't park.
- */
 export const RatesLine = ({rates, isNow, tx}: {rates: Rate[]; isNow: boolean; tx: ParkingText}) =>
     rates.length > 0 ? (
         <span className="parking-rate-line">
@@ -26,10 +21,6 @@ export const RatesLine = ({rates, isNow, tx}: {rates: Rate[]; isNow: boolean; tx
         </span>
     ) : null;
 
-/**
- * How far a lot is: "2 min walk to HUB" (`venueName` given), "2 min walk", or
- * "2 min" (`short`). Without a measured walk, a straight-line estimate instead.
- */
 export function walkText(view: LotView, tx: ParkingText, options: {venueName?: string; short?: boolean} = {}): string {
     if (view.walk) {
         const n = walkMinutes(view.walk.seconds);
@@ -39,7 +30,6 @@ export function walkText(view: LotView, tx: ParkingText, options: {venueName?: s
     return view.miles === null ? '' : formatDistanceEstimate(view.miles, tx.isEnglish);
 }
 
-/** Where the lot data comes from and when it was updated, at the bottom of the page; nothing without a date. */
 export const Footer = ({generatedAt, tx}: {generatedAt: string; tx: ParkingText}) => {
     const generated = new Date(generatedAt);
     if (Number.isNaN(generated.getTime())) return null;

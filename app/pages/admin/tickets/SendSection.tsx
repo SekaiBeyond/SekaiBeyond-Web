@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGetTicketEmailQuota, callSendTicketEmails, errorSuffix, type TicketEmailQuota } from '~/lib/firebase';
+import { callSendTicketEmails, errorSuffix } from '~/lib/firebase';
+import { EmailQuotaBanner, TemplateUnsavedBanner, useEmailQuota } from '../EmailQuotaBanner';
 import type { ShowToast } from '../utils';
 import { sendRefusal } from './helpers';
 import type { AttendeeTotals } from './types';
 
-// Only for the confirm text before quota loads; the server's quota.chunkSize is
-// what counts.
 const FALLBACK_CHUNK_SIZE = 100;
 
 interface SendSectionProps {
@@ -31,37 +30,11 @@ export function SendSection({
     const {isEnglish} = useLanguage();
     const [sending, setSending] = useState(false);
     const [progress, setProgress] = useState<SendProgress | null>(null);
-    const [quota, setQuota] = useState<TicketEmailQuota | null>(null);
-    const [quotaError, setQuotaError] = useState(false);
+    const emailQuota = useEmailQuota();
+    const {quota, remainingToday, remainingQueue, fullyBlocked} = emailQuota;
     const cancelRef = useRef(false);
     const [cancelling, setCancelling] = useState(false);
 
-    const loadQuota = useCallback(async () => {
-        try {
-            const res = await callGetTicketEmailQuota();
-            setQuota(res.data);
-            setQuotaError(false);
-        } catch (err) {
-            console.error('[SendSection] quota load', err);
-            setQuotaError(true);
-        }
-    }, []);
-
-    useEffect(() => {
-        void loadQuota();
-    }, [loadQuota]);
-
-    const remainingToday = quota
-        ? Math.max(0, quota.dailyCap - quota.sentToday)
-        : null;
-    const remainingQueue = quota
-        ? Math.max(0, quota.queueCap - quota.queuedCount)
-        : null;
-    const quotaNearCap = remainingToday !== null && remainingToday <= 10;
-    const quotaAtCap = remainingToday === 0;
-    // Blocked only when both the cap and the queue are full; otherwise overflow
-    // queues in /scheduledMail and drains as the window reopens.
-    const fullyBlocked = quotaAtCap && remainingQueue === 0;
     const chunkSize = quota?.chunkSize ?? FALLBACK_CHUNK_SIZE;
 
     const send = async (mode: 'unsent' | 'all') => {
@@ -165,7 +138,7 @@ export function SendSection({
             setProgress(null);
             cancelRef.current = false;
             setCancelling(false);
-            void loadQuota();
+            void emailQuota.load();
         }
     };
 
@@ -183,42 +156,11 @@ export function SendSection({
                     : '通过 Resend 发送门票二维码。每封邮件为对应参加者的每张门票包含一个二维码。'}
             </p>
 
-            {templateUnsaved && (
-                <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
-                    <strong>
-                        {isEnglish ? 'Email template not saved.' : '邮件模板尚未保存。'}
-                    </strong>
-                    <p>
-                        {isEnglish
-                            ? 'Save the template below before sending. Emails go out with the saved version.'
-                            : '发送前请先保存下方的模板。邮件将按已保存的版本发送。'}
-                    </p>
-                </div>
-            )}
+            {templateUnsaved && <TemplateUnsavedBanner/>}
 
-            <div className={`admin-tickets-send-banner ${
-                quotaError ? 'admin-tickets-send-banner-warning'
-                    : fullyBlocked ? 'admin-tickets-send-banner-error'
-                        : (quotaAtCap || quotaNearCap) ? 'admin-tickets-send-banner-warning'
-                            : 'admin-tickets-send-banner-info'}`}>
-                {quotaError ? (
-                    <span>
-                        {isEnglish
-                            ? 'Could not load Resend quota. Sending still works.'
-                            : '无法加载 Resend 额度。发送功能仍可使用。'}
-                    </span>
-                ) : quota ? (
-                    <span>
-                        {isEnglish
-                            ? `Resend free tier: ${quota.sentToday} / ${quota.dailyCap} emails used in the last 24h (${remainingToday} remaining). Overflow queue: ${quota.queuedCount} / ${quota.queueCap} waiting to send. Capacity returns gradually as older sends age out of the rolling 24-hour window. Part of the daily limit is kept back for sign-up and password emails, and isn't counted here.`
-                            : `Resend 免费额度：过去 24 小时已使用 ${quota.sentToday} / ${quota.dailyCap} 封（剩余 ${remainingToday} 封）。待发队列：${quota.queuedCount} / ${quota.queueCap} 封。额度随早前邮件超出 24 小时滚动窗口而逐步恢复。每日限额中有一部分预留给注册和密码邮件，未计入此处。`}
-                    </span>
-                ) : (
-                    <span>
-                        {isEnglish ? 'Loading quota...' : '加载额度中...'}
-                    </span>
-                )}
-            </div>
+            <EmailQuotaBanner state={emailQuota} describe={(quota, remaining) => isEnglish
+                ? `Resend free tier: ${quota.sentToday} / ${quota.dailyCap} emails used in the last 24h (${remaining} remaining). Overflow queue: ${quota.queuedCount} / ${quota.queueCap} waiting to send. Capacity returns gradually as older sends age out of the rolling 24-hour window. Part of the daily limit is kept back for sign-up and password emails, and isn't counted here.`
+                : `Resend 免费额度：过去 24 小时已使用 ${quota.sentToday} / ${quota.dailyCap} 封（剩余 ${remaining} 封）。待发队列：${quota.queuedCount} / ${quota.queueCap} 封。额度随早前邮件超出 24 小时滚动窗口而逐步恢复。每日限额中有一部分预留给注册和密码邮件，未计入此处。`}/>
 
             <div className="admin-tickets-send-stats">
                 <p>

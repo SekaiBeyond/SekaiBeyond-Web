@@ -1,19 +1,5 @@
 import type { CSSProperties } from 'react';
 
-/**
- * The main hall floor plan for Artist Alley: the HUB Ballroom as laid out for the con,
- * from HUB's reservation diagram. Fixed to HUB like the hero's VENUE_MAP_URL; if the
- * hall or its tables change, this file does. Which vendor sits where is admin data.
- *
- * Only what a visitor walks past is drawn: stage, cheering space, photo booth, tables
- * and doors.
- *
- * One CSS grid, oriented like the diagram: west wall at the top, stage on the left,
- * north on the right. On narrow screens the stylesheet turns it a quarter turn
- * anticlockwise (north up) instead of squeezing it; a rotation, not a transpose, so
- * row A stays on the right hand for someone standing in the hall.
- */
-
 export const HALL_ROWS = [
     {letter: 'A', tables: 14},
     {letter: 'B', tables: 14},
@@ -24,11 +10,6 @@ export const HALL_ROWS = [
 
 export type HallRow = typeof HALL_ROWS[number]['letter']
 
-/**
- * Every table, A1 to E3, in the order the page and the stored list keep.
- * Mirrored by CON_HALL_TABLES in functions/src/functions/admin.ts, which
- * refuses any other.
- */
 export const HALL_TABLES: string[] = HALL_ROWS.flatMap(({letter, tables}) =>
     Array.from({length: tables}, (_, i) => `${letter}${i + 1}`));
 
@@ -36,60 +17,48 @@ const TABLE_ORDER = new Map(HALL_TABLES.map((table, i) => [table, i]));
 
 export const isHallTable = (table: string) => TABLE_ORDER.has(table);
 
-/** Plan order, so A2 sorts before A10. */
 export const byHallOrder = (a: string, b: string) =>
     (TABLE_ORDER.get(a) ?? Infinity) - (TABLE_ORDER.get(b) ?? Infinity);
 
 export const rowOf = (table: string) => table.charAt(0) as HallRow;
 
-/** A track's size as a landscape column or row, then as the portrait row or column it turns into. */
 type Track = readonly [landscape: string, portrait: string]
 
 const WALL: Track = ['4px', '4px'];
 
-/**
- * South wall to north wall. Each table is two half-table tracks wide, so the E
- * tables, set between the tables above them, still land on a grid line.
- */
 const COLUMNS: Track[] = [
     WALL,
-    ['minmax(52px, 3fr)', '60px'], // 1: stage
+    ['minmax(52px, 3fr)', '60px'],
     ['10px', '8px'],
-    ['minmax(84px, 6fr)', '84px'], // 3: free cheering space
+    ['minmax(84px, 6fr)', '84px'],
     ['18px', '14px'],
-    ...Array.from({length: 28}, (): Track => ['minmax(0, 1fr)', '15px']), // 5–32: tables 1–14
+    ...Array.from({length: 28}, (): Track => ['minmax(0, 1fr)', '15px']),
     ['18px', '14px'],
-    ['minmax(72px, 4.5fr)', '58px'], // 34: photo booth
+    ['minmax(72px, 4.5fr)', '58px'],
     ['12px', '10px'],
     WALL,
 ];
 
-/**
- * West wall to east wall. Vendors sit back to back between A and B and between
- * C and D; the wide tracks are the aisles.
- */
 const ROWS: Track[] = [
     WALL,
     ['28px', '10px'],
-    ['36px', 'minmax(0, 1fr)'], // 2: A
+    ['36px', 'minmax(0, 1fr)'],
     ['6px', '4px'],
-    ['36px', 'minmax(0, 1fr)'], // 4: B
+    ['36px', 'minmax(0, 1fr)'],
     ['44px', '14px'],
-    ['36px', 'minmax(0, 1fr)'], // 6: C
+    ['36px', 'minmax(0, 1fr)'],
     ['6px', '4px'],
-    ['36px', 'minmax(0, 1fr)'], // 8: D
+    ['36px', 'minmax(0, 1fr)'],
     ['36px', '12px'],
-    ['36px', 'minmax(0, 1fr)'], // 10: E
+    ['36px', 'minmax(0, 1fr)'],
     ['8px', '4px'],
     WALL,
 ];
 
 const ROW_TRACK: Record<HallRow, number> = {A: 2, B: 4, C: 6, D: 8, E: 10};
 
-/** The diagram puts E1–E3 against the east wall, each centred between two tables above. */
 const E_HALF_COLUMNS = [15, 19, 23];
 
-/** Zero-based track indices into COLUMNS and ROWS. */
 interface Area {
     col: number
     colSpan: number
@@ -97,11 +66,6 @@ interface Area {
     rowSpan: number
 }
 
-/**
- * Grid lines for both orientations, as custom properties the stylesheet's
- * container query picks between. Turned anticlockwise, landscape row r becomes
- * portrait column r, and landscape column c becomes portrait row `n − c`.
- */
 const place = ({col, colSpan, row, rowSpan}: Area): CSSProperties => ({
     '--l-col': `${col + 1} / span ${colSpan}`,
     '--l-row': `${row + 1} / span ${rowSpan}`,
@@ -109,7 +73,6 @@ const place = ({col, colSpan, row, rowSpan}: Area): CSSProperties => ({
     '--p-row': `${COLUMNS.length - col - colSpan + 1} / span ${colSpan}`,
 } as CSSProperties);
 
-/** The track lists for the grid container, landscape and portrait. */
 export const HALL_GRID_STYLE = {
     '--l-cols': COLUMNS.map(([l]) => l).join(' '),
     '--l-rows': ROWS.map(([l]) => l).join(' '),
@@ -117,7 +80,6 @@ export const HALL_GRID_STYLE = {
     '--p-rows': [...COLUMNS].reverse().map(([, p]) => p).join(' '),
 } as CSSProperties;
 
-/** The room itself, walls included — the border is drawn in the wall tracks. */
 export const HALL_FLOOR = place({col: 0, colSpan: COLUMNS.length, row: 0, rowSpan: ROWS.length});
 
 const tableArea = (table: string): Area => {
@@ -138,11 +100,6 @@ export const HALL_LANDMARKS: {kind: LandmarkKind; style: CSSProperties}[] = [
     {kind: 'booth', style: place({col: 34, colSpan: 1, row: 5, rowSpan: 5})},
 ];
 
-/**
- * The doors the diagram marks as exits, each in a wall track. `end` is the stage
- * or north wall, `side` the long west or east wall, which tells the stylesheet
- * how to inset it from the corners.
- */
 export const HALL_DOORS: {wall: 'end' | 'side'; style: CSSProperties}[] = [
     {wall: 'end', style: place({col: 0, colSpan: 1, row: 1, rowSpan: 2})},
     {wall: 'end', style: place({col: 0, colSpan: 1, row: 9, rowSpan: 2})},
@@ -152,5 +109,4 @@ export const HALL_DOORS: {wall: 'end' | 'side'; style: CSSProperties}[] = [
     {wall: 'end', style: place({col: COLUMNS.length - 1, colSpan: 1, row: 2, rowSpan: 3})},
 ];
 
-/** In the free corner beside the north doors, where it reads in either orientation. */
 export const HALL_COMPASS = place({col: 34, colSpan: 1, row: 2, rowSpan: 3});

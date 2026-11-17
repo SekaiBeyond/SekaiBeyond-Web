@@ -1,26 +1,16 @@
 import type { ReactNode } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 
-/**
- * Shared chrome for the admin card-list tabs (tags, venues, events, badges): the
- * "+ New X" button that opens a create form, the cards, and the per-card
- * actions. Each tab keeps its own state and fields.
- */
-
 interface CreateSectionProps {
     show: boolean;
     setShow: (show: boolean) => void;
-    /** "+ New X" dashed-button label. */
     newLabel: string;
-    /** Create-form heading, e.g. "Create New Tag". */
     title: string;
     ctaLabel: string;
     ctaBusyLabel: string;
     busy: boolean;
-    /** Disables the submit button beyond `busy` (e.g. a required field is empty). */
     ctaDisabled?: boolean;
     onCreate: () => void;
-    /** Runs when Cancel hides the form (e.g. to reset the draft). */
     onCancel?: () => void;
     children: ReactNode;
 }
@@ -74,19 +64,16 @@ export function CreateSection({
     );
 }
 
-/** A card in an event or badge grid, opening its item: image, title, a line under it, and tags. */
 export function ListCard({image, title, subtitle, tags = [], onClick}: {
     image: string;
     title: string;
     subtitle: string;
-    /** Shown in turn; a false one is left out. */
     tags?: (string | false)[];
     onClick: () => void;
 }) {
     const {isEnglish} = useLanguage();
     return (
         <button className="admin-event-card" onClick={onClick}>
-            {/* An event archived without a poster has no image. */}
             {image ? (
                 <img src={image} alt="" className="admin-event-card-img"/>
             ) : (
@@ -103,7 +90,6 @@ export function ListCard({image, title, subtitle, tags = [], onClick}: {
     );
 }
 
-/** Save/Cancel pair for a card's inline edit form. */
 export function CardSaveCancel({saving, saveDisabled = false, onSave, onCancel, topMargin = false}: {
     saving: boolean;
     saveDisabled?: boolean;
@@ -130,7 +116,6 @@ export function CardSaveCancel({saving, saveDisabled = false, onSave, onCancel, 
     );
 }
 
-/** Edit/Delete pair for a card in display mode. */
 export function CardEditDeleteActions({onEdit, onDelete, deleting}: {
     onEdit: () => void;
     onDelete: () => void;

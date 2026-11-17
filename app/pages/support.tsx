@@ -12,7 +12,6 @@ type Bilingual = {en: string; zh: string};
 interface Action {
     kind: 'phone' | 'email' | 'link';
     href: string;
-    /** A plain string reads the same in both languages: a number, an address, a name. */
     label: Bilingual | string;
 }
 
@@ -20,7 +19,6 @@ interface Resource {
     id: string;
     name: Bilingual;
     description: Bilingual;
-    /** When and for whom it's available, where that isn't anyone at any time. */
     availability?: Bilingual;
     actions: Action[];
 }
@@ -39,12 +37,6 @@ const MAKE_A_REPORT: Action = {
     label: {en: 'Make a report to UW', zh: '向 UW 提交举报'},
 };
 
-/**
- * UW's own services, which this page sends people to instead of explaining the
- * process itself. Every name, number, address and claim here is taken from the
- * linked UW page, so re-check them there before changing anything, and update
- * `CHECKED` below when you do.
- */
 const UW_RESOURCES: Resource[] = [
     {
         id: 'guide',
@@ -138,10 +130,8 @@ const UW_RESOURCES: Resource[] = [
     },
 ];
 
-/** When the details in `UW_RESOURCES` were last checked against UW's pages. */
 const CHECKED: Bilingual = {en: 'November 2026', zh: '2026 年 11 月'};
 
-/** The club accounts that take direct messages. */
 const CLUB_SOCIALS = [
     {key: 'discord', Icon: SiDiscord},
     {key: 'instagram', Icon: SiInstagram},

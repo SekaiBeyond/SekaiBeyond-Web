@@ -106,11 +106,6 @@ interface ClaimCodeSectionProps {
     eventEndAt?: Date;
 }
 
-/**
- * One event's claim code: load, generate, toggle, and edit its time window.
- * Staff codes also work for past events; check-in codes are upcoming-only. The
- * staff variant is core-staff-only under the rules, so mount it only for them.
- */
 export function ClaimCodeSection({eventId, variant, showToast, readOnly = false, eventEndAt}: ClaimCodeSectionProps) {
     const {isEnglish} = useLanguage();
     const isStaff = variant === 'staff';
@@ -196,7 +191,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         return () => {
             stale = true;
         };
-        // Not keyed on isEnglish: a toggle would reload over an unsaved window.
     }, [eventId, variant, showToast]);
 
     useEffect(() => {
@@ -357,7 +351,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         </div>
     );
 
-    // No Generate after a failed read: it retires existing codes without the regenerate warning.
     if (loadFailed) {
         return (
             <div className="admin-codes-section">

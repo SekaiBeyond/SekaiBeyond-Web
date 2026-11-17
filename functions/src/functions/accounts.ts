@@ -39,7 +39,6 @@ import {
     googleBindingOf,
     googleIndexRef,
     PASSWORD_PEPPER,
-    unlinkFirebaseGoogle,
 } from "../utils/credentials";
 import { requireNotBanned } from "../utils/bans";
 import {
@@ -80,17 +79,6 @@ import { endSessions, sessionIdOf, signInToken } from "../utils/sessions";
 import { isStorageUrl } from "../utils/storage";
 import { sanitizeDisplayText, validateDocId, validateEmail } from "../utils/validation";
 
-/**
- * Our own accounts. Signing in happens here: these check an email and password,
- * or a Google sign-in, against credentials/{uid}, and answer with a Firebase
- * custom token for the client to sign in with. That token is the only part of
- * Firebase Auth still used, since Firestore's rules and every callable read
- * who's asking from it.
- *
- * Anyone can call these signed out, so they're protected by App Check, the
- * limits below and answers that don't say whether an address has an account.
- */
-
 const ACCOUNT_CALL: CallableOptions = {
     maxInstances: 20,
     memory: "512MiB",
@@ -100,35 +88,18 @@ const ACCOUNT_CALL: CallableOptions = {
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 
-// Code emails one network may ask for in an hour: a quarter of what the whole
-// site may send (CODE_MAIL_HOURLY_CAP), so no single client can use up everyone's
-// codes, and with them the day's code mail within hours. A venue's Wi-Fi shares
-// this, but code mail is that scarce whoever asks: a Google sign-up with its
-// Google address needs no code, and raising the site's cap raises this with it.
 const CODES_PER_HOUR_PER_NETWORK = Math.max(1, Math.floor(CODE_MAIL_HOURLY_CAP / 4));
 const SIGN_INS_PER_MINUTE_PER_NETWORK = 60;
 const UNDOS_PER_HOUR_PER_NETWORK = 30;
 
-// Checking codes, per network. Across every address, loose enough for as many as
-// the network may be sent. On any one address's code, fewer than the wrong tries
-// that kill it (CODE_ATTEMPTS), so no single client can use up a code its owner
-// is waiting on, the one way left in for an account locked out by password
-// guessing. Clients on several networks still can.
 const CODE_CHECKS_PER_HOUR_PER_NETWORK = 2 * CODES_PER_HOUR_PER_NETWORK;
 const CODE_CHECKS_PER_CODE_PER_NETWORK = CODE_ATTEMPTS - 1;
 
-// Password tries on one address, by anyone and whether or not it has an account,
-// so being stopped says nothing about it. Enough for someone working out which
-// password they used, and far too few to guess one: the daily ceiling keeps a
-// guesser who waits out each window to a few thousand tries a year. Forgot
-// Password and Google still sign in while either is in force, so nobody can lock
-// a person out by trying their address.
 const SIGN_INS_PER_ADDRESS = 10;
 const SIGN_INS_PER_ADDRESS_WINDOW_MS = 15 * MINUTE_MS;
 const SIGN_INS_PER_ADDRESS_PER_DAY = 30;
 const DAY_MS = 24 * HOUR_MS;
 
-// What a code email takes to send, roughly, for when there's nothing to send.
 const SEND_TIME_MS = 150;
 const SEND_TIME_JITTER_MS = 300;
 
@@ -154,14 +125,12 @@ const emailHeld = () =>
         code: "email-held",
     });
 
-/** Refuses an address whose domain can't receive mail, before a code is spent bouncing off it. */
 async function requireMailDomain(email: string): Promise<void> {
     if (!await domainTakesMail(email)) {
         throw new HttpsError("invalid-argument", "That address can't receive email.", {code: "email-undeliverable"});
     }
 }
 
-/** When the account in `user` may next change its address, or null if it may now. */
 function emailChangeLockedUntil(user: FirebaseFirestore.DocumentData | undefined): Date | null {
     const changedAt: Date | undefined = user?.emailChangedAt?.toDate?.();
     if (!changedAt) return null;
@@ -169,12 +138,6 @@ function emailChangeLockedUntil(user: FirebaseFirestore.DocumentData | undefined
     return next.getTime() > Date.now() ? next : null;
 }
 
-/**
- * Refuses an owner's own email change while it can't be made: within a month of
- * the last, or while the account is due to be deleted. A move after a deletion
- * request would leave the owner, told of the deletion at the old address, unable
- * to sign in and cancel it before it happens.
- */
 function requireEmailChangeAllowed(user: FirebaseFirestore.DocumentData | undefined): void {
     const lockedUntil = emailChangeLockedUntil(user);
     if (lockedUntil) {
@@ -202,11 +165,6 @@ function readDisplayName(value: unknown): string {
     return name;
 }
 
-/**
- * Throws unless `code` is the live one. Goes last in a call, as it uses the code
- * up. Anyone can try a code, and wrong tries kill it, so each try is charged to
- * the caller's network first (CODE_CHECKS_PER_CODE_PER_NETWORK).
- */
 async function requireEmailCode(
     request: CallableRequest,
     purpose: CodePurpose,
@@ -223,7 +181,6 @@ async function requireEmailCode(
     if (!await consumeEmailCode(purpose, email, code)) throw badCode();
 }
 
-/** Emails a code, or `instead` of one, unless `email` has had too many lately, which looks the same to the caller. */
 async function mailCode(
     purpose: CodePurpose,
     email: string,
@@ -241,11 +198,6 @@ async function mailCode(
     }
 }
 
-/**
- * What goes to `email` in place of a code to take it on: a note that it has an
- * account, or that it's held for one that just moved off it (addressHeldForUndo),
- * or undefined when a code can go. `exceptUid`'s own hold doesn't count.
- */
 async function insteadOfCode(
     email: string,
     language: MailLanguage,
@@ -256,11 +208,6 @@ async function insteadOfCode(
     return held ? addressHeldMail(email, held.until.toDate(), language) : undefined;
 }
 
-/**
- * Emails a code proving an address, ahead of the call it's for. The answer is
- * the same whether or not the address has an account: to sign up with one that
- * does, its owner gets told so instead of getting a code.
- */
 export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
     const input = (request.data ?? {}) as {purpose?: unknown; email?: unknown; language?: unknown};
     const language = readMailLanguage(input.language);
@@ -272,14 +219,10 @@ export const sendEmailCode = onCall(ACCOUNT_CALL, async (request) => {
         await mailCode("signup", email, language, await insteadOfCode(email, language));
     } else if (input.purpose === "password") {
         const email = validateEmail(input.email, "email");
-        // Refused alike when no code could go out now, or a full mailbag would
-        // tell an address with an account from one without.
         await requireCodeMailRoom();
         if ((await emailIndexRef(email).get()).exists) {
             await mailCode("password", email, language);
         } else {
-            // An owner locked out of an account just moved off this address is
-            // likeliest to try here, so they're pointed to the link that undoes it.
             const held = await addressHeldForUndo(email);
             if (held) {
                 await mailCode("password", email, language, addressHeldMail(email, held.until.toDate(), language));
@@ -321,11 +264,6 @@ interface NewAccount {
     google: GoogleIdentity | null;
 }
 
-/**
- * Makes an account, whose address has been proven by now. The new doc's ID is
- * its uid. An address another account has moved off comes off that account's
- * former list, so it only ever leads to one account.
- */
 async function createAccount({email, displayName, photoURL, passwordHash, google}: NewAccount): Promise<string> {
     const userRef = db.collection("users").doc();
     const uid = userRef.id;
@@ -361,7 +299,6 @@ async function createAccount({email, displayName, photoURL, passwordHash, google
     try {
         await creditScannedTickets(userRef, email);
     } catch (err) {
-        // The account exists either way; a missed credit must not fail sign-up.
         console.error(`createAccount: ticket credit failed for ${uid}`, err);
     }
     return uid;
@@ -380,13 +317,8 @@ export const signUpWithEmail = onCall(ACCOUNT_CALL, async (request) => {
     return {token: await signInToken(uid)};
 });
 
-/** Names the credentials doc of no account: a uid is a Firestore ID or one of Firebase Auth's, never this. */
 const NO_ACCOUNT = "-";
 
-/**
- * The account `password` opens at `email`, or a refusal that doesn't say which
- * part was wrong. Only the right password learns that the account is banned.
- */
 async function checkPassword(request: CallableRequest, email: string, password: string): Promise<string> {
     await limitNetwork(request, "signin", SIGN_INS_PER_MINUTE_PER_NETWORK, MINUTE_MS);
     const address = emailIndexRef(email).id;
@@ -394,8 +326,6 @@ async function checkPassword(request: CallableRequest, email: string, password: 
     await consumeRateLimit(`signin_day_${address}`, SIGN_INS_PER_ADDRESS_PER_DAY, DAY_MS);
 
     const uid: string | undefined = (await emailIndexRef(email).get()).get("uid");
-    // Read either way, of nobody's when there's no account, so the answer takes
-    // as long whether or not the address has one.
     const stored: string | null | undefined = (await credentialsRef(uid || NO_ACCOUNT).get()).get("passwordHash");
     if (!await verifyPassword(password, stored) || !uid) throw wrongCredentials();
     await requireNotBanned(uid);
@@ -409,11 +339,6 @@ export const signInWithPassword = onCall(ACCOUNT_CALL, async (request) => {
     return {token: await signInToken(uid)};
 });
 
-/**
- * Sets a password, in place of any old one, and signs out the account's other
- * devices, since a changed password is often someone getting a stolen account
- * back. The device asking gets a new sign-in from its caller.
- */
 async function setPassword(
     uid: string,
     email: string,
@@ -435,10 +360,6 @@ async function setPassword(
     await sendNotice(await passwordChangedMail(email, language));
 }
 
-/**
- * Forgot Password, which also gives a password to an account that never had one:
- * every account made through Google before these existed. Signs in with it.
- */
 export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
     const input = (request.data ?? {}) as {email?: unknown; code?: unknown; password?: unknown; language?: unknown};
     const email = validateEmail(input.email, "email");
@@ -448,7 +369,6 @@ export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
     await requireEmailCode(request, "password", email, code);
     const uid: string | undefined = (await emailIndexRef(email).get()).get("uid");
     if (!uid) throw badCode();
-    // Before the password changes, as a banned account couldn't sign in with it.
     await requireNotBanned(uid);
     await limitNoticedChange(uid, "password");
 
@@ -456,7 +376,6 @@ export const resetPassword = onCall(ACCOUNT_CALL, async (request) => {
     return {token: await signInToken(uid)};
 });
 
-/** The account bound to a Google sign-in, if there is one, kept up to date with what Google says now. */
 async function accountForGoogle(google: GoogleIdentity): Promise<string | null> {
     const uid: string | undefined = (await googleIndexRef(google.sub).get()).get("uid");
     if (!uid) return null;
@@ -479,11 +398,6 @@ async function accountForGoogle(google: GoogleIdentity): Promise<string | null> 
     return uid;
 }
 
-/**
- * Signs in with a Google account bound to an account. One that isn't gets its
- * details back instead, for the create-account prompt: no account or login
- * exists until that's finished, so walking away leaves nothing behind.
- */
 export const signInWithGoogle = onCall(ACCOUNT_CALL, async (request) => {
     await limitNetwork(request, "signin", SIGN_INS_PER_MINUTE_PER_NETWORK, MINUTE_MS);
     const google = await verifyGoogleToken((request.data as {idToken?: unknown} | null)?.idToken);
@@ -502,11 +416,6 @@ export const signInWithGoogle = onCall(ACCOUNT_CALL, async (request) => {
     };
 });
 
-/**
- * The create-account prompt. Google has proven its own address, so that needs no
- * code; any other address does, from sendEmailCode. The password is optional, as
- * Google signs them in; Forgot Password gives them one later if they want.
- */
 export const createAccountWithGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const input = (request.data ?? {}) as {
         idToken?: unknown;
@@ -528,11 +437,6 @@ export const createAccountWithGoogle = onCall(ACCOUNT_CALL, async (request) => {
     return {token: await signInToken(uid)};
 });
 
-/**
- * Binds a Google account to `uid`, which may only have the one, and tells the
- * account's address: a binding outlives a password reset, so someone who got
- * into the account briefly could otherwise keep a way back in unnoticed.
- */
 async function bindGoogleTo(uid: string, google: GoogleIdentity, language: MailLanguage): Promise<void> {
     const notifyEmail = await db.runTransaction(async (txn) => {
         const [held, credentials, user] = await Promise.all([
@@ -565,7 +469,6 @@ async function bindGoogleTo(uid: string, google: GoogleIdentity, language: MailL
     if (notifyEmail) await sendNotice(await googleChangedMail(notifyEmail, google.email, true, language));
 }
 
-/** The prompt's "I already have an account": signs in with a password and binds the Google account to it. */
 export const bindGoogleWithPassword = onCall(ACCOUNT_CALL, async (request) => {
     const input = (request.data ?? {}) as {
         idToken?: unknown;
@@ -582,7 +485,6 @@ export const bindGoogleWithPassword = onCall(ACCOUNT_CALL, async (request) => {
     return {token: await signInToken(uid)};
 });
 
-/** For a signed-in account, from Settings. */
 export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {idToken?: unknown; language?: unknown};
@@ -592,10 +494,6 @@ export const bindGoogle = onCall(ACCOUNT_CALL, async (request) => {
     return {bound: true};
 });
 
-/**
- * Takes the Google account off the caller's account, which needs a password to
- * still be signed in to.
- */
 export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const language = readMailLanguage((request.data as {language?: unknown} | null)?.language);
@@ -629,17 +527,12 @@ export const unbindGoogle = onCall(ACCOUNT_CALL, async (request) => {
         return {email: (user.get("email") as string | undefined) ?? "", googleEmail: google.email};
     });
 
-    await unlinkFirebaseGoogle(uid);
     if (unbound?.email) {
         await sendNotice(await googleChangedMail(unbound.email, unbound.googleEmail, false, language));
     }
     return {unbound: true};
 });
 
-/**
- * How an account signs in, without anything that signs it in: for its owner's
- * Settings tab, and for staff on the admin user page.
- */
 export const getSignInMethods = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request, "account");
     const raw = (request.data as {uid?: unknown} | null)?.uid;
@@ -658,7 +551,6 @@ export const getSignInMethods = onCall({maxInstances: 20}, async (request) => {
     };
 });
 
-/** Changes a password from Settings. The code stands in for the old password, which an account may not have. */
 export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {code?: unknown; password?: unknown; language?: unknown};
@@ -669,27 +561,14 @@ export const changePassword = onCall(ACCOUNT_CALL, async (request) => {
     await requireEmailCode(request, "password", email, code);
     await limitNoticedChange(uid, "password");
     await setPassword(uid, email, password, sessionIdOf(request.auth!.token), readMailLanguage(input.language));
-    // This device's sign-in was revoked with the rest, so it gets a new one.
     return {token: await signInToken(uid)};
 });
 
-/**
- * An owner's own move off `oldEmail`, which the old address has been told of
- * already, with the link that undoes it when there's an `undoToken`.
- */
 interface OwnMove {
     oldEmail: string;
     undoToken: string | null;
 }
 
-/**
- * Moves an account to `email`, whose owner has been proven or vouched for by now.
- * The old address joins the account's former list, dated, so tickets bought
- * under it from now on aren't the account's (formerEmailsAfter), and leaves the
- * index for anyone else to take. `by` is who's acting. An `own` move is held to
- * the month between changes, starts the next one, and can be undone from the
- * old address (undoEmailChange); staff stepping in does none of that.
- */
 async function moveEmail(
     uid: string,
     email: string,
@@ -707,12 +586,9 @@ async function moveEmail(
         if (!user.exists) throw new HttpsError("not-found", "User not found.");
         if (held.exists) throw emailTaken();
         if (own) requireEmailChangeAllowed(user.data());
-        // Staff too: an account moved back onto the address it's held for is the
-        // only one that may have it.
         if (await addressHeldForUndo(email, txn, uid)) throw emailHeld();
 
         const oldEmail: string = user.get("email") ?? "";
-        // The notice went to the address read before this; it's the wrong one now.
         if (own && oldEmail !== own.oldEmail) {
             throw new HttpsError("aborted", "The account changed meanwhile. Please try again.");
         }
@@ -744,7 +620,6 @@ async function moveEmail(
                 uid,
                 oldEmail,
                 newEmail: email,
-                // Which of the account's app links undoing it removes (undoEmailChange).
                 changedAt: Timestamp.fromMillis(now),
                 expiresAt: Timestamp.fromMillis(now + EMAIL_UNDO_DAYS * 24 * HOUR_MS),
             });
@@ -753,25 +628,14 @@ async function moveEmail(
     });
 }
 
-/** The attendance an account's new address was scanned into. */
 async function creditMovedEmail(uid: string, email: string): Promise<void> {
     try {
         await creditScannedTickets(db.collection("users").doc(uid), email);
     } catch (err) {
-        // The address has moved either way; getMyTickets backfills while the event runs.
         console.error(`creditMovedEmail: ticket credit failed for ${uid}`, err);
     }
 }
 
-/**
- * An owner moving their account to a new address. The old address has to hear
- * of it, with the link that undoes it, as that's how an owner whose sign-in was
- * stolen gets the account back. So the notice goes first, and a notice that
- * can't go stops the move: refused when no notice could go today, before the
- * code is used up, and when sending it fails. Should the move then fail, which
- * takes another change to the account in the moment between, the old address has
- * a notice for a change that didn't happen, whose link says it doesn't work.
- */
 export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {email?: unknown; code?: unknown; language?: unknown};
@@ -784,8 +648,6 @@ export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
     const oldEmail: string = user.get("email") ?? "";
     if (oldEmail) await requireNoticeMailRoom();
     await requireEmailCode(request, "email-change", email, code);
-    // After the code, or this would say to anyone signed in whether an address
-    // has an account; before the notice, so taken since isn't announced as done.
     if ((await emailIndexRef(email).get()).exists) throw emailTaken();
     if (await addressHeldForUndo(email, undefined, uid)) throw emailHeld();
 
@@ -799,30 +661,6 @@ export const changeEmail = onCall(ACCOUNT_CALL, async (request) => {
     return {email};
 });
 
-/**
- * The "This wasn't me" link: puts an account back on the address it moved off,
- * and shuts every way in that the change could have opened. Someone who got in
- * could have set a password on their own address, bound their own Google account,
- * asked for the account to be deleted, or linked their own account in an app
- * since, so all of that goes, and the new
- * password set here is the only way in left. The address it moved to comes off
- * the former list too, or tickets bought under it would stay on the account.
- *
- * The address must still be the one the link moved it to: once staff have stepped
- * in, or the owner has moved on, this link is out of date. Nothing signs in here:
- * every device is being signed out, and the one asking signs in fresh with the
- * new password. The address it moved to is told, in case this link was the wrong
- * person's: the old mailbox may be why the owner moved.
- *
- * A deletion is cancelled only when the account asked for it, as anyone signed
- * in to it could have. One staff asked for stays theirs (cancelAccountDeletion).
- *
- * The link is used up only once every device is signed out. Until then whoever
- * moved the account is still in, so a restore whose signing out fails marks the
- * link `restoredAt` rather than spending it: following it again puts the way in
- * back to just the new password and finishes. The month's lock on email changes
- * their move started stays until then too, so they can't move it again meanwhile.
- */
 export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
     const input = (request.data ?? {}) as {token?: unknown; password?: unknown; language?: unknown};
     await limitNetwork(request, "undo", UNDOS_PER_HOUR_PER_NETWORK, HOUR_MS);
@@ -837,7 +675,6 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         if (typeof uid !== "string") throw badUndoLink();
         const oldEmail: string = undo.get("oldEmail");
         const newEmail: string = undo.get("newEmail");
-        // Followed before, and the address put back, but not everything after.
         const finishing = !!undo.get("restoredAt");
 
         const [user, credentials, oldHeld, newHeld, formerHolders, appLinks] = await Promise.all([
@@ -850,18 +687,6 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
         ]);
         if (!emailUndoLive(undo, user.data())) throw badUndoLink();
 
-        // Whoever moved it may have linked their own account in an app after,
-        // which would go on reading this one, and whose notice went to their
-        // own address: those go below, as links the account never made
-        // (disownLinkInTxn), which holds each app's account and leaves this
-        // one free to link its owner's at once, once in LINK_HOLD_DAYS per
-        // app. Without that limit, moving to a second address, linking and
-        // undoing the move would skip a link's hold every time, as undoing
-        // also lifts the month between email changes. Not the links from
-        // before: the owner's address was told of those, with a way to undo
-        // one it didn't make (undoAppLink). Undo links from before changedAt
-        // was kept say when by when they run out. Their apps' names, and what
-        // disowning each takes, are read now, before anything is written.
         const changedAt = (undo.get("changedAt") as Timestamp | undefined)?.toMillis()
             ?? (undo.get("expiresAt") as Timestamp).toMillis() - EMAIL_UNDO_DAYS * 24 * HOUR_MS;
         const linksSince = appLinks.docs
@@ -932,7 +757,6 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
     });
 
     await endSessions(uid, null);
-    await unlinkFirebaseGoogle(uid);
 
     const userRef = db.collection("users").doc(uid);
     await db.runTransaction(async (txn) => {
@@ -944,11 +768,6 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
     return {email: oldEmail};
 });
 
-/**
- * Staff moving an account to a new address, for someone who has lost their
- * mailbox and so can't get a code. Core staff can do this to anyone they can
- * manage, so it's on the Records tab and both addresses are told.
- */
 export const adminChangeEmail = onCall(ACCOUNT_CALL, async (request) => {
     const uid = await requireAuth(request, "staff");
     const input = (request.data ?? {}) as {targetUid?: unknown; email?: unknown; language?: unknown};

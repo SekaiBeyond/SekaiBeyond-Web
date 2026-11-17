@@ -11,6 +11,7 @@ import { QuickQrGenerator } from './qr/QuickQrGenerator';
 import { SocialPlatformsManager } from './qr/SocialPlatformsManager';
 import { buildQrPayload, emptyDraft, QrCodeForm, type QrDraft, } from './qr/QrCodeForm';
 import { refreshAfterSave, type ShowToast } from '../utils';
+import { ToolHeader } from '../ToolHeader';
 
 interface QrCodesToolProps {
     onBack: () => void;
@@ -30,7 +31,6 @@ export const QrCodesTool = ({onBack, showToast, readOnly = false}: QrCodesToolPr
     const [tracked, setTracked] = useState(false);
     const [draft, setDraft] = useState<QrDraft>(emptyDraft());
     const [saving, setSaving] = useState(false);
-    // Where to return after the platforms manager, so a create draft isn't lost.
     const [platformsReturn, setPlatformsReturn] = useState<View>('dashboard');
 
     const selected = qrCodes.find(c => c.id === selectedId) ?? null;
@@ -108,12 +108,9 @@ export const QrCodesTool = ({onBack, showToast, readOnly = false}: QrCodesToolPr
     if (view === 'create') {
         return (
             <div className="admin-section">
-                <div className="admin-tools-header">
-                    <button className="admin-btn admin-btn--link" onClick={() => setView('dashboard')} type="button">
-                        {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
-                    </button>
-                    <h3 className="admin-tools-title">{isEnglish ? 'New QR Code' : '新建二维码'}</h3>
-                </div>
+                <ToolHeader title={isEnglish ? 'New QR Code' : '新建二维码'}
+                            back={isEnglish ? 'Back to QR Codes' : '返回二维码列表'}
+                            onBack={() => setView('dashboard')}/>
 
                 <div className="admin-qr-mode-toggle">
                     <button

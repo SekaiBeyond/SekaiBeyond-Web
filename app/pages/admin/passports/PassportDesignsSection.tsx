@@ -11,16 +11,13 @@ import { BilingualFormField } from '../BilingualFormField';
 import { CardEditDeleteActions } from '../CrudShell';
 import { ImageUploadField } from '../ImageUploadField';
 import { refreshAfterSave, type ShowToast } from '../utils';
+import { ToolHeader } from '../ToolHeader';
 
 const TERM_PRESETS = [30, 90, 180, 365, 730];
 
-/* The one shape a cover is drawn at, everywhere; the phone lays the art on its
-   side rather than using a second shape. */
 const COVER_ASPECT = 3 / 4;
-/* Twice the widest it's ever painted (840px), for 2x displays. */
 const COVER_WIDTH = 1680;
 
-/** Mirrors shownNames in functions/src/functions/passports.ts, which enforces it. */
 const shownNames = (design: {name: string; nameCn: string}): string[] => {
     const name = design.name.trim();
     return [name.toLowerCase(), (design.nameCn.trim() || name).toLowerCase()];
@@ -35,11 +32,6 @@ interface PassportDesignsSectionProps {
     readOnly: boolean;
 }
 
-/**
- * The designs passports are generated from: name, year, cover art and
- * membership term. Listed by year, with names unique within one. The year is
- * fixed once created, and a design can't be deleted once it has passports.
- */
 export const PassportDesignsSection = ({
                                            designs,
                                            loading,
@@ -49,7 +41,6 @@ export const PassportDesignsSection = ({
                                            readOnly,
                                        }: PassportDesignsSectionProps) => {
     const {isEnglish} = useLanguage();
-    // One editor at a time: 'new', or the id of the design being edited.
     const [editing, setEditing] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -81,7 +72,6 @@ export const PassportDesignsSection = ({
         }
     };
 
-    // Already newest year first, so each year's designs are one contiguous run.
     const years: {year: number; list: PassportDesign[]}[] = [];
     for (const design of designs) {
         const last = years[years.length - 1];
@@ -91,12 +81,8 @@ export const PassportDesignsSection = ({
 
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
-                    {isEnglish ? '← Back to Passports' : '← 返回通行证'}
-                </button>
-                <h3 className="admin-tools-title">{isEnglish ? 'Passport Designs' : '通行证设计'}</h3>
-            </div>
+            <ToolHeader title={isEnglish ? 'Passport Designs' : '通行证设计'}
+                        back={isEnglish ? 'Back to Passports' : '返回通行证'} onBack={onBack}/>
 
             {!readOnly && (editing === 'new' ? (
                 <DesignEditor
@@ -190,37 +176,27 @@ const DesignCard = ({design, readOnly, deleting, onEdit, onDelete}: {
 };
 
 interface DesignEditorProps {
-    /** The design being edited, or null to create one. */
     initial: PassportDesign | null;
-    /** Every design, for the per-year name check. */
     designs: PassportDesign[];
-    /** Called once the save has landed; the parent refreshes and closes the editor. */
     onSaved: () => Promise<void>;
     onCancel: () => void;
     showToast: ShowToast;
 }
 
-/**
- * Create or edit one design, with the cover beside the fields at its real 3:4.
- */
 const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEditorProps) => {
     const {isEnglish} = useLanguage();
     const isNew = !initial;
     const [year, setYear] = useState(initial?.year ?? new Date().getFullYear());
     const [name, setName] = useState(initial?.name ?? '');
     const [nameCn, setNameCn] = useState(initial?.nameCn ?? '');
-    // Kept as typed, so the field can be cleared and retyped without snapping back.
     const [termInput, setTermInput] = useState(String(initial?.termDays ?? DEFAULT_PASSPORT_TERM_DAYS));
     const [coverFile, setCoverFile] = useState<File | null>(null);
     const [coverPreview, setCoverPreview] = useState<string | null>(null);
     const [outerFile, setOuterFile] = useState<File | null>(null);
     const [outerPreview, setOuterPreview] = useState<string | null>(null);
-    // Blanked when removed, so the save clears it.
     const [outerUrl, setOuterUrl] = useState(initial?.outerCoverImageUrl ?? '');
     const [saving, setSaving] = useState(false);
 
-    // Previews picked here are this editor's to revoke on close; revoking one
-    // ImageUploadField already let go of is harmless.
     const previewUrls = useRef<string[]>([]);
     useEffect(() => () => {
         for (const url of previewUrls.current) URL.revokeObjectURL(url);
@@ -229,8 +205,6 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
     const termDays = Number(termInput);
     const termValid = Number.isInteger(termDays) && termDays >= 1 && termDays <= MAX_PASSPORT_TERM_DAYS;
     const hasCover = !!coverFile || !!initial?.coverImageUrl;
-    // Checked here so the form can say why Save is off; the server refuses it
-    // too.
     const draftNames = shownNames({name, nameCn});
     const nameTaken = !!name.trim() && designs.some(d =>
         d.id !== initial?.id && d.year === year && shownNames(d).some(n => draftNames.includes(n)));
@@ -381,7 +355,6 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
                         </small>
                     </label>
 
-                    {/* A div, not the label: the preset chips are buttons of their own. */}
                     <div className="admin-passport-term-field">
                         <label>
                             <span>{isEnglish ? 'Membership term' : '会员期限'}</span>

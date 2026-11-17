@@ -9,14 +9,6 @@ import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import { localized } from '~/lib/localized';
 import { ticketTypeLabel } from '~/pages/admin/tickets/types';
 
-/**
- * The signed-in holder's tickets for events not yet over: null in flight,
- * `failed` on error, empty once every event has ended. Pass null to skip: nobody
- * else's profile has tickets.
- *
- * Matched by email on the server, not uid: tickets are sold to an address, often
- * before there's an account.
- */
 export function useHeldTickets(uid: string | null): {ticketEvents: HeldTicketEvent[] | null; failed: boolean} {
     const [ticketEvents, setTicketEvents] = useState<HeldTicketEvent[] | null>(null);
     const [failed, setFailed] = useState(false);
@@ -41,12 +33,6 @@ export function useHeldTickets(uid: string | null): {ticketEvents: HeldTicketEve
     return {ticketEvents, failed};
 }
 
-/**
- * Keep the screen lit while a code is held up to a scanner; dimming midway is
- * the commonest reason to present a ticket twice. Released when the modal
- * closes, and taken again on returning to the tab, since backgrounding drops it.
- * Unsupported or refused is fine.
- */
 function useScreenAwake() {
     useEffect(() => {
         const wakeLock = (navigator as {
@@ -61,7 +47,6 @@ function useScreenAwake() {
             if (done || sentinel || document.visibilityState !== 'visible') return;
             wakeLock.request('screen')
                 .then(lock => {
-                    // Closed while the request was in flight: let it go again.
                     if (done) {
                         void lock.release().catch(() => {
                         });
@@ -74,7 +59,6 @@ function useScreenAwake() {
         };
 
         const reacquire = () => {
-            // Backgrounding already released it.
             if (document.visibilityState !== 'visible') sentinel = null;
             else acquire();
         };
@@ -91,7 +75,6 @@ function useScreenAwake() {
     }, []);
 }
 
-/** What a ticket's state is called. */
 const ticketStatusLabel = (ticket: HeldTicket, isEnglish: boolean): string => {
     if (ticket.voided) return isEnglish ? 'Void — please contact us' : '已作废 — 请联系我们';
     if (!ticket.redeemed) return isEnglish ? 'Ready to scan' : '等待扫描';
@@ -103,20 +86,9 @@ const ticketStatusLabel = (ticket: HeldTicket, isEnglish: boolean): string => {
     return isEnglish ? `Checked in${at ? ` · ${at}` : ''}` : `已入场${at ? ` · ${at}` : ''}`;
 };
 
-/**
- * Void wins over scanned, as the status line reads: the voiding is what the
- * holder needs to act on.
- */
 const ticketStateClass = (ticket: HeldTicket): string =>
     ticket.voided ? ' profile-ticket--void' : ticket.redeemed ? ' profile-ticket--used' : '';
 
-/**
- * A ticket blown up to be scanned: the code as large as the screen allows, on
- * white. Rows draw no code because a small one is hard to read at a door.
- *
- * Only unscanned tickets open. A voided one opens stamped, so its holder can see
- * it and staff can read out the id.
- */
 const TicketQrModal = ({ticket, eventTitle, claimUrl, onClose}: {
     ticket: HeldTicket;
     eventTitle: string;
@@ -152,8 +124,6 @@ const TicketQrModal = ({ticket, eventTitle, claimUrl, onClose}: {
                 <span className="profile-ticket-type">{type}</span>
 
                 <div className="profile-ticket-modal-qr">
-                    {/* The spec's 4-module quiet zone, drawn into the SVG rather
-                        than promised by CSS padding. */}
                     <QRCodeSVG value={claimUrl} size={512} level="M" marginSize={4}/>
                     {ticket.voided && (
                         <span className="profile-ticket-stamp" aria-hidden="true"><FiX/></span>
@@ -167,11 +137,6 @@ const TicketQrModal = ({ticket, eventTitle, claimUrl, onClose}: {
     );
 };
 
-/**
- * One ticket: what it admits, where it stands, and while still usable, the way
- * to its code. The whole row is the button, for a phone. A scanned ticket's code
- * is spent, so it ends in a mark instead.
- */
 const TicketStub = ({ticket, onOpen}: {ticket: HeldTicket; onOpen: () => void}) => {
     const {isEnglish} = useLanguage();
     const type = ticketTypeLabel(ticket.type, isEnglish);
@@ -207,19 +172,12 @@ const TicketStub = ({ticket, onOpen}: {ticket: HeldTicket; onOpen: () => void}) 
     );
 };
 
-/** Which ticket's code is on screen, and what the modal needs to title it. */
 interface OpenTicket {
     ticket: HeldTicket;
     eventId: string;
     eventTitle: string;
 }
 
-/**
- * The holder's tickets on /profile, grouped by event, spent and voided ones
- * included so they can see which is which. No code is drawn until asked for: a
- * wall of QRs is unreadable at card size and shows every code at once in a room
- * full of phones.
- */
 export const ProfileTickets = ({ticketEvents}: {ticketEvents: HeldTicketEvent[]}) => {
     const {isEnglish} = useLanguage();
     const {venues} = useVenues();

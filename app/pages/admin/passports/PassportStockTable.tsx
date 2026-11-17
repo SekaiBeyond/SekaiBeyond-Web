@@ -9,7 +9,6 @@ export type SortDir = 'asc' | 'desc';
 export interface Column {
     key: SortKey;
     label: {en: string; cn: string};
-    /** Which way the first click sorts: text A–Z, dates newest first. */
     first: SortDir;
 }
 
@@ -22,7 +21,6 @@ const COLUMNS: Column[] = [
     {key: 'generated', label: {en: 'Generated', cn: '生成时间'}, first: 'desc'},
 ];
 
-/** Date without the time, which only the tooltip and the detail page need. */
 const shortDate = (date: Date | null, isEnglish: boolean): string =>
     date
         ? date.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
@@ -30,10 +28,6 @@ const shortDate = (date: Date | null, isEnglish: boolean): string =>
         })
         : '—';
 
-/**
- * The Holder cell. A holder whose account was deleted says so, since a blank
- * would read as "nobody"; when holders couldn't be read at all, it stays blank.
- */
 const Holder = ({
                     passport,
                     owners,
@@ -69,7 +63,6 @@ const Holder = ({
                     referrerPolicy="no-referrer"
                 />
             ) : (
-                // No photo: a blank face rather than a broken image.
                 <span className="admin-passport-holder-face admin-passport-holder-face--blank">
                     {Array.from(owner.displayName.trim())[0]?.toUpperCase() ?? '?'}
                 </span>
@@ -82,16 +75,11 @@ const Holder = ({
     );
 };
 
-/**
- * Sent to and Note, which only some designs use, shown only when a passport of
- * the design has one, so printed stock keeps its four columns.
- */
 export interface OptionalColumns {
     sentTo: boolean;
     note: boolean;
 }
 
-/** The cell's name on the stacked phone layout, where there are no headers. */
 const StackLabel = ({children}: {children: string}) => (
     <span className="admin-passport-cell-label">{children}</span>
 );
@@ -169,8 +157,6 @@ export const PassportStockTable = ({
                             role="button"
                             onClick={() => onOpen(passport.id)}
                             onKeyDown={e => {
-                                // Only the row's own keys; space on the tick box
-                                // ticks it.
                                 if (e.target !== e.currentTarget) return;
                                 if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
@@ -180,16 +166,12 @@ export const PassportStockTable = ({
                         >
                             <td
                                 className="admin-passport-cell-tick"
-                                // The tick cell swallows the open, except on a
-                                // claimed row, which has no box.
                                 onClick={e => {
                                     if (passport.status !== 'claimed') e.stopPropagation();
                                 }}
                             >
                                 <input
                                     type="checkbox"
-                                    // Claimed since being ticked: shown unticked,
-                                    // as it has left the selection.
                                     checked={passport.status !== 'claimed' && selectedSet.has(passport.id)}
                                     onChange={() => onToggleOne(passport.id)}
                                     disabled={passport.status === 'claimed'}
@@ -214,8 +196,6 @@ export const PassportStockTable = ({
                                     {passportStatusLabel(passport.status, isEnglish)}
                                 </span>
                             </td>
-                            {/* Flagged when empty, so the stacked layout drops the
-                            line. */}
                             <td className={`admin-passport-cell-holder${
                                 passport.status === 'claimed' && passport.ownerUid
                                     ? '' : ' admin-passport-cell-holder--none'}`}>

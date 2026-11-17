@@ -10,7 +10,6 @@ import { eitherLanguage, localized } from '~/lib/localized';
 
 const OPEN_EVENT = 'open-redeem-modal';
 const PASSPORT_CLAIMED_EVENT = 'passport-claimed';
-/** Set by fillActivationKey in functions/src/utils/passports.ts. */
 const REDEEM_PARAM = 'redeem';
 
 export const openRedeemModal = () => window.dispatchEvent(new CustomEvent(OPEN_EVENT));
@@ -29,7 +28,6 @@ interface EventInfo {
 
 type ClaimedBadge = Pick<BadgeDef, 'name' | 'nameCn' | 'description' | 'descriptionCn' | 'imageUrl'>;
 
-/** An emailed passport's address, masked, and the signed-in account's. */
 interface EmailMismatch {
     sentTo: string;
     accountEmail: string;
@@ -57,7 +55,6 @@ export const RedeemModal = () => {
     const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
     const [passport, setPassport] = useState<PassportGrant | null>(null);
     const [mismatch, setMismatch] = useState<EmailMismatch | null>(null);
-    // Ticked to say they've checked the account, which lets them go ahead.
     const [mismatchChecked, setMismatchChecked] = useState(false);
     const [error, setError] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
@@ -90,9 +87,6 @@ export const RedeemModal = () => {
         return () => window.removeEventListener(OPEN_EVENT, handler);
     }, [user, profile, open]);
 
-    // A passport key email's link, ?redeem=<key>: the box opens with the key in
-    // it once the visitor is signed in, for them to redeem on the account they
-    // mean to. Taken off the URL so a reload doesn't open it again.
     const linkedCode = searchParams.get(REDEEM_PARAM);
     useEffect(() => {
         if (!linkedCode || !user || !profile) return;
@@ -124,11 +118,6 @@ export const RedeemModal = () => {
         await redeem(trimmed, false);
     };
 
-    /**
-     * `confirmEmailMismatch` once they've been shown an emailed passport's
-     * address and gone ahead: a passport stays on the account that activates
-     * it, so the first try asks.
-     */
     const redeem = async (code: string, confirmEmailMismatch: boolean) => {
         if (!user || !profile) return;
         if (submittingRef.current) return;
@@ -137,8 +126,6 @@ export const RedeemModal = () => {
         setState('claiming');
         setError('');
 
-        // One call for any kind of code; guessing here would spend a rate-limit
-        // slot per guess.
         try {
             const {data} = await callRedeemCode({code, ...(confirmEmailMismatch ? {confirmEmailMismatch} : {})});
 
@@ -227,7 +214,6 @@ export const RedeemModal = () => {
 
     if (!show) return null;
 
-    // The server's reading of the account, which is what it compared.
     const accountLabel = mismatch?.accountEmail
         || (isEnglish ? 'an account without an email address' : '一个没有邮箱地址的账号');
 

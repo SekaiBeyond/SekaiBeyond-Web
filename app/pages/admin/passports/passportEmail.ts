@@ -61,14 +61,12 @@ const ACTIVATION_CODE_PLACEHOLDER = /{{\s*activationCode\s*}}/g;
 const ACTIVATE_URL_PLACEHOLDER = /{{\s*activateUrl\s*}}/g;
 const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
 
-/** Mirrors carriesKey in functions/src/functions/passportEmails.ts, which refuses to send without it. */
 export const carriesKey = (template: Pick<EmailTemplate, 'subject' | 'bodyHtml'>): boolean =>
     [template.subject, template.bodyHtml].some(t =>
         t.search(ACTIVATION_CODE_PLACEHOLDER) !== -1 || t.search(ACTIVATE_URL_PLACEHOLDER) !== -1);
 
 const SAMPLE_KEY = 'ABCD-EFGH-JKMN';
 
-/** Mirrors renderKeyEmail and fillActivationKey on the server, for a sample recipient. */
 const fillSample = (
     text: string,
     design: PassportDesign | undefined,
@@ -81,7 +79,6 @@ const fillSample = (
     const cover = htmlContext && design?.coverImageUrl
         ? `<img src="${escapeHtml(design.coverImageUrl)}" alt="${escapeHtml(name)}" width="200" style="display:block;margin:0 auto;width:200px;max-width:60%;height:auto;border:0;border-radius:8px;"/>`
         : '';
-    // Function replacements, as on the server, so a `$` in a name isn't read as a pattern.
     return text
         .replace(/{{\s*recipientEmail\s*}}/g, () => 'sample@example.com')
         .replace(/{{\s*designName\s*}}/g, () => sub(name))
@@ -102,12 +99,6 @@ export const renderPassportSamplePreview = (
     template: EmailTemplate, design: PassportDesign | undefined, contactEmail: string, origin: string,
 ): string => sanitizeEmailHtml(fillSample(template.bodyHtml, design, contactEmail, origin, true));
 
-/**
- * The addresses in pasted text or an imported file, lowercased, in order and as
- * often as listed: an address listed twice is sent two passports. Anything with
- * an @ that isn't an address is returned as invalid, once each; everything else
- * (names, a CSV's headers and other columns) is passed over.
- */
 export const parseEmailList = (text: string): {emails: string[]; invalid: string[]} => {
     const emails: string[] = [];
     const invalid = new Set<string>();
@@ -120,7 +111,6 @@ export const parseEmailList = (text: string): {emails: string[]; invalid: string
     return {emails, invalid: [...invalid]};
 };
 
-/** How many times each address is in `emails`. */
 export const countAddresses = (emails: string[]): Map<string, number> => {
     const counts = new Map<string, number>();
     for (const email of emails) counts.set(email, (counts.get(email) ?? 0) + 1);

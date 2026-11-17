@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callEmailPassports, callGetTicketEmailQuota, errorSuffix, functionsErrorCode } from '~/lib/firebase';
+import { callEmailPassports, errorSuffix, functionsErrorCode } from '~/lib/firebase';
+import { EmailQuotaBanner, TemplateUnsavedBanner, useEmailQuota } from '../EmailQuotaBanner';
 import { fetchPassportsByDesign, MAX_PASSPORT_EMAIL, type PassportDesign } from '~/lib/passports';
 import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
 import { parseFile } from '../tickets/importValidation';
@@ -8,6 +9,7 @@ import type { ShowToast } from '../utils';
 import { PassportEmailTemplateSection } from './PassportEmailTemplateSection';
 import { designLabel, DesignSelect, DesignTermHint, PassportNoteField } from './PassportGenerator';
 import { countAddresses, parseEmailList } from './passportEmail';
+import { ToolHeader } from '../ToolHeader';
 
 interface PassportEmailerProps {
     designs: PassportDesign[];
@@ -16,25 +18,14 @@ interface PassportEmailerProps {
     showToast: ShowToast;
 }
 
-interface QuotaState {
-    sentToday: number;
-    dailyCap: number;
-    queuedCount: number;
-    queueCap: number;
-}
-
-/** What one run came to, across its chunks. */
 interface RunResult {
     sent: number;
     queued: number;
-    /** Not sent, and put back in the list: no room, refused, or never reached. */
     left: number;
 }
 
-/** How many of an address's repeats a notice names before counting the rest. */
 const NAMED_MAX = 10;
 
-/** "a@x.com ×2, b@y.com ×3", the first NAMED_MAX, then how many more. */
 const nameAddresses = (entries: [string, number][], isEnglish: boolean): string => {
     const named = entries.slice(0, NAMED_MAX).map(([email, n]) => `${email} ×${n}`).join(isEnglish ? ', ' : '、');
     const more = entries.length - NAMED_MAX;
@@ -43,14 +34,6 @@ const nameAddresses = (entries: [string, number][], isEnglish: boolean): string 
 
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
-/**
- * Passports sent by email: a list of addresses, pasted or imported, each sent
- * a passport of its own from one design, with its key in the email edited
- * below. An address listed twice gets two, for someone who bought two, so
- * repeats, and anyone already sent one of the design, are pointed out rather
- * than dropped. Whatever doesn't go is put back in the list, so sending it
- * again picks up where this run stopped.
- */
 export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: PassportEmailerProps) => {
     const {isEnglish} = useLanguage();
     const [designId, setDesignId] = useState(defaultDesignId ?? designs[0]?.id ?? '');
@@ -59,8 +42,8 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
     const [sending, setSending] = useState(false);
     const [progress, setProgress] = useState<{done: number; total: number} | null>(null);
     const [result, setResult] = useState<RunResult | null>(null);
-    const [quota, setQuota] = useState<QuotaState | null>(null);
-    const [quotaError, setQuotaError] = useState(false);
+    const emailQuota = useEmailQuota();
+    const {remainingToday, remainingQueue, fullyBlocked} = emailQuota;
     const [templateUnsaved, setTemplateUnsaved] = useState(false);
     const [importing, setImporting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,8 +55,6 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
     const listed = useMemo(() => countAddresses(emails), [emails]);
     const repeated = useMemo(() => [...listed].filter(([, n]) => n > 1), [listed]);
 
-    // How many passports of this design each address was already sent, so a
-    // second one is a choice. Null while loading or if it couldn't be read.
     const [sentBefore, setSentBefore] = useState<Map<string, number> | null>(null);
     const sentBeforeToken = useRef(0);
     const loadSentBefore = useCallback(async (target: string) => {
@@ -101,31 +82,10 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
         [listed, sentBefore],
     );
 
-    // Leaving would stop the run between chunks without saying where.
     useExitGuard(sending, isEnglish
         ? 'Passports are still being sent. Leaving stops the run, and the addresses not yet sent won’t be listed. Leave anyway?'
         : '通行证仍在发送中。离开将中止发送，且不会列出尚未发送的地址。仍要离开吗？');
 
-    const loadQuota = useCallback(async () => {
-        try {
-            const res = await callGetTicketEmailQuota();
-            setQuota(res.data);
-            setQuotaError(false);
-        } catch (err) {
-            console.error('[PassportEmailer] quota load', err);
-            setQuotaError(true);
-        }
-    }, []);
-
-    useEffect(() => {
-        void loadQuota();
-    }, [loadQuota]);
-
-    const remainingToday = quota ? Math.max(0, quota.dailyCap - quota.sentToday) : null;
-    const remainingQueue = quota ? Math.max(0, quota.queueCap - quota.queuedCount) : null;
-    const fullyBlocked = remainingToday === 0 && remainingQueue === 0;
-
-    // Added to the list rather than sent, so it can be checked and edited first.
     const importFile = async (file: File) => {
         if (file.size > MAX_IMPORT_BYTES) {
             showToast(isEnglish ? 'That file is over 5 MB.' : '文件超过 5 MB。', 'error');
@@ -135,14 +95,11 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
         try {
             let content: string;
             if (/\.xlsx$/i.test(file.name)) {
-                // Headers too: in a sheet that's only addresses, the first one is
-                // read as a header.
                 const {fields, records} = await parseFile(file);
                 content = [...fields, ...records.flatMap(r => Object.values(r))].join('\n');
             } else {
                 content = await file.text();
             }
-            // All of them, repeats too: the notices below point those out.
             const found = parseEmailList(content).emails;
             if (found.length > 0) {
                 setText(prev => `${prev.trimEnd()}${prev.trim() ? '\n' : ''}${found.join('\n')}`);
@@ -199,12 +156,9 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
         setResult(null);
         setProgress({done: 0, total});
 
-        // Kept for the next run: what's put back in the list is sent for the
-        // same reason.
         const trimmedNote = note.trim();
         let sent = 0;
         let queued = 0;
-        // Not sent: put back in the list once the run ends.
         const leftOver: string[] = [];
         let done = 0;
         try {
@@ -227,8 +181,6 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                         'error');
                     break;
                 }
-                // No room left today or in the queue, so the rest would only
-                // come back the same way.
                 if (data.deferred.length > 0) break;
             }
         } catch (err) {
@@ -254,8 +206,6 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                 code === 'quota-exceeded' ? 'warning' : 'error',
             );
         } finally {
-            // Only once a batch has gone through: stopped before that, the list
-            // stays as typed.
             if (done > 0) {
                 const left = [...leftOver, ...emails.slice(done)];
                 setText(left.join('\n'));
@@ -266,7 +216,7 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
             setProgress(null);
             cancelRef.current = false;
             setCancelling(false);
-            void loadQuota();
+            void emailQuota.load();
         }
     };
 
@@ -276,12 +226,8 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
 
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={leave} type="button">
-                    {isEnglish ? '← Back to Passports' : '← 返回通行证'}
-                </button>
-                <h3 className="admin-tools-title">{isEnglish ? 'Email Passports' : '邮件发送通行证'}</h3>
-            </div>
+            <ToolHeader title={isEnglish ? 'Email Passports' : '邮件发送通行证'}
+                        back={isEnglish ? 'Back to Passports' : '返回通行证'} onBack={leave}/>
 
             <div className="admin-tickets-send admin-section-mb">
                 <h3>{isEnglish ? 'Recipients' : '收件人'}</h3>
@@ -344,8 +290,6 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                         ? `${emails.length} passport${emails.length === 1 ? '' : 's'} for ${listed.size} address${listed.size === 1 ? '' : 'es'}.`
                         : `共 ${emails.length} 本通行证，发送至 ${listed.size} 个地址。`}
                 </p>
-                {/* Sent as listed, so a slip of the paste shows here before it
-                    costs a passport. */}
                 {repeated.length > 0 && (
                     <p className="admin-helper-text admin-tickets-edit-warning">
                         {isEnglish
@@ -368,38 +312,11 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                     </p>
                 )}
 
-                {templateUnsaved && (
-                    <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
-                        <strong>{isEnglish ? 'Email template not saved.' : '邮件模板尚未保存。'}</strong>
-                        <p>
-                            {isEnglish
-                                ? 'Save the template below before sending. Emails go out with the saved version.'
-                                : '发送前请先保存下方的模板。邮件将按已保存的版本发送。'}
-                        </p>
-                    </div>
-                )}
+                {templateUnsaved && <TemplateUnsavedBanner/>}
 
-                <div className={`admin-tickets-send-banner ${
-                    quotaError ? 'admin-tickets-send-banner-warning'
-                        : fullyBlocked ? 'admin-tickets-send-banner-error'
-                            : remainingToday !== null && remainingToday <= 10 ? 'admin-tickets-send-banner-warning'
-                                : 'admin-tickets-send-banner-info'}`}>
-                    {quotaError ? (
-                        <span>
-                            {isEnglish
-                                ? 'Could not load the Resend quota. Sending still works.'
-                                : '无法加载 Resend 额度。发送功能仍可使用。'}
-                        </span>
-                    ) : quota ? (
-                        <span>
-                            {isEnglish
-                                ? `${remainingToday} of ${quota.dailyCap} emails left in the rolling 24-hour window, shared with ticket emails. Overflow queue: ${quota.queuedCount} / ${quota.queueCap}.`
-                                : `24 小时滚动窗口内剩余 ${remainingToday} / ${quota.dailyCap} 封（与门票邮件共用）。待发队列：${quota.queuedCount} / ${quota.queueCap}。`}
-                        </span>
-                    ) : (
-                        <span>{isEnglish ? 'Loading quota...' : '加载额度中...'}</span>
-                    )}
-                </div>
+                <EmailQuotaBanner state={emailQuota} describe={(quota, remaining) => isEnglish
+                    ? `${remaining} of ${quota.dailyCap} emails left in the rolling 24-hour window, shared with ticket emails. Overflow queue: ${quota.queuedCount} / ${quota.queueCap}.`
+                    : `24 小时滚动窗口内剩余 ${remaining} / ${quota.dailyCap} 封（与门票邮件共用）。待发队列：${quota.queuedCount} / ${quota.queueCap}。`}/>
 
                 {progress && (
                     <div className="admin-tickets-send-progress">

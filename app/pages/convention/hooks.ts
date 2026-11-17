@@ -3,10 +3,6 @@ import { CON_NAV_LINKS, useConListing } from '~/lib/conContent';
 import { type Duration, splitDuration } from '~/lib/countdown';
 import { parseSiteTime } from '~/lib/siteTime';
 
-/**
- * A CSS media query in JS; the hero uses it to keep its clip off entirely for
- * reduced motion.
- */
 export const useMediaQuery = (query: string) => {
     const [matches, setMatches] = useState(false);
 
@@ -23,9 +19,7 @@ export const useMediaQuery = (query: string) => {
 };
 
 interface CountdownState extends Duration {
-    /** True once the start time has passed. */
     started: boolean;
-    /** True once the end time has passed. */
     ended: boolean;
 }
 
@@ -33,17 +27,9 @@ const remainingFrom = (target: number, end: number): CountdownState => {
     const now = Date.now();
     const ended = Number.isFinite(end) && now > end;
     const diff = target - now;
-    // An unparseable date reads as not started, with zeroed digits rather than
-    // NaN.
     return {...splitDuration(diff), started: Number.isFinite(diff) && diff <= 0, ended};
 };
 
-/**
- * Counts down to `isoDate` once a second and reports when `endIsoDate` has
- * passed. Both are read with parseSiteTime, so it ends when the con opens
- * wherever the viewer is. It keeps ticking past the start, since the live →
- * ended change is what it drives, and stops at the end.
- */
 export const useCountdown = (isoDate: string, endIsoDate: string): CountdownState => {
     const target = parseSiteTime(isoDate).getTime();
     const end = parseSiteTime(endIsoDate).getTime();
@@ -67,17 +53,10 @@ export const useCountdown = (isoDate: string, endIsoDate: string): CountdownStat
     return countdown;
 };
 
-// setTimeout fires at once past ~24.8 days, so longer waits go in hops.
 const MAX_TIMEOUT = 2 ** 31 - 1;
 
-/**
- * The current time, re-read only as each of `isoDates` passes, so a page left
- * open across an early-bird deadline switches price without ticking every
- * second.
- */
 export const useNowAcross = (isoDates: string[]) => {
     const [now, setNow] = useState(() => Date.now());
-    // Joined so a fresh array with the same dates does not reschedule the timer.
     const key = isoDates.join('|');
 
     useEffect(() => {
@@ -95,26 +74,18 @@ export const useNowAcross = (isoDates: string[]) => {
     return now;
 };
 
-/**
- * True once the con's event has ended, switching on a page left open as it
- * does. False with no event linked or an unparseable end.
- */
 export const useConEnded = () => {
     const {endTime} = useConListing().listing;
     const now = useNowAcross([endTime]);
     const end = parseSiteTime(endTime).getTime();
-    // At, not only past: useNowAcross can wake exactly at the end and won't
-    // wake again for it.
     return Number.isFinite(end) && now >= end;
 };
 
-/** The con's nav links, less Tickets once the con has ended and its section is gone. */
 export const useConNavLinks = () => {
     const ended = useConEnded();
     return ended ? CON_NAV_LINKS.filter(link => link.id !== 'tickets') : CON_NAV_LINKS;
 };
 
-/** True once the page has scrolled past `offset` — used to solidify the con navbar. */
 export const useScrolledPast = (offset: number) => {
     const [passed, setPassed] = useState(false);
 
@@ -128,10 +99,6 @@ export const useScrolledPast = (offset: number) => {
     return passed;
 };
 
-/**
- * The id of the section filling most of the viewport, for the navbar's
- * highlight.
- */
 export const useActiveSection = (ids: string[]) => {
     const [active, setActive] = useState('');
 

@@ -38,7 +38,7 @@ import { pastEventIds, shelfPassports, toStringIds } from "../utils/publicProfil
 import { decodeUpload, detectImageMime, isStorageUrl, MAX_UPLOAD_SIZE_MB, saveUpload } from "../utils/storage";
 import { sanitizeDisplayText, validateBoolean, validateDocId, validateInstant } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
-import { recordDoc, recordRef } from "../utils/records";
+import { performer, recordDoc, recordRef } from "../utils/records";
 import { endSessions, sessionsRef } from "../utils/sessions";
 
 export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
@@ -51,12 +51,7 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     }
 
     const data = userSnap.data()!;
-    // Sections the owner has switched off are emptied here, not at the client,
-    // so the data is actually withheld. The flags go along so the viewer reads
-    // "kept private" rather than an empty state.
     const visibility = readVisibility(data.profileVisibility);
-    // Your own profile is never filtered, or you couldn't tell a hidden section
-    // from an empty one.
     const isSelf = callerUid === targetUid;
     const showBadges = isSelf || visibility.badges;
     const showEvents = isSelf || visibility.events;
@@ -71,8 +66,6 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         }
     }
 
-    // Past events only: upcoming ids would leak unpublished events whose titles
-    // the rules withhold.
     const rawStaffEvents = showEvents ? toStringIds(data.eventStaffEvents) : [];
     const [pastEvents, passports] = await Promise.all([
         pastEventIds(rawStaffEvents),
@@ -90,11 +83,8 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         badges: showBadges ? (data.badges ?? []) : [],
         badgeEarnedAt,
         passports,
-        // So the shelf doesn't link to a page that would turn the viewer away.
         passportPageHidden: showPassports && data.hidePassportPage === true,
         group: normalizeGroup(data.group),
-        // Only whether there is a membership; the expiry is the owner's
-        // business.
         isMember: isMembershipActive(data),
         title: data.title ?? "",
         titleCn: data.titleCn ?? "",
@@ -102,16 +92,6 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     };
 });
 
-/**
- * The name and photo of the Google account bound to a user, so the admin user
- * page can tell a name or photo set on the site from the Google one the profile
- * started with. Null when none is bound. Staff+ only, as they can already read
- * the profile it's compared with.
- *
- * Two names, since the profile copied the sign-up one and Google's may have
- * changed since: `signUpName` is the one it was bound with, `name` the latest.
- * Both come cleaned as a stored displayName is, so they compare directly.
- */
 export const getGoogleProfile = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     await requireStaff(uid);
@@ -128,11 +108,6 @@ export const getGoogleProfile = onCall({maxInstances: 10}, async (request) => {
     };
 });
 
-/**
- * Switch sections of the caller's own profile on or off for everyone else, like
- * setPassportPrivacy. Partial updates, so two open tabs can't undo each other's
- * switches.
- */
 export const setProfileVisibility = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
@@ -150,7 +125,6 @@ export const setProfileVisibility = onCall({maxInstances: 10}, async (request) =
     return {visibility: merged};
 });
 
-/** Refuses unless the caller is core staff or above, with rights over the target's group. */
 function requireAdminOver(callerSnap: FirebaseFirestore.DocumentSnapshot, targetData: FirebaseFirestore.DocumentData): void {
     const callerGroup = callerSnap.data()?.group;
     if (!ADMIN_GROUPS.includes(callerGroup)) {
@@ -166,8 +140,6 @@ interface ProfileTarget {
     callerName: string;
 }
 
-// Whose profile an edit applies to: your own always, someone else's only with
-// admin rights over their group.
 async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): Promise<ProfileTarget> {
     const targetUid = rawTargetUid === undefined || rawTargetUid === null
         ? callerUid
@@ -190,14 +162,10 @@ async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): P
     };
 }
 
-// Uploading your own avatar or banner is a membership perk that staff+ keep
-// without one; only plain users with no active membership are blocked.
 function canSetOwnImages(userData: FirebaseFirestore.DocumentData): boolean {
     return isMembershipActive(userData) || isStaffOrAbove(userData.group);
 }
 
-// Checks every profile image upload makes before touching Storage: allowed
-// type, size, and bytes that match the type.
 function decodeProfileImage(input: {data?: string; contentType?: string}): {buffer: Buffer; contentType: string} {
     const {data: dataBase64, contentType} = input;
 
@@ -214,13 +182,10 @@ function decodeProfileImage(input: {data?: string; contentType?: string}): {buff
     return {buffer, contentType};
 }
 
-// Each upload overwrites the same path, so the URL busts the year-long cache.
 async function saveProfileImage(path: string, buffer: Buffer, contentType: string): Promise<string> {
     return `${await saveUpload(path, buffer, contentType)}&t=${Date.now()}`;
 }
 
-// The photo a user reverts to without an uploaded avatar: their Google
-// account's, if one is bound.
 async function googlePhotoURL(uid: string): Promise<string> {
     return googleBindingOf(await credentialsRef(uid).get())?.photoURL ?? "";
 }
@@ -266,7 +231,6 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     const input = request.data as {data?: string; contentType?: string; targetUid?: string};
     const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input.targetUid);
 
-    // A membership perk for your own avatar; admins can give one to anyone.
     if (isSelf && !canSetOwnImages(targetData)) {
         throw new HttpsError("permission-denied", "An active membership is required to upload an avatar.");
     }
@@ -274,7 +238,6 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     const {buffer, contentType} = decodeProfileImage(input);
     const downloadUrl = await saveProfileImage(`avatars/${targetUid}`, buffer, contentType);
 
-    // Atomically set photoURL on the user doc so clients can't set arbitrary URLs
     await db.collection("users").doc(targetUid).update({photoURL: downloadUrl});
 
     if (!isSelf) {
@@ -294,8 +257,6 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     const input = request.data as {targetUid?: string};
     const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input?.targetUid);
 
-    // Without a membership you can't upload an avatar, but may remove one an
-    // admin gave you.
     if (isSelf && !canSetOwnImages(targetData) && !isStorageUrl(targetData.photoURL)) {
         throw new HttpsError("permission-denied", "An active membership is required to delete an avatar.");
     }
@@ -316,10 +277,6 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
 
     return {photoURL};
 });
-/**
- * The image across the top of the caller's profile. A membership perk like an
- * avatar, but self only: admins can take a banner down, never put one up.
- */
 export const uploadBanner = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
@@ -335,13 +292,10 @@ export const uploadBanner = onCall({maxInstances: 10}, async (request) => {
     const {buffer, contentType} = decodeProfileImage(request.data as {data?: string; contentType?: string});
     const downloadUrl = await saveProfileImage(`banners/${uid}`, buffer, contentType);
 
-    // Set on the user doc here so clients can't point bannerURL anywhere else.
     await userRef.update({bannerURL: downloadUrl});
 
     return {url: downloadUrl};
 });
-// No membership needed to remove your banner; admins can remove anyone's they
-// manage.
 export const deleteBanner = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
@@ -363,10 +317,6 @@ export const deleteBanner = onCall({maxInstances: 10}, async (request) => {
     return {deleted: true};
 });
 
-/**
- * A staff title from a request: "" when left out, refused when not a string or
- * over 100 characters once cleaned.
- */
 function readTitle(raw: unknown): string {
     if (raw === undefined || raw === null) return "";
     if (typeof raw !== "string") throw new HttpsError("invalid-argument", "Invalid title.");
@@ -390,7 +340,6 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("permission-denied", "Cannot change your own group.");
     }
 
-    // Titles can only be set when assigning staff or core-staff
     const shouldHaveTitle = ["staff", "core-staff"].includes(newGroup);
     const title = readTitle(input.title);
     const titleCn = readTitle(input.titleCn);
@@ -416,8 +365,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
             titleCn: shouldHaveTitle ? titleCn : FieldValue.delete(),
         });
         const fields = {
-            performedBy: uid,
-            performedByName: callerSnap.data()!.displayName ?? "",
+            ...performer(uid, callerSnap),
             targetUid,
             targetName: targetData.displayName ?? "",
         };
@@ -437,13 +385,9 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
         return oldGroup;
     });
 
-    // So their next sign-in to an app has the new group (mintAppToken). A
-    // title isn't on it, so a change of title alone signs no one out.
     if (oldGroup !== newGroup) await signOutOfApps(targetUid);
     return {oldGroup, newGroup};
 });
-// Membership is time-boxed, not a group: this never writes `group`, which only
-// changeUserGroup does.
 export const setMembership = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const input = request.data as {targetUid?: string; expiresAt?: string | null; extendDays?: number};
@@ -455,7 +399,6 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("invalid-argument", "Provide exactly one of expiresAt or extendDays.");
     }
 
-    // expiresAt: null revokes. A date sets the expiry outright.
     let absoluteExpiry: Timestamp | null = null;
     if (hasExpiresAt && input.expiresAt !== null) {
         const iso = validateInstant(input.expiresAt, "expiresAt");
@@ -496,8 +439,7 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
             ? "membership-revoke"
             : hasExtendDays ? "membership-extend" : "membership-grant";
         txn.set(recordRef(), recordDoc(recordType, {
-            performedBy: uid,
-            performedByName: callerSnap.data()!.displayName ?? "",
+            ...performer(uid, callerSnap),
             targetUid,
             targetName: targetData.displayName ?? "",
             oldExpiresAt: isoOrNull(oldExpiry) ?? "",
@@ -526,7 +468,6 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
             throw new HttpsError("invalid-argument", "Title can only be set for staff or core-staff.");
         }
 
-        // Only president can set title for core-staff; core-staff can only set title for staff
         if (targetGroup === "core-staff" && callerGroup !== "president") {
             throw new HttpsError("permission-denied",
                 "Only the president can set the title of a core-staff member.");
@@ -537,8 +478,7 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
             titleCn: titleCn || FieldValue.delete(),
         });
         txn.set(recordRef(), recordDoc("title-set", {
-            performedBy: uid,
-            performedByName: callerSnap.data()!.displayName ?? "",
+            ...performer(uid, callerSnap),
             targetUid,
             targetName: targetSnap.data()!.displayName ?? "",
             oldTitle: targetSnap.data()!.title ?? "",
@@ -571,8 +511,7 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
             [`badgeEarnedAt.${badgeId}`]: grant ? FieldValue.serverTimestamp() : FieldValue.delete(),
         });
         txn.set(recordRef(), recordDoc(grant ? "achievement-grant" : "achievement-revoke", {
-            performedBy: uid,
-            performedByName: callerSnap.data()!.displayName ?? "",
+            ...performer(uid, callerSnap),
             targetUid,
             targetName: targetSnap.data()!.displayName ?? "",
             badgeId,
@@ -582,7 +521,6 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
-/** Staff's note on why an account is banned: "" when left out, refused when not a string or over 500 characters. */
 function readBanReason(raw: unknown): string {
     if (raw === undefined || raw === null) return "";
     if (typeof raw !== "string") throw new HttpsError("invalid-argument", "Invalid reason.");
@@ -591,12 +529,6 @@ function readBanReason(raw: unknown): string {
     return reason;
 }
 
-/**
- * Bans an account from signing in, to the site or any app, until `until` or,
- * without one, until lifted (unbanUser), and signs every device on it out at
- * once (see utils/bans.ts). Banning one already banned sets its new terms.
- * Core-staff and above, over the target's group, and never themselves.
- */
 export const banUser = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const input = request.data as {targetUid?: string; until?: string | null; reason?: unknown};
@@ -623,9 +555,6 @@ export const banUser = onCall({maxInstances: 10}, async (request) => {
         requireCanManage(callerSnap.data()!.group, targetData.group);
 
         const callerName: string = callerSnap.data()!.displayName ?? "";
-        // Without staff's note and who made it, which go on below once every
-        // device is signed out: the account can read its own user doc while one
-        // is still signed in, and is watching it.
         txn.update(targetRef, {
             bannedAt: FieldValue.serverTimestamp(),
             bannedUntil: until ?? FieldValue.delete(),
@@ -642,16 +571,12 @@ export const banUser = onCall({maxInstances: 10}, async (request) => {
         return {until: isoOrNull(until), reason, byName: callerName};
     });
 
-    // Signed out whatever happens to the first, which a retry puts right.
     try {
         await setAuthDisabled(targetUid, true);
     } finally {
         await endSessions(targetUid, null);
     }
 
-    // No device is left signed in to read the account's user doc now, and none
-    // can sign in. Only onto a ban still there: one lifted meanwhile has had
-    // these cleared, and they'd be left on an account that can sign in again.
     const targetRef = db.collection("users").doc(targetUid);
     await db.runTransaction(async (txn) => {
         if (!hasBan((await txn.get(targetRef)).data())) return;
@@ -660,7 +585,6 @@ export const banUser = onCall({maxInstances: 10}, async (request) => {
     return {ban: {...ban, at: new Date().toISOString()}};
 });
 
-/** Lifts an account's ban, by staff who could have made it, and says whether there was one. */
 export const unbanUser = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const targetUid = validateDocId((request.data as {targetUid?: string})?.targetUid, "targetUid");
@@ -675,8 +599,7 @@ export const unbanUser = onCall({maxInstances: 10}, async (request) => {
 
         txn.update(targetRef, BAN_CLEARED);
         txn.set(recordRef(), recordDoc("account-unban", {
-            performedBy: uid,
-            performedByName: callerSnap.data()!.displayName ?? "",
+            ...performer(uid, callerSnap),
             targetUid,
             targetName: targetData.displayName ?? "",
         }));
@@ -687,18 +610,6 @@ export const unbanUser = onCall({maxInstances: 10}, async (request) => {
     return {lifted};
 });
 
-/**
- * Schedules an account's deletion, for `deleteAt`'s TTL policy to carry out.
- * Anyone may ask for their own, from a device on its list, and its address is
- * told at once, with the way to cancel: otherwise someone with a stolen sign-in
- * could quietly delete it. `deletionRequestedBy` says whose request it is, which
- * decides who may cancel it (cancelAccountDeletion).
- *
- * An account's own request also waits out any link that can still undo a recent
- * move off an address (undoEmailChange), and that address is told too. Someone
- * with a stolen sign-in could move the account and then delete it, and the link
- * is its owner's way back, which cancels the deletion as well.
- */
 export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND_API_KEY]}, async (request) => {
     const input = (request.data ?? {}) as {targetUid?: string; language?: unknown};
     const ownAccount = !input.targetUid || input.targetUid === request.auth?.uid;
@@ -717,8 +628,6 @@ export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND
         }
         const targetData = targetSnap.data()!;
 
-        // Anyone may delete their own account; someone else's needs admin rights
-        // over them.
         if (callerUid !== targetUid) requireAdminOver(callerSnap, targetData);
 
         if (deletionPending(targetData)) {
@@ -748,8 +657,6 @@ export const requestAccountDeletion = onCall({maxInstances: 10, secrets: [RESEND
             deleteAt,
             notify: ownRequest ? {
                 email: (targetData.email as string | undefined) ?? "",
-                // A link already followed has put the account back on its
-                // address, which is the one told above.
                 movedOff: undos.filter(undo => !undo.get("restoredAt")).map(undo => undo.get("oldEmail") as string),
             } : null,
         };
@@ -783,8 +690,6 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
             throw new HttpsError("not-found", "No pending deletion.");
         }
 
-        // Staff may cancel any they could have asked for. An owner may cancel only
-        // their own request, so someone staff are removing can't keep the account.
         if (callerUid !== targetUid) {
             requireAdminOver(callerSnap, targetData);
         } else if (targetData.deletionRequestedBy !== callerUid) {
@@ -811,9 +716,6 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
 
     return {cancelled: true};
 });
-// retry: a dropped event would leave a sign-in that still works for an account
-// that's gone. Re-runs are safe: every step tolerates what's already gone, and
-// the record has a fixed id.
 export const onUserDeleted = onDocumentDeleted(
     {document: "users/{uid}", maxInstances: 10, retry: true},
     async (event) => {
@@ -831,8 +733,6 @@ export const onUserDeleted = onDocumentDeleted(
         }
         await deleteFromApps(uid);
 
-        // Frees the address and the Google account for use again. One batch, as
-        // the credentials doc is the only thing that names the Google account.
         const credentials = await credentialsRef(uid).get();
         const sub = googleBindingOf(credentials)?.sub;
         const emailRef = data?.email ? emailIndexRef(data.email) : null;
@@ -857,11 +757,6 @@ export const onUserDeleted = onDocumentDeleted(
             console.error(`onUserDeleted: sessions delete failed for ${uid}`, err);
         }
 
-        // Its links to apps' accounts (utils/appLinks.ts), which leaves those
-        // free to link another account at once: there's nothing left to pass on.
-        // Thrown, so a retry finishes it: a link left behind would still have
-        // the app reading an account that's gone, if only its absence. Each is
-        // recorded with it, under a fixed ID, so a retry overwrites its record.
         const links = await accountLinksQuery(uid).get();
         if (!links.empty) {
             const apps = await db.getAll(...links.docs.map(doc => appsCol().doc((doc.data() as AppLinkDoc).appId)));
@@ -882,7 +777,6 @@ export const onUserDeleted = onDocumentDeleted(
         }
 
         try {
-            // Fixed id, so retries and re-fires overwrite one record.
             await recordRef(`account-deleted-${uid}`).set(recordDoc("account-deleted", {
                 targetUid: uid,
                 targetName: data?.displayName ?? "",

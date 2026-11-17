@@ -14,17 +14,11 @@ import {
 } from './passportEmail';
 
 interface PassportEmailTemplateSectionProps {
-    /** What the preview fills the design placeholders from. */
     design: PassportDesign | undefined;
     showToast: ShowToast;
     onUnsavedChange: (unsaved: boolean) => void;
 }
 
-/**
- * The one email every passport key goes out in, whatever the design. Like the
- * ticket template: emailPassports sends only what's saved here, never the
- * default.
- */
 export function PassportEmailTemplateSection({design, showToast, onUnsavedChange}: PassportEmailTemplateSectionProps) {
     const {isEnglish} = useLanguage();
     const {config} = useSiteConfig();
@@ -44,7 +38,6 @@ export function PassportEmailTemplateSection({design, showToast, onUnsavedChange
         return <div className="spinner spinner-centered"/>;
     }
 
-    // No editor after a failed read, so the stored template can't be saved over.
     if (loadFailed) {
         return (
             <p className="admin-no-results">

@@ -28,7 +28,6 @@ interface StatsSectionProps {
     onRefresh: () => void;
 }
 
-/** An unlisted HomeTown ticket's type, unknown until an import lists it. */
 const UNKNOWN_TYPE = 'unknown';
 type StatType = TicketType | typeof UNKNOWN_TYPE;
 const STAT_TYPES: StatType[] = [...TICKET_TYPES.map(t => t.value), UNKNOWN_TYPE];
@@ -71,8 +70,6 @@ interface TimelineEntry {
     type: StatType;
 }
 
-// Per bucket: a label, the running total, and a count per ticket type for the
-// stacked bars.
 type TimelineDatum = {
     label: string;
     cumulative: number;
@@ -83,8 +80,6 @@ interface Timeline {
     types: StatType[];
 }
 
-// Hour, day or week buckets by span, split by type, with a running total.
-// `types` lists only the types present, in canonical order.
 const buildTimeline = (entries: TimelineEntry[], isEnglish: boolean): Timeline => {
     if (entries.length === 0) return {data: [], types: []};
     const sorted = [...entries].sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -148,7 +143,6 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
                 }
                 const type: StatType = a.unlisted ? UNKNOWN_TYPE : (t.type || 'normal');
                 typeCounts[type] = (typeCounts[type] || 0) + 1;
-                // Active tickets per type, split into redeemed and not.
                 if (!t.voided) {
                     if (t.redeemed) {
                         redeemedByType[type] = (redeemedByType[type] || 0) + 1;
@@ -332,7 +326,6 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
     );
 }
 
-/** A chart under its title, or `emptyText` ("No data.") in its place when there's nothing to plot. */
 function ChartCard({title, empty, emptyText, children}: {
     title: string;
     empty: boolean;
@@ -362,8 +355,6 @@ function ChartPie({data, donut}: {data: ChartDatum[]; donut?: boolean}) {
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    // Shares of the room the legend leaves, which shrinks on a phone
-                    // as it wraps, so the labels outside the pie stay in the chart.
                     innerRadius={donut ? '36%' : 0}
                     outerRadius="65%"
                     paddingAngle={data.length > 1 ? 2 : 0}
@@ -388,10 +379,6 @@ function ChartPie({data, donut}: {data: ChartDatum[]; donut?: boolean}) {
     );
 }
 
-/**
- * A type's name wrapped to its own bar's slot, so on a phone "Early Bird
- * Student" stacks rather than running into its neighbours.
- */
 const WrappedTypeTick = ({
                              x,
                              y,
@@ -422,7 +409,6 @@ function ChartTypeStatus(
         <ResponsiveContainer width="100%" height={280}>
             <BarChart data={data} margin={{top: 8, right: 8, left: 0, bottom: 0}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.06)"/>
-                {/* Tall enough for a name wrapped to three lines. */}
                 <XAxis dataKey="name" tick={WrappedTypeTick} interval={0} height={44}/>
                 <YAxis allowDecimals={false} tick={{fontSize: 11}} width="auto"/>
                 <Tooltip/>
@@ -456,7 +442,6 @@ const CUMULATIVE_KEY = 'cumulative';
 function ChartTimeline(
     {data, types, isEnglish}: {data: TimelineDatum[]; types: StatType[]; isEnglish: boolean},
 ) {
-    // Series toggled off in the legend.
     const [hidden, setHidden] = useState<Set<string>>(new Set());
 
     const toggle = (key?: string) => {
@@ -472,7 +457,6 @@ function ChartTimeline(
         });
     };
 
-    // Round only the top segment of each bar — i.e. the last visible type.
     const topVisibleType = [...types].reverse().find(t => !hidden.has(t));
 
     return (

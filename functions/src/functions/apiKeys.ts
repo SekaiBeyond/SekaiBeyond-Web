@@ -8,10 +8,8 @@ import { sanitizeDisplayText, validateDocId, validateStr, validateStringArray } 
 import { API_SCOPES, type ApiKeyDoc, apiKeysCol, generateApiKey, isApiScope } from "../utils/apiKeys";
 
 const API_KEY_NAME_MAX = 60;
-/** Events one key may be held to; past this, it may as well have all of them. */
 const API_KEY_EVENTS_MAX = 20;
 const API_KEY_EXPIRY_DAYS_DEFAULT = 365;
-/** No key lives forever, so a forgotten one lapses on its own. */
 const API_KEY_EXPIRY_DAYS_MAX = 730;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -25,13 +23,6 @@ function validateExpiresInDays(value: unknown): number {
     return value;
 }
 
-/**
- * A key a registered app's server calls the API with (see api.ts). Core-staff
- * and above only. The key is in the reply and nowhere else.
- *
- * Keys belong to the app, not to whoever made them, so one keeps working when
- * its maker steps down, and any core-staff can rename or revoke it.
- */
 export const createApiKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
@@ -48,7 +39,6 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
     if (!Array.isArray(input.scopes) || input.scopes.length === 0 || !input.scopes.every(isApiScope)) {
         throw new HttpsError("invalid-argument", `scopes must name at least one of: ${API_SCOPES.join(", ")}.`);
     }
-    // In API_SCOPES order and once each, however they came.
     const requested = input.scopes as string[];
     const scopes = API_SCOPES.filter(s => requested.includes(s));
     const eventIds = validateStringArray(input.eventIds, "eventIds", API_KEY_EVENTS_MAX, 128)
@@ -59,8 +49,6 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
     const expiresAt = Timestamp.fromMillis(Date.now() + expiresInDays * DAY_MS);
 
     await adminTransaction(uid, async (txn, callerSnap) => {
-        // The app must exist, and any event the key is held to must exist too.
-        // Archived or not: archiving keeps the ID, so the hold carries over.
         const [appSnap, ...found] = await Promise.all([
             txn.get(appsCol().doc(appId)),
             ...eventIds.map(id => getEventDoc(id, txn)),
@@ -97,10 +85,6 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
     return {id: keyId, key, hint, expiresAt: expiresAt.toDate().toISOString()};
 });
 
-/**
- * Renames a key. Any core-staff may rename any key, as with revoking. Orders
- * and records already made keep the name they were made under.
- */
 export const renameApiKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const input = (request.data ?? {}) as {keyId?: unknown; name?: unknown};
@@ -133,10 +117,6 @@ export const renameApiKey = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
-/**
- * Stops a key working at once and deletes it, so it leaves the list. Records
- * keep its name and hint. Expired keys go the same way.
- */
 export const revokeApiKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const input = (request.data ?? {}) as {keyId?: unknown};

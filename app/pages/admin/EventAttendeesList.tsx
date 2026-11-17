@@ -65,7 +65,6 @@ export function EventAttendeesList({
                     {attendees.length} {isEnglish ? 'attendees' : '人参加'}
                 </p>
             )}
-            {/* A new tab, so the event stays open behind the profile. */}
             {!loading && attendees.map((u) => (
                 <UserRow
                     key={u.uid}
@@ -79,7 +78,7 @@ export function EventAttendeesList({
                         <button
                             className="admin-toggle-btn admin-toggle-revoke"
                             onClick={(e) => {
-                                e.stopPropagation(); // the row behind it opens the profile
+                                e.stopPropagation();
                                 void removeAttendee(u);
                             }}
                             onKeyDown={(e) => e.stopPropagation()}

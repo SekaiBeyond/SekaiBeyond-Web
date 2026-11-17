@@ -19,10 +19,6 @@ interface PosterViewerProps {
     onClose: () => void;
 }
 
-/**
- * One poster full size with the rest either side; the thumbnails are for
- * picking, this is for reading.
- */
 const PosterViewer = ({posters, index, onIndex, onClose}: PosterViewerProps) => {
     const t = useT();
     const ref = useRef<HTMLDivElement>(null);
@@ -31,7 +27,6 @@ const PosterViewer = ({posters, index, onIndex, onClose}: PosterViewerProps) => 
     const count = posters.length;
     const step = (delta: number) => onIndex((index + delta + count) % count);
 
-    // `step` is rebuilt from these each render, so they are what the listener needs.
     useEffect(() => {
         if (count < 2) return;
         const onKey = (event: KeyboardEvent) => {
@@ -100,10 +95,6 @@ const PosterViewer = ({posters, index, onIndex, onClose}: PosterViewerProps) => 
     );
 };
 
-/**
- * The maid café: its poster beside the theme, room and hours, then each maid's.
- * Each part appears once filled in.
- */
 export const MaidCafe = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
@@ -118,7 +109,6 @@ export const MaidCafe = () => {
         : '';
     const hasDetails = !!(theme || location || hours || intro);
 
-    // Every poster in page order, so the viewer steps through them as they are laid out.
     const posters: Poster[] = [
         ...(cafe.poster ? [{src: cafe.poster, caption: theme || t({en: 'Maid Café', zh: '女仆咖啡'})}] : []),
         ...cafe.maids.flatMap(maid => (maid.poster ? [{src: maid.poster, caption: maid.name}] : [])),
@@ -185,7 +175,6 @@ export const MaidCafe = () => {
                     <h3 className="sbc-maids-title">{t({en: 'Meet the maids', zh: '女仆阵容'})}</h3>
 
                     <ul className="sbc-maid-grid">
-                        {/* Keyed by position: two maids may share a name. */}
                         {cafe.maids.map((maid, i) => (
                             <li key={i}>
                                 {maid.poster ? (

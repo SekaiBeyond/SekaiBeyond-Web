@@ -22,20 +22,12 @@ interface PassportSearchProps {
     showToast: ShowToast;
 }
 
-/**
- * Look up a passport by its sticker code, its owner, the address it was emailed
- * to or its note: a 10-character code resolves directly; anything else is
- * matched against users, whose passports are listed, the start of emailed
- * passports' addresses, claimed or not, and anywhere in a note.
- */
 export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps) => {
     const {isEnglish} = useLanguage();
     const [term, setTerm] = useState('');
     const [busy, setBusy] = useState(false);
     const [results, setResults] = useState<{passport: Passport; detail: string}[] | null>(null);
 
-    // With where it was activated when that's another address, as far as the
-    // passport itself says (see claimedElsewhere).
     const sentDetail = (passport: Passport): string => {
         if (!passport.sentTo) return '';
         const sent = isEnglish ? `emailed to ${passport.sentTo}` : `发送至 ${passport.sentTo}`;
@@ -45,7 +37,6 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
         return isEnglish ? `${sent} · ⚠ activated on ${shown}` : `${sent} · ⚠ 激活账号为 ${shown}`;
     };
 
-    // Last, as the row cuts a long one short.
     const withNote = (detail: string, note: string): string =>
         [detail, isEnglish ? `note: ${note}` : `备注：${note}`].filter(Boolean).join(' · ');
 
@@ -60,7 +51,6 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
                 setResults(passport ? [{passport, detail: sentDetail(passport)}] : []);
                 return;
             }
-            // Up to 30 matching users, whose passports are fetched together.
             const [owners, sent, noted] = await Promise.all([
                 searchUsers(query),
                 fetchPassportsSentTo(query),
@@ -73,14 +63,11 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
                     claimedElsewhere(passport, owner.email) === null ? ''
                         : isEnglish ? ` · ⚠ emailed to ${passport.sentTo}` : ` · ⚠ 发送至 ${passport.sentTo}`}`,
             })));
-            // An emailed passport its recipient claimed is already listed under
-            // them.
             const listed = new Set(found.map(r => r.passport.id));
             found.push(...sent.filter(p => !listed.has(p.id)).map(passport => ({
                 passport,
                 detail: sentDetail(passport),
             })));
-            // A note that matched shows on its row, whichever way it was found.
             const noteById = new Map(noted.map(p => [p.id, p.note]));
             for (const result of found) {
                 const note = noteById.get(result.passport.id);
@@ -149,18 +136,12 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
 interface PassportRowProps {
     passport: Passport;
     designs: PassportDesign[];
-    /** Appended to the year and design name, when not blank. */
     detail: string;
     onOpen: (id: string) => void;
 }
 
-/**
- * Whether scanning a holder's passports shows their page or a private notice,
- * as they set it on their profile.
- */
 export const PassportPageTag = ({hidden}: {hidden: boolean}) => {
     const {isEnglish} = useLanguage();
-    // The member's own wording for the setting, from their Settings tab.
     const row = PRIVACY_ROWS.find(r => r.key === 'passportPage');
     const meaning = row && (hidden ? row.off : row.on);
     return (
@@ -175,7 +156,6 @@ export const PassportPageTag = ({hidden}: {hidden: boolean}) => {
     );
 };
 
-/** One passport as a clickable row, here and on a user's admin page. */
 export const PassportRow = ({passport, designs, detail, onOpen}: PassportRowProps) => {
     const {isEnglish} = useLanguage();
     return (

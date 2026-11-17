@@ -1,15 +1,8 @@
-// An event's wallet pass settings and look, for its Emails section. Mirrors
-// functions/src/utils/walletPass.ts and ticketTypeStyle in
-// functions/src/utils/ticketEmail.ts.
-
-/** WalletWallet's free colour presets. */
 export const WALLET_COLORS = ['dark', 'blue', 'green', 'red', 'purple', 'orange'] as const;
 type WalletColor = typeof WALLET_COLORS[number];
 
-/** Lines an event can add to the back of its passes (WALLET_PASS_MAX_NOTES). */
 export const WALLET_PASS_MAX_NOTES = 4;
 
-/** The text top-left of every pass, for now in place of the event's headerText (WALLET_PASS_TOP_TEXT). */
 export const WALLET_PASS_TOP_TEXT = 'Sekai Beyond';
 
 interface WalletPassNote {
@@ -24,7 +17,6 @@ export interface WalletPassSettings {
     notes: WalletPassNote[];
 }
 
-/** settings/walletPass as the server reads it (parseWalletPassSettings). */
 export function parseWalletPassSettings(raw: Record<string, unknown> | undefined): WalletPassSettings {
     const str = (v: unknown) => typeof v === 'string' ? v.trim() : '';
     const notes: unknown[] = Array.isArray(raw?.notes) ? raw.notes : [];
@@ -39,10 +31,6 @@ export function parseWalletPassSettings(raw: Record<string, unknown> | undefined
     };
 }
 
-/**
- * Each preset as WalletWallet draws it, read from the pass.json of passes it
- * made: the background, values and labels.
- */
 export const WALLET_COLOR_STYLES: Record<WalletColor, {bg: string; fg: string; label: string}> = {
     dark: {bg: 'rgb(24, 24, 27)', fg: 'rgb(255, 255, 255)', label: 'rgb(161, 161, 170)'},
     blue: {bg: 'rgb(30, 64, 175)', fg: 'rgb(255, 255, 255)', label: 'rgb(191, 219, 254)'},
@@ -62,10 +50,6 @@ export const WALLET_COLOR_NAMES: Record<'auto' | WalletColor, {en: string; zh: s
     orange: {en: 'Orange', zh: '橙色'},
 };
 
-/**
- * A ticket type's label on the back of the pass, its short label top-right, and
- * its colour under "auto" (ticketTypeStyle on the server).
- */
 export function walletTicketStyle(type: string): {label: string; shortLabel: string; color: WalletColor} {
     switch (type) {
         case 'early-bird-student':
@@ -87,15 +71,10 @@ export function walletTicketStyle(type: string): {label: string; shortLabel: str
     }
 }
 
-/**
- * The event's passes made and not revoked (settings/walletPass passCount, kept
- * by the server), which keep the details they were made with.
- */
 export function readWalletPassCount(raw: Record<string, unknown> | undefined): number {
     const n = raw?.passCount;
     return typeof n === 'number' && Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
-/** Two settings the same once stored, so an edit undone doesn't read as unsaved. */
 export const sameWalletPassSettings = (a: WalletPassSettings, b: WalletPassSettings): boolean =>
     JSON.stringify(parseWalletPassSettings({...a})) === JSON.stringify(parseWalletPassSettings({...b}));

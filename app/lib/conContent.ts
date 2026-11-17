@@ -8,9 +8,6 @@ import { resolveVenueById, useVenues } from './venues';
 import { isHallTable } from '~/pages/convention/hall';
 import type { Localized } from '~/pages/convention/i18n';
 
-/* Admin-editable /con content: saved to staff-only `conContent/draft` and mirrored
-   to public `conContent/main` while published. */
-
 export const CON_NAME: Localized = {en: 'Sekai Beyond Con', zh: '彼世界动漫游戏展'};
 
 interface NavLink {
@@ -28,7 +25,6 @@ export const CON_NAV_LINKS: NavLink[] = [
     {id: 'faq', label: {en: 'FAQ', zh: '常见问题'}},
 ];
 
-/** Chip colours a room can use (`sbc-accent--pink`, etc.). */
 export const ROOM_ACCENTS = ['pink', 'violet', 'amber', 'sky', 'mint', 'slate'] as const;
 
 export type RoomAccent = typeof ROOM_ACCENTS[number]
@@ -40,7 +36,6 @@ interface ConSettings {
 interface ConEvent {
     tagline: Localized
     intro: Localized
-    /** Linked `upcomingEvents` doc id providing hours, venue, and ticket URL. */
     upcomingEventId: string
 }
 
@@ -55,7 +50,6 @@ interface Room {
 }
 
 export interface ScheduleItem {
-    /** Omitted for announced slots whose time is still TBA. */
     start?: string
     end?: string
     room?: string
@@ -78,7 +72,6 @@ interface MaidCafe {
 }
 
 export interface Vendor {
-    /** Table code from `HALL_TABLES` (e.g. "A1"). */
     table: string
     name: string
     link?: string
@@ -91,7 +84,6 @@ interface VendorCta {
     label: Localized
 }
 
-/** Discounted price valid until `endsAt` (`YYYY-MM-DDTHH:MM` on the Pacific clock). */
 export interface EarlyBird {
     price: number
     endsAt: string
@@ -113,9 +105,7 @@ export interface TicketFee {
 }
 
 export interface InPersonSession {
-    /** YYYY-MM-DD */
     date: string
-    /** HH:MM */
     start: string
     end: string
 }
@@ -149,11 +139,6 @@ export type ConContentSection = keyof ConContent;
 
 const BLANK: Localized = {en: '', zh: ''};
 
-/**
- * What a section reads as until first saved, and the staff preview's fallback
- * when the read fails. Blank on purpose: this file ships in the public bundle,
- * so anything written here would be public before the con is.
- */
 const DEFAULT_CON_CONTENT: ConContent = {
     settings: {published: false},
     event: {tagline: BLANK, intro: BLANK, upcomingEventId: ''},
@@ -272,7 +257,6 @@ const readTickets = (raw: unknown): TicketTier[] =>
         id: str(tier.id),
         name: loc(tier.name),
         price: nonNegative(tier.price),
-        // Always present so key order matches the editor's draft for JSON dirty checks.
         earlyBird: readEarlyBird(tier.earlyBird),
         note: loc(tier.note),
         perks: Array.isArray(tier.perks) ? tier.perks.map(perk => loc(perk)) : [],
@@ -313,7 +297,6 @@ const readSections = (data: Record<string, unknown>): Omit<ConContent, 'settings
     faq: readFaq(data.faq),
 });
 
-/** Exists only while the con is published. */
 const publicCache = createValueCache<ConContent>('con content', async () => {
     const db = getFirebaseDb();
     const snap = await getDoc(doc(db, 'conContent', 'main'));
@@ -334,11 +317,9 @@ const draftCache = createValueCache<ConContent>('con content draft', async () =>
 interface ConContentRead {
     content: ConContent;
     loading: boolean;
-    /** True when the initial read failed, so callers don't treat fallback defaults as real data. */
     failed: boolean;
 }
 
-/** Reads the public mirror for visitors and the draft for staff preview. */
 export function useConContent(): ConContentRead {
     const {profile, loading: authLoading} = useAuth();
     const canPreview = !!profile && hasPermission(profile.group, 'staff');
@@ -355,7 +336,6 @@ export function useConContent(): ConContentRead {
 }
 
 interface ConListing {
-    /** Pacific-clock `YYYY-MM-DDTHH:MM` without zone suffix. */
     date: string;
     endTime: string;
     venueId: string;
@@ -405,10 +385,6 @@ export function useConDraft(): ConContentRead {
     return {content, loading, failed: error !== null};
 }
 
-/**
- * Re-fetches and returns the stored draft so the editor re-seeds from server-normalized
- * values; refreshes the public mirror too if subscribed.
- */
 export const refreshConContent = async (): Promise<ConContent> => {
     const [draft] = await Promise.all([
         draftCache.refresh(),

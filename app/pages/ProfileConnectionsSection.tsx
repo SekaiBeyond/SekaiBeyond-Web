@@ -9,10 +9,6 @@ import type { SignInState } from '~/pages/ProfileAccountSection';
 import { AppLinkRows } from '~/pages/ProfileAppLinkRows';
 import { ConnectionRow } from '~/pages/ProfileConnectionRow';
 
-/**
- * Google, a way to sign in here. It can only be unbound once the account has a
- * password, or nothing would be left to sign in with.
- */
 const GoogleRow = ({signIn, showToast}: {signIn: SignInState; showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const language = isEnglish ? 'en' : 'zh';
@@ -117,12 +113,6 @@ const GoogleRow = ({signIn, showToast}: {signIn: SignInState; showToast: ShowToa
     );
 };
 
-/**
- * /profile's Settings tab: the accounts elsewhere connected to this one.
- * Google, which signs in here, then each app the account may link its account
- * in, such as the WeChat mini program, which then reads who it is here but
- * never signs in here. Everything is enforced server-side.
- */
 export const ProfileConnectionsSection = ({signIn, showToast}: {signIn: SignInState; showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const {profile} = useAuth();

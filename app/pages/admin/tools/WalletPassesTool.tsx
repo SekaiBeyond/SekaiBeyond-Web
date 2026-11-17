@@ -1,26 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetWalletPassStatus, type WalletPassStatus } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
+import { RefreshButton, ToolHeader, useToolLoader } from '../ToolHeader';
 
 interface WalletPassesToolProps {
     onBack: () => void;
     showToast: ShowToast;
 }
 
-// At or below this, the month's passes are "running low": about one big send.
 const LOW_HEADROOM = 50;
 
-// The 1st of the month after `month` ("2026-10"), when WalletWallet resets its
-// count, for when it hasn't said.
 const nextMonthStart = (month: string): string => {
     const [y, m] = month.split('-').map(Number);
     if (!y || !m) return '';
     return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
 };
 
-// A "2026-11-01" day as the reader would write it. Read in UTC, so it doesn't
-// slip a day west of Greenwich.
 const formatDay = (day: string, isEnglish: boolean): string => {
     const ms = Date.parse(`${day}T00:00:00Z`);
     if (Number.isNaN(ms)) return day;
@@ -32,37 +28,12 @@ const formatDay = (day: string, isEnglish: boolean): string => {
 export const WalletPassesTool = ({onBack, showToast}: WalletPassesToolProps) => {
     const {isEnglish} = useLanguage();
     const [status, setStatus] = useState<WalletPassStatus | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
 
-    const load = useCallback(async (notify: boolean) => {
-        setLoading(true);
-        try {
-            const res = await callGetWalletPassStatus();
-            setStatus(res.data);
-            setError(false);
-            if (notify) {
-                showToast(isEnglish ? 'Usage refreshed.' : '用量已刷新。', 'success');
-            }
-        } catch (err) {
-            console.error('[WalletPassesTool] load', err);
-            setError(true);
-            if (notify) {
-                showToast(
-                    isEnglish ? 'Could not load wallet pass usage.' : '无法加载钱包票券用量。',
-                    'error',
-                );
-            }
-        } finally {
-            setLoading(false);
-        }
-    }, [isEnglish, showToast]);
-
-    useEffect(() => {
-        // On mount only; refresh is manual, and a language toggle shouldn't
-        // refetch.
-        void load(false);
-    }, []);
+    const {loading, error, load} = useToolLoader(callGetWalletPassStatus, setStatus,
+        {
+            refreshed: {en: 'Usage refreshed.', zh: '用量已刷新。'},
+            failed: {en: 'Could not load wallet pass usage.', zh: '无法加载钱包票券用量。'}
+        }, showToast);
 
     const off = status !== null && (!status.configured || status.cap === 0 || status.perTicketDailyCap === 0);
     const remaining = status ? Math.max(0, status.limit - status.used) : 0;
@@ -75,24 +46,11 @@ export const WalletPassesTool = ({onBack, showToast}: WalletPassesToolProps) => 
 
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
-                    {isEnglish ? '← Back to Tools' : '← 返回工具'}
-                </button>
-                <h3 className="admin-tools-title">
-                    {isEnglish ? 'Wallet Passes' : '电子钱包票券'}
-                </h3>
-                <button
-                    className="admin-toggle-btn admin-toggle-edit admin-quota-refresh"
-                    onClick={() => void load(true)}
-                    disabled={loading}
-                    type="button"
-                >
-                    {loading
-                        ? (isEnglish ? 'Loading...' : '加载中...')
-                        : (isEnglish ? 'Refresh' : '刷新')}
-                </button>
-            </div>
+            <ToolHeader title={isEnglish ? 'Wallet Passes' : '电子钱包票券'}
+                        back={isEnglish ? 'Back to Tools' : '返回工具'} onBack={onBack}>
+                <RefreshButton className="admin-toggle-btn admin-toggle-edit admin-quota-refresh"
+                               onClick={() => load(true)} busy={loading}/>
+            </ToolHeader>
 
             <p className="admin-helper-text admin-section-mb">
                 {isEnglish

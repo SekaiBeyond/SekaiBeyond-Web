@@ -9,7 +9,6 @@ const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1350;
 const CANVAS_BACKGROUND = '#faf3f6';
 const TEXT_COLOR = '#ff1678';
-// The photo opening in foreground-overlay.png, measured in source-image pixels.
 const PHOTO_WINDOW = {left: 460, top: 615, right: 1724, bottom: 2287, sourceWidth: 2166, sourceHeight: 2707};
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_FONT_BYTES = 30 * 1024 * 1024;
@@ -34,10 +33,6 @@ type GestureStart =
     | {kind: 'pan'; pointerId: number; x: number; y: number; transform: PhotoTransform}
     | {kind: 'pinch'; distance: number; angle: number; midpointX: number; midpointY: number; transform: PhotoTransform};
 
-/**
- * `title` is drawn on the card (always English, to match the artwork); `label`
- * is the menu's.
- */
 const CARD_TITLE_PRESETS = {
     cosplay: {title: 'Cosplay Lineup', label: {en: 'Cosplay Lineup', zh: 'Cosplay 阵容'}},
     vendor: {title: 'Artist Alley', label: {en: 'Vendor / Artist Alley', zh: '摊主 / 创作者市集'}},
@@ -50,12 +45,8 @@ type CardTitlePreset = keyof typeof CARD_TITLE_PRESETS | 'custom';
 type TitleFont = {family: string; size: number};
 type UploadedFont = TitleFont & {name: string; face: FontFace};
 
-// The longest preset title, and how wide every font draws it.
 const TITLE_SAMPLE = CARD_TITLE_PRESETS.cosplay.title;
 const TITLE_SAMPLE_WIDTH = 690;
-// Open-licensed (OFL or Apache) Google Fonts only, since visitors type their
-// own titles. Each size draws TITLE_SAMPLE at TITLE_SAMPLE_WIDTH; longer titles
-// shrink.
 const TITLE_FONTS: TitleFont[] = [
     {family: 'Caveat Brush', size: 132},
     {family: 'Water Brush', size: 132},
@@ -65,7 +56,6 @@ const TITLE_FONTS: TitleFont[] = [
     {family: 'Yellowtail', size: 128},
     {family: 'Caveat', size: 143},
 ];
-// None of the title fonts has Chinese glyphs, so Chinese titles fall through to this brush face.
 const TITLE_CJK_FONT = 'Ma Shan Zheng';
 const TITLE_FONT_STYLESHEET = 'https://fonts.googleapis.com/css2?'
     + [...TITLE_FONTS.map(font => font.family), TITLE_CJK_FONT].map(family => `family=${family.replaceAll(' ', '+')}&`).join('')
@@ -74,18 +64,15 @@ const TITLE_FONT_STYLESHEET = 'https://fonts.googleapis.com/css2?'
 const titleFontStack = (family: string) => `"${family}", "${TITLE_CJK_FONT}", sans-serif`;
 
 let titleFontStylesheet: Promise<void> | undefined;
-// Added when the share card first mounts, so the rest of the site never fetches it.
 const loadTitleFontStylesheet = () => titleFontStylesheet ??= new Promise(resolve => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = TITLE_FONT_STYLESHEET;
-    // A failed request still settles, so the title falls back to sans-serif instead of never drawing.
     link.onload = () => resolve();
     link.onerror = () => resolve();
     document.head.append(link);
 });
 
-// Uploaded fonts can't be measured ahead of time, so they're sized here the way the presets were.
 const measureTitleSize = (family: string) => {
     const context = document.createElement('canvas').getContext('2d');
     if (!context) return TITLE_FONTS[0].size;
@@ -94,12 +81,10 @@ const measureTitleSize = (family: string) => {
     return width > 0 ? Math.min(260, Math.max(52, Math.round(100 * TITLE_SAMPLE_WIDTH / width))) : TITLE_FONTS[0].size;
 };
 
-/** A horizontally centred line of text, and the room it may take up. */
 interface TextBox {
     centerY: number;
     maxWidth: number;
     maxHeight: number;
-    /** Font size to start from; it steps down towards `minSize` until the text fits. */
     size: number;
     minSize: number;
     fontFamily: string;
@@ -140,7 +125,6 @@ const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 
 type Frame = {left: number; top: number; width: number; height: number};
 
-// The artwork is almost exactly 4:5: fit it whole and centred, without distorting it.
 const fitOverlay = (sourceWidth: number, sourceHeight: number): Frame => {
     const scale = Math.min(CANVAS_WIDTH / sourceWidth, CANVAS_HEIGHT / sourceHeight);
     const width = sourceWidth * scale;
@@ -148,7 +132,6 @@ const fitOverlay = (sourceWidth: number, sourceHeight: number): Frame => {
     return {left: (CANVAS_WIDTH - width) / 2, top: (CANVAS_HEIGHT - height) / 2, width, height};
 };
 
-/** Where the overlay's photo opening lands on the card, given where the overlay is drawn. */
 const photoWindowIn = (frame: Frame) => {
     const scaleX = frame.width / PHOTO_WINDOW.sourceWidth;
     const scaleY = frame.height / PHOTO_WINDOW.sourceHeight;
@@ -171,18 +154,12 @@ const measurePinch = (first: PointerPoint, second: PointerPoint) => {
     };
 };
 
-/** The chosen file, with the input cleared so someone can choose the same file again. */
 const takeFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     return file;
 };
 
-/**
- * The share card maker: a visitor's photo in the con's frame, with a title, an
- * optional line, and a QR back here. Drawn on a canvas in the browser; nothing
- * is uploaded.
- */
 export const ShareCard = () => {
     const t = useT();
     const qrHeading = t({en: 'MAKE YOUR OWN', zh: '制作你的分享卡'});
@@ -195,7 +172,6 @@ export const ShareCard = () => {
     const fontUploadToken = useRef(0);
     const activePointers = useRef(new Map<number, PointerPoint>());
     const gestureStart = useRef<GestureStart | null>(null);
-    // Mirrors `transform` for gesture handlers, which can run before a re-render.
     const transformRef = useRef<PhotoTransform>(DEFAULT_TRANSFORM);
     const [photo, setPhoto] = useState<ImageBitmap | null>(null);
     const [overlay, setOverlay] = useState<HTMLImageElement | null>(null);
@@ -218,7 +194,6 @@ export const ShareCard = () => {
     const [shareUrl, setShareUrl] = useState('');
 
     useEffect(() => {
-        // This deployment's origin, opening at the share-card editor.
         setShareUrl(`${window.location.origin}${window.location.pathname}#lineup`);
     }, []);
 
@@ -250,8 +225,6 @@ export const ShareCard = () => {
 
     useEffect(() => {
         let cancelled = false;
-        // Also fetches the CJK glyph slices for a Chinese title. The canvas can't
-        // repaint itself, so each finished load bumps a redraw counter.
         void loadTitleFontStylesheet()
             .then(() => Promise.all([
                 document.fonts.load(`${titleFont.size}px ${titleFontStack(titleFont.family)}`, title.trim() || 'A'),
@@ -282,18 +255,15 @@ export const ShareCard = () => {
         if (!context) return;
 
         context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        // Opaque, so transparent photos don't turn black in dark-mode viewers.
         context.fillStyle = CANVAS_BACKGROUND;
         context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-        // The overlay's place on the card. Until it loads, its measured size stands in.
         const frame = fitOverlay(
             overlay?.naturalWidth ?? PHOTO_WINDOW.sourceWidth,
             overlay?.naturalHeight ?? PHOTO_WINDOW.sourceHeight,
         );
 
         if (photo) {
-            // Fit the whole photo into the frame's transparent opening by default.
             const opening = photoWindowIn(frame);
             const fitScale = Math.min(opening.width / photo.width, opening.height / photo.height);
             const scale = fitScale * transform.zoom;
@@ -310,7 +280,6 @@ export const ShareCard = () => {
         if (readyFamily === titleFont.family) {
             drawCenteredText(context, title, {
                 centerY: 160,
-                // 760 wide keeps a long title clear of the artwork's top-left corner bracket (x 63–134).
                 maxWidth: 760,
                 maxHeight: 210,
                 size: titleFont.size,
@@ -331,8 +300,6 @@ export const ShareCard = () => {
 
         const qrCanvas = qrCanvasRef.current;
         if (shareUrl && qrCanvas) {
-            // The quiet zone lets the artwork through, so the QR sits in the pale
-            // lower edge.
             context.drawImage(qrCanvas, SHARE_QR.left, SHARE_QR.top, SHARE_QR.size, SHARE_QR.size);
 
             context.textAlign = 'left';
@@ -369,8 +336,6 @@ export const ShareCard = () => {
         }
 
         setFontOpening(true);
-        // Read into memory: the file stays on the device, and an ArrayBuffer
-        // needs no blob: URL, which font-src doesn't allow.
         const family = `Uploaded Font ${token}`;
         let face: FontFace;
         try {
@@ -524,14 +489,11 @@ export const ShareCard = () => {
                 checked={titleFont.family === font.family}
                 onChange={() => setTitleFont(font)}
             />
-            {/* Scaled like the card title, so every option reads at about the same width. */}
             <span style={{fontFamily: titleFontStack(font.family), fontSize: `${font.size / 100}rem`}}>{label}</span>
         </label>
     );
 
     return (
-        // The nav and every printed QR code open at `lineup`, so it stays
-        // whatever the section is called.
         <section id="lineup" className="sbc-section sbc-lineup-section">
             <SectionHeader
                 title={{en: 'Share Card', zh: '活动分享卡'}}
@@ -563,7 +525,6 @@ export const ShareCard = () => {
                             </div>
                         )}
                     </div>
-                    {/* Always rendered so the preview doesn't shrink when a photo arrives; hidden until then. */}
                     <p className={`sbc-lineup-hint${photo ? '' : ' sbc-lineup-hint--idle'}`}>
                         {t({
                             en: 'Drag to move. On touch screens, use two fingers to move, zoom, and rotate.',
@@ -671,7 +632,6 @@ export const ShareCard = () => {
                             </legend>
                             <div className="sbc-lineup-font-options">
                                 {TITLE_FONTS.map(font => fontOption(font, font.family))}
-                                {/* An added font takes the upload tile's place, keeping the grid at two rows. */}
                                 {uploadedFont ? fontOption(uploadedFont, uploadedFont.name) : (
                                     <label
                                         className="sbc-lineup-font-option sbc-lineup-font-upload sbc-lineup-font-file-trigger"
@@ -782,7 +742,6 @@ export const ShareCard = () => {
                             <label className="sbc-lineup-control">
                                 <span className="sbc-lineup-control-heading">
                                     <span>{t({en: 'Rotation', zh: '旋转'})}</span>
-                                    {/* Rounded: a two-finger turn leaves it fractional. */}
                                     <output>{Math.round(transform.rotation)}°</output>
                                 </span>
                                 <input

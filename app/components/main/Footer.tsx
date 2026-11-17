@@ -9,7 +9,6 @@ import { useConContent } from "~/lib/conContent";
 export const Footer = () => {
     const {isEnglish} = useLanguage();
     const {hasActive, activeEvents, loading: upcomingLoading} = useUpcomingEvents();
-    // Shown while loading, as there usually is something, so the links don't shift.
     const upcomingHidden = !upcomingLoading && !hasActive;
     const singleUpcoming = activeEvents.length === 1;
     const {config} = useSiteConfig();

@@ -16,7 +16,6 @@ import {
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { useEffect, useRef, useState } from 'react';
 
-// MapLibre looks for its worker beside its own script, which the bundle moves.
 setWorkerUrl(maplibreWorkerUrl);
 
 const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
@@ -46,7 +45,6 @@ export function createMap(
     map.keyboard.disableRotation();
     map.addControl(new NavigationControl({showCompass: false}), 'top-right');
     map.addControl(new AttributionControl({compact: true, customAttribution: attribution}), 'bottom-right');
-    // Stub missing sprite icons with a 1x1 transparent pixel to suppress MapLibre warnings.
     map.setMissingStyleImageResolver(id => {
         if (!map.hasImage(id)) map.addImage(id, {width: 1, height: 1, data: new Uint8Array(4)});
     });
@@ -54,10 +52,6 @@ export function createMap(
     return map;
 }
 
-/**
- * Strips 3D buildings, OSM parking POI icons (which include non-visitor lots),
- * and highway shield layers from the base style.
- */
 function tidyStyle(style: StyleSpecification): StyleSpecification {
     const notParking = ['!=', ['get', 'class'], 'parking'] as FilterSpecification;
     const layers = style.layers
@@ -73,18 +67,14 @@ function tidyStyle(style: StyleSpecification): StyleSpecification {
     return {...style, layers};
 }
 
-// Lot codes appear beside the plain pins from this zoom (`.is-zoomed-in` on the
-// container); suggested lots always show theirs.
 const LABEL_ZOOM = 17.4;
 
-/** Marks the container `.is-zoomed-in` while the map is zoomed in far enough for pin labels. */
 export function trackLabelZoom(map: MapLibreMap, container: HTMLElement): void {
     const update = () => container.classList.toggle('is-zoomed-in', map.getZoom() >= LABEL_ZOOM);
     map.on('zoom', update);
     update();
 }
 
-/** Calls `handler` on a click on the map itself, not on a marker or a popup. */
 export function onBackgroundClick(map: MapLibreMap, handler: () => void): void {
     map.on('click', e => {
         const target = e.originalEvent.target;
@@ -93,7 +83,6 @@ export function onBackgroundClick(map: MapLibreMap, handler: () => void): void {
     });
 }
 
-/** First symbol layer above building polygons, used to insert overlays beneath labels. */
 export function firstLabelAboveBuildings(map: MapLibreMap): string | undefined {
     const layers = map.getStyle().layers;
     const lastBuilding = layers.findLastIndex(l => 'source-layer' in l && l['source-layer'] === 'building');
@@ -119,7 +108,6 @@ export function useMarkerElements(
     const [placed, setPlaced] = useState<PlacedMarkers>({elements: {}, markers: {}});
     const latest = useRef({points, options});
     latest.current = {points, options};
-    // Sorted, so a reordering alone doesn't remake every marker.
     const pointsKey = points.map(p => `${p.key}@${p.lng},${p.lat}`).sort().join(';');
 
     useEffect(() => {
@@ -141,7 +129,6 @@ export function useMarkerElements(
     return placed;
 }
 
-/** A popup for the map, with an element to portal its content into. Opening and closing are the caller's. */
 export function usePopup(map: MapLibreMap | null, options: PopupOptions): {
     popup: Popup | null;
     content: HTMLElement | null

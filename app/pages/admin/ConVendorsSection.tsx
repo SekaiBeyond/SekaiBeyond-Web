@@ -17,11 +17,6 @@ export const VendorsSection = ({content, loading, showToast, readOnly}: SectionP
 
     const byTable = useMemo(() => new Map(draft.tables.map(vendor => [vendor.table, vendor])), [draft.tables]);
 
-    /**
-     * The draft lists only occupied tables, in plan order, as the server stores
-     * them, so filling and clearing a table is no change. A table with only a
-     * link is kept, and Save asks for a name.
-     */
     const setTable = (table: string, patch: Partial<Pick<VendorDraft, 'name' | 'link'>>) =>
         setDraft(prev => {
             const was = prev.tables.find(vendor => vendor.table === table);
@@ -42,11 +37,9 @@ export const VendorsSection = ({content, loading, showToast, readOnly}: SectionP
             return next;
         });
 
-    /** From the plan: open the table's row and put the cursor in its name. */
     const jumpTo = (table: string) => {
         setRowOpen(rowOf(table), true);
         setCurrent(table);
-        // After the row has rendered open — a closed <details> hides its inputs.
         requestAnimationFrame(() => {
             const input = nameInputs.current.get(table);
             input?.focus({preventScroll: true});

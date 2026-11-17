@@ -25,8 +25,6 @@ export const Hero = () => {
     const {isEnglish} = useLanguage();
     const bubbleStyles = useMemo(generateBubbleStyles, []);
     const {activeEvents, hasActive, loading: upcomingLoading} = useUpcomingEvents();
-    // Points to what's coming while loading, as there usually is something, so
-    // the button doesn't switch once it loads.
     const showUpcoming = upcomingLoading || hasActive;
 
     const scrollTo = (e: MouseEvent, id: string) => {

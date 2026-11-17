@@ -5,14 +5,11 @@ import { callAdminChangeEmail, callGetSignInMethods, type SignInMethods } from '
 import type { UserRecord } from './types';
 import type { ShowToast } from './utils';
 
-/** How an account signs in, as the Sign-in and Connected Accounts sections both show it. */
 export interface UserSignIn {
-    /** Null until loaded. */
     methods: SignInMethods | null;
     failed: boolean;
 }
 
-/** How the account `uid` signs in, loaded once for its page. */
 export function useUserSignInMethods(uid: string): UserSignIn {
     const [methods, setMethods] = useState<SignInMethods | null>(null);
     const [failed, setFailed] = useState(false);
@@ -32,12 +29,6 @@ export function useUserSignInMethods(uid: string): UserSignIn {
     return {methods, failed};
 }
 
-/**
- * Whether an account has a password, and the way to give it a new address when
- * its owner has lost the mailbox and can't get a code. That skips the month
- * between changes, says so on the Records tab, and tells both addresses.
- * Google is the Connected Accounts section's (UserConnectionsSection).
- */
 export const UserSignInSection = ({user, signIn, canManage, onUpdated, showToast}: {
     user: UserRecord;
     signIn: UserSignIn;
@@ -93,7 +84,6 @@ export const UserSignInSection = ({user, signIn, canManage, onUpdated, showToast
                         ? 'Not set, and no Google account: they’d set one with a code sent to their email.'
                         : '未设置，也未绑定 Google：需通过发送到邮箱的验证码设置密码。');
 
-    // The rows of the account's own Account card in Settings, as staff see them.
     return (
         <div className="admin-group-section">
             <h4 className="admin-badges-title">{isEnglish ? 'Sign-in' : '登录方式'}</h4>

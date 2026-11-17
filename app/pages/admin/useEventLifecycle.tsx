@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { functionsErrorCode } from '~/lib/firebase';
 import { refreshAfterSave, type ShowToast } from './utils';
 
 interface UseEventLifecycleOptions {
-    /** Schedule the ~48h delayed deletion (past or upcoming variant of the callable). */
     requestDeletion: (data: {eventId: string}) => Promise<unknown>;
     cancelDeletion: (data: {eventId: string}) => Promise<unknown>;
     setPublished: (data: {eventId: string; published: boolean}) => Promise<unknown>;
@@ -12,10 +11,6 @@ interface UseEventLifecycleOptions {
     showToast: ShowToast;
 }
 
-/**
- * Publish/unpublish and request/cancel-deletion, shared by the past and
- * upcoming event tabs, which only differ in the functions behind them.
- */
 export function useEventLifecycle({
                                       requestDeletion,
                                       cancelDeletion,
@@ -82,36 +77,81 @@ export function useEventLifecycle({
     return {deletionBusyId, requestDeleteEvent, cancelDeleteEvent, togglePublish};
 }
 
-export function PublishToggleButton({published, onToggle}: {published: boolean; onToggle: () => void}) {
+type EventLifecycle = ReturnType<typeof useEventLifecycle>;
+
+export function EventActions({event, onEdit, lifecycle, children}: {
+    event: {id: string; title: string; published: boolean; deleteAt: Date | null};
+    onEdit: () => void;
+    lifecycle: EventLifecycle;
+    children?: ReactNode;
+}) {
     const {isEnglish} = useLanguage();
+    const busy = lifecycle.deletionBusyId === event.id;
+    const busyLabel = isEnglish ? 'Working...' : '处理中...';
     return (
-        <button
-            className={`admin-toggle-btn ${published ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-            onClick={onToggle}
-        >
-            {published
-                ? (isEnglish ? 'Unpublish' : '取消发布')
-                : (isEnglish ? 'Publish' : '发布')}
-        </button>
+        <div className="admin-form-actions admin-section-mb">
+            <button className="admin-toggle-btn admin-toggle-edit" onClick={onEdit}>
+                {isEnglish ? 'Edit Event' : '编辑活动'}
+            </button>
+            <button
+                className={`admin-toggle-btn ${event.published ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                onClick={() => lifecycle.togglePublish(event)}
+            >
+                {event.published
+                    ? (isEnglish ? 'Unpublish' : '取消发布')
+                    : (isEnglish ? 'Publish' : '发布')}
+            </button>
+            {event.deleteAt ? (
+                <button className="admin-toggle-btn admin-toggle-grant"
+                        onClick={() => lifecycle.cancelDeleteEvent(event)} disabled={busy}>
+                    {busy ? busyLabel : (isEnglish ? 'Cancel deletion' : '取消删除')}
+                </button>
+            ) : (
+                <button className="admin-toggle-btn admin-toggle-revoke"
+                        onClick={() => lifecycle.requestDeleteEvent(event)} disabled={busy}>
+                    {busy ? busyLabel : (isEnglish ? 'Delete Event' : '删除活动')}
+                </button>
+            )}
+            {children}
+        </div>
     );
 }
 
-/** "Delete Event" or, when a deletion is already scheduled, "Cancel deletion". */
-export function DeleteOrCancelButton({deleteAt, busy, onRequest, onCancel}: {
-    deleteAt: Date | null;
-    busy: boolean;
-    onRequest: () => void;
-    onCancel: () => void;
+export function EventDetailHeader({image, title, description, onBack, backLabel, children}: {
+    image: string;
+    title: string;
+    description?: string;
+    onBack: () => void;
+    backLabel: string;
+    children: ReactNode;
 }) {
-    const {isEnglish} = useLanguage();
-    const busyLabel = isEnglish ? 'Working...' : '处理中...';
-    return deleteAt ? (
-        <button className="admin-toggle-btn admin-toggle-grant" onClick={onCancel} disabled={busy}>
-            {busy ? busyLabel : (isEnglish ? 'Cancel deletion' : '取消删除')}
-        </button>
-    ) : (
-        <button className="admin-toggle-btn admin-toggle-revoke" onClick={onRequest} disabled={busy}>
-            {busy ? busyLabel : (isEnglish ? 'Delete Event' : '删除活动')}
+    return (
+        <>
+            <button className="admin-btn admin-btn--link" onClick={onBack}>
+                &larr; {backLabel}
+            </button>
+            <div className="admin-event-detail-header">
+                {image && <img src={image} alt="" className="admin-event-detail-img"/>}
+                <div>
+                    <h3>{title}</h3>
+                    <p className="admin-event-detail-meta">{children}</p>
+                    {description !== undefined && <p className="admin-description-text">{description}</p>}
+                </div>
+            </div>
+        </>
+    );
+}
+
+export function SubTab({active, onClick, count, children}: {
+    active: boolean;
+    onClick: () => void;
+    count?: number | null;
+    children: ReactNode;
+}) {
+    return (
+        <button className={`admin-sub-tab ${active ? 'admin-sub-tab-active' : ''}`} onClick={onClick}>
+            {children}
+            {count != null && count > 0 && <span className="admin-sub-tab-count">{count}</span>}
         </button>
     );
 }

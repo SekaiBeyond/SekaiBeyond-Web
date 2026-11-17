@@ -1,28 +1,20 @@
-import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { UserRecord } from './types';
-import { searchUsers, type ShowToast } from './utils';
+import type { ShowToast } from './utils';
+import { UserSearchInput, useUserSearch } from './useUserSearch';
 import { UserRow } from './UserRow';
 
 interface UserSearchAddProps {
-    /** Users hidden from the results (already on the roster, or otherwise ineligible). */
     excludeUids: Set<string>;
-    /** Uid of the user whose add is in flight, to disable just that row's button. */
     busyUid: string | null;
     onAdd: (user: UserRecord) => void;
     addLabel: string;
     addingLabel: string;
-    /** Shown when a completed search has no addable results. */
     noMatchMessage: string;
     showToast: ShowToast;
-    /** In a labelled form field, which spaces it, so it keeps no margins of its own. */
     inField?: boolean;
 }
 
-/**
- * Search and candidate rows for adding a user to a roster. The caller decides
- * what "add" means and keeps `excludeUids` current.
- */
 export function UserSearchAdd({
                                   excludeUids,
                                   busyUid,
@@ -34,58 +26,23 @@ export function UserSearchAdd({
                                   inField = false,
                               }: UserSearchAddProps) {
     const {isEnglish} = useLanguage();
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
-    const [searching, setSearching] = useState(false);
-    const [hasSearched, setHasSearched] = useState(false);
+    const search = useUserSearch(() =>
+        showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error'));
 
-    const runSearch = async () => {
-        const q = searchQuery.trim();
-        if (!q) {
-            setSearchResults([]);
-            setHasSearched(false);
-            return;
-        }
-        setSearching(true);
-        try {
-            setSearchResults(await searchUsers(q));
-        } catch {
-            showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error');
-        } finally {
-            setSearching(false);
-            setHasSearched(true);
-        }
-    };
-
-    const candidates = searchResults.filter(u => !excludeUids.has(u.uid));
+    const candidates = search.results.filter(u => !excludeUids.has(u.uid));
 
     return (
         <div className="admin-event-staff-add"
              style={{marginTop: inField ? 0 : 16, flexDirection: 'column', alignItems: 'stretch', gap: 8}}>
             <div className="admin-search" style={inField ? {marginBottom: 0} : undefined}>
-                <input
-                    type="text"
-                    className="admin-input"
+                <UserSearchInput
+                    search={search}
+                    onSearch={() => void search.run()}
                     placeholder={isEnglish ? 'Search user by email or name...' : '输入邮箱或姓名搜索用户...'}
-                    value={searchQuery}
-                    onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setHasSearched(false);
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && runSearch()}
                 />
-                <button
-                    className="admin-btn admin-btn--cta"
-                    onClick={runSearch}
-                    disabled={searching || !searchQuery.trim()}
-                >
-                    {searching
-                        ? (isEnglish ? 'Searching...' : '搜索中...')
-                        : (isEnglish ? 'Search' : '搜索')}
-                </button>
             </div>
 
-            {hasSearched && !searching && candidates.length === 0 && (
+            {search.hasSearched && !search.searching && candidates.length === 0 && (
                 <p className="admin-no-results">{noMatchMessage}</p>
             )}
 

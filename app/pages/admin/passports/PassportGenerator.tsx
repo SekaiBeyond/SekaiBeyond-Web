@@ -7,6 +7,7 @@ import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
 import { downloadBlob } from '~/lib/download';
 import type { ShowToast } from '../utils';
 import { buildPassportCsv, usePassportPngExport } from './passportExport';
+import { ToolHeader } from '../ToolHeader';
 
 interface PassportGeneratorProps {
     designs: PassportDesign[];
@@ -15,25 +16,19 @@ interface PassportGeneratorProps {
     showToast: ShowToast;
 }
 
-/** The run sizes stock is printed in, the last being the server's ceiling. */
 const COUNT_PRESETS = [25, 50, 100, MAX_PASSPORT_GENERATE];
 
-/** What one generate call handed back, plus the stamp its files are named with. */
 interface GeneratedRun {
     designId: string;
     year: number;
     passports: {passportId: string; activationCode: string}[];
-    /** As sent, for the result screen; blank for none. */
     note: string;
-    /** Fixed when the call landed, so a second download has the same name. */
     stamp: string;
 }
 
-/** How the admin screens tell designs apart: a year can have several. */
 export const designLabel = (design: PassportDesign, isEnglish: boolean): string =>
     `${design.year} · ${passportName(design, isEnglish)}`;
 
-/** A picker over every design, each by its year and name. */
 export const DesignSelect = ({designs, value, onChange, disabled}: {
     designs: PassportDesign[];
     value: string;
@@ -52,16 +47,10 @@ export const DesignSelect = ({designs, value, onChange, disabled}: {
     );
 };
 
-/**
- * The optional note given to every passport a run makes, such as why they're
- * being made. The stock table shows it, so it's also how a run is told apart
- * later.
- */
 export const PassportNoteField = ({value, onChange, disabled, className, labelClassName}: {
     value: string;
     onChange: (note: string) => void;
     disabled?: boolean;
-    /** The field's and its label's, to match the form it's in. */
     className: string;
     labelClassName?: string;
 }) => {
@@ -91,7 +80,6 @@ export const PassportNoteField = ({value, onChange, disabled, className, labelCl
     );
 };
 
-/** What each passport of the picked design grants, under its picker. */
 export const DesignTermHint = ({design}: {design: PassportDesign | undefined}) => {
     const {isEnglish} = useLanguage();
     if (!design) return null;
@@ -104,11 +92,6 @@ export const DesignTermHint = ({design}: {design: PassportDesign | undefined}) =
     );
 };
 
-/**
- * Mint passports and hand over the print files. Nothing ties a run together
- * afterwards, so leaving without exporting means picking them out of the stock
- * table (newest first) for a Keys CSV.
- */
 export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: PassportGeneratorProps) => {
     const {isEnglish} = useLanguage();
     const [designId, setDesignId] = useState(defaultDesignId ?? designs[0]?.id ?? '');
@@ -125,8 +108,6 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
     const selectedDesign = designs.find(d => d.id === designId);
     const issuedDesign = passportName(designs.find(d => d.id === issued?.designId), isEnglish);
 
-    // Armed while keys exist that aren't saved, covering tab close, reload and
-    // admin tab switches as well as Back.
     useExitGuard(!!issued && !exported, isEnglish
         ? 'You haven’t downloaded the activation keys. After leaving, select these passports in the stock table to download them. Leave anyway?'
         : '你还没有下载激活码。离开后，需在库存表中选中这些通行证才能下载。仍要离开吗？');
@@ -146,10 +127,6 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
             const res = await callGeneratePassports({designId, count, note: trimmed});
             const run: GeneratedRun = {...res.data, note: trimmed, stamp: fileStamp()};
             setIssued(run);
-            // Saved unasked, so the screen is a confirmation rather than the only
-            // copy. Only a throw re-arms the warning; a download the browser blocks
-            // still counts as exported, which is why the banner says to check for
-            // the file.
             setExported(false);
             try {
                 exportCsv(run);
@@ -165,24 +142,17 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
         }
     };
 
-    // Back asks through the guard, like every other way out.
     const leave = () => {
         if (confirmExit()) onBack();
     };
 
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={leave} type="button">
-                    {isEnglish ? '← Back to Passports' : '← 返回通行证'}
-                </button>
-                <h3 className="admin-tools-title">{isEnglish ? 'Generate Passports' : '生成通行证'}</h3>
-            </div>
+            <ToolHeader title={isEnglish ? 'Generate Passports' : '生成通行证'}
+                        back={isEnglish ? 'Back to Passports' : '返回通行证'} onBack={leave}/>
 
             {!issued ? (
                 <>
-                    {/* The run as what it makes: the cover, the term, and how
-                        many. */}
                     <div className="admin-passport-run">
                         <div className="admin-passport-run-cover">
                             {selectedDesign?.coverImageUrl
@@ -202,8 +172,6 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                                 <span className="admin-passport-run-label">
                                     {isEnglish ? 'How many' : '数量'}
                                 </span>
-                                {/* Stock is printed in round runs, so the usual
-                                    sizes are one click. */}
                                 <div className="admin-passport-count">
                                     {COUNT_PRESETS.map(preset => (
                                         <button
@@ -258,8 +226,6 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                             {isEnglish ? 'Cancel' : '取消'}
                         </button>
                     </div>
-                    {/* The one fact that changes what to do next, beside the
-                        button. */}
                     <p className="admin-passport-gen-note">
                         {isEnglish
                             ? 'The keys CSV downloads as soon as the passports exist. To download it again later, select the passports in the stock table and use Keys CSV.'
@@ -268,8 +234,6 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                 </>
             ) : (
                 <>
-                    {/* Saved is an outcome, not a warning, so it isn't yellow;
-                        unsaved stays red. */}
                     <div className={`admin-passport-result admin-passport-result--${
                         exported ? 'saved' : 'unsaved'}`}>
                         <strong className="admin-passport-result-title">
@@ -321,8 +285,6 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                                 ? (isEnglish ? `Rendering ${progress.done}/${progress.total}…` : `生成中 ${progress.done}/${progress.total}…`)
                                 : (isEnglish ? 'Download stickers ZIP' : '下载贴纸 ZIP')}
                         </button>
-                        {/* Apart from the downloads: it's the way off the
-                            screen. */}
                         <button
                             className="admin-toggle-btn admin-toggle-cancel admin-passport-result-done"
                             onClick={leave}
@@ -332,13 +294,10 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                         </button>
                     </div>
 
-                    {/* Public code and secret key, as two labelled columns. */}
                     <div className="admin-passport-keys">
                         <div className="admin-passport-key-row admin-passport-keys-head">
                             <span className="admin-passport-key-code">
                                 {isEnglish ? 'Code' : '编号'}
-                                {/* Dropped on a phone, where both labels don't
-                                    fit. */}
                                 <span className="admin-passport-keys-head-where">
                                     {isEnglish ? ' · on the sticker' : ' · 印于贴纸'}
                                 </span>

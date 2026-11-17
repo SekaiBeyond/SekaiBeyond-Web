@@ -15,7 +15,6 @@ const PassportShelfCard = ({designId, year, date, code, to}: {
     year: number;
     date?: string;
     code: string;
-    /** Left off when the passport page is private, rather than link to its notice. */
     to?: string;
 }) => {
     const {isEnglish} = useLanguage();
@@ -40,11 +39,6 @@ const PassportShelfCard = ({designId, year, date, code, to}: {
         : <div className="passport-shelf-card">{body}</div>;
 };
 
-/**
- * Every passport bound to `uid`, whole, for staff looking at an account: null
- * in flight, `failed` on error. Pass null to skip. Only staff can read
- * passports; an account's own shelf is useOwnPassports.
- */
 export function usePassportsByOwner(uid: string | null): {passports: Passport[] | null; failed: boolean} {
     const [passports, setPassports] = useState<Passport[] | null>(null);
     const [failed, setFailed] = useState(false);
@@ -69,12 +63,6 @@ export function usePassportsByOwner(uid: string | null): {passports: Passport[] 
     return {passports, failed};
 }
 
-/**
- * The shelf of the account signed in, `uid`: null in flight, `failed` on
- * error. Pass null to skip; someone else's shelf comes with their public
- * profile. From getMyPassports, as the passports themselves are staff's to
- * read: one emailed to someone holds that address.
- */
 export function useOwnPassports(uid: string | null): {passports: ShelfPassport[] | null; failed: boolean} {
     const [passports, setPassports] = useState<ShelfPassport[] | null>(null);
     const [failed, setFailed] = useState(false);
@@ -103,12 +91,6 @@ export function useOwnPassports(uid: string | null): {passports: ShelfPassport[]
     return {passports, failed};
 }
 
-/**
- * A member's shelf on /profile, one card per physical passport, so duplicates
- * of a design each get their own. Each links to its passport page unless the
- * holder made that private. Loading, failure, private and empty are the profile
- * page's to draw.
- */
 export const PassportShelf = ({passports, linked = true}: {passports: ShelfPassport[]; linked?: boolean}) => {
     const {isEnglish} = useLanguage();
     return (

@@ -1,9 +1,5 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
 
-/**
- * A page's whole content when it has nothing to show: why, a sign-in button
- * when signing in would help, and the way home.
- */
 export const NoticeCard = ({title, text, onSignIn}: {title: string; text?: string; onSignIn?: () => void}) => {
     const {isEnglish} = useLanguage();
     return (

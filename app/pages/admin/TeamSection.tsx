@@ -15,7 +15,6 @@ interface LinkedAccount {
     photoURL: string;
 }
 
-// Names never follow an account, so no name flag is read here.
 const memberFollows = (m: TeamMemberConfig) => ({
     role: m.useAccountRole ?? false,
     photo: m.useAccountPhoto ?? false,
@@ -31,15 +30,12 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
     const {isEnglish} = useLanguage();
     const [members, setMembers] = useState<TeamMemberConfig[]>([]);
     const [loadingRoster, setLoadingRoster] = useState(true);
-    // An unreadable roster keeps the editor shut: every change saves the whole
-    // list, so editing an empty one would wipe the team.
     const [rosterFailed, setRosterFailed] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [isAdding, setIsAdding] = useState(false);
     const [accounts, setAccounts] = useState<Map<string, LinkedAccount>>(new Map());
 
-    // The full roster lives in a server-only doc, loaded through a staff-gated callable.
     const loadRoster = useCallback(async () => {
         try {
             const res = await callGetTeamRoster();
@@ -56,7 +52,6 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
         loadRoster();
     }, [loadRoster]);
 
-    // Preview followed fields from the live account, as the public page does.
     useEffect(() => {
         const uids = [...new Set(
             members
@@ -100,13 +95,10 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
         setSaving(true);
         try {
             await callSaveTeamMembers({teamMembers: newMembers});
-            // The public projection cache, and the canonical roster back into the
-            // editor.
             await Promise.all([refreshAfterSave(refreshConfig, showToast, isEnglish), loadRoster()]);
             showToast(isEnglish ? 'Team updated.' : '团队已更新。', 'success');
         } catch (e) {
             showToast(errorMessage(e, isEnglish ? 'Failed to update team.' : '更新团队失败。'), 'error');
-            // Revert state if saving failed
             setMembers(members);
         } finally {
             setSaving(false);
@@ -132,8 +124,6 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
         saveChanges(newMembers).then();
     };
 
-    // Swaps within the same honorary status, so reordering never crosses
-    // groups.
     const moveMember = (index: number, direction: 'up' | 'down') => {
         const isHonorary = !!members[index].isHonorary;
         let targetIndex = -1;
@@ -170,8 +160,6 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
         const member = members[index];
         const acc = member.uid ? accounts.get(member.uid) : undefined;
         const f = memberFollows(member);
-        // A followed role falls back to the group label, then the stored value; a photo
-        // straight to the stored value.
         const accTitle = acc ? accountEffectiveTitle(acc.group, acc.title, acc.titleCn) : null;
         const displayName = member.name;
         const displayRole = f.role && accTitle ? (accTitle.en || member.role) : member.role;

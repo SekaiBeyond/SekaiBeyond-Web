@@ -5,19 +5,11 @@ import type { QrScanner } from '~/lib/useQrScanner';
 interface QrScannerViewportProps {
     scanner: QrScanner;
     isEnglish: boolean;
-    /** Disables starting the camera (e.g. while a scan is in flight). */
     startDisabled?: boolean;
-    /** The camera's frame, for a caller that brings it into view. */
     viewportRef?: Ref<HTMLDivElement>;
-    /** Extra controls rendered in the button row, after Stop. */
     children?: ReactNode;
 }
 
-/**
- * The camera preview and button row shared by the admin scanners, used with
- * {@link useQrScanner}. While the camera is off its frame is the button that
- * starts it. The caller decides what a code means and renders the result.
- */
 export function QrScannerViewport({scanner, isEnglish, startDisabled, viewportRef, children}: QrScannerViewportProps) {
     const {videoRef, canvasRef, cameraActive, cameraError, startCamera, stopCamera} = scanner;
     return (

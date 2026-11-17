@@ -9,14 +9,12 @@ interface LotDetailProps {
     view: LotView;
     parkingWindow: ParkingWindow;
     venueName: string;
-    /** Codes of the lots the guide lists, so overflow lots among them can be opened. */
     listedCodes: ReadonlySet<string>;
     onBack: () => void;
     onOpenLot: (code: string) => void;
     tx: ParkingText;
 }
 
-/** Why a lot has the status it has: its hours that day, against the event's. */
 function whyText({status}: LotView, parkingWindow: ParkingWindow, tx: ParkingText): string {
     if (status.kind === 'event' && status.pricing) {
         return tx.t('whyEvent', {p: status.pricing.price, when: tx.pricingWhen(status.pricing)});
@@ -44,7 +42,6 @@ const SectionHead = ({icon, title, tone = 'info'}: {icon: string; title: ReactNo
     </div>
 );
 
-/** Everything about one lot, in place of the list. */
 export const LotDetail = ({
                               view,
                               parkingWindow,
@@ -56,9 +53,7 @@ export const LotDetail = ({
                           }: LotDetailProps) => {
     const {lot, status, suggested, note} = view;
 
-    // Only rates the lot can charge: W28 lists daytime rates, but it's permits only then.
     const rates = weeklyRates(lot);
-    // When it has both kinds, each says which hours it's for.
     const ratePeriods = rates.some(r => r.unit === 'night') && rates.some(r => r.unit !== 'night');
     const rateLabel = {hour: 'hourly', day: 'daily', night: 'night'} as const;
     const stalls = ([['standard', 'P'], ['compact', 'C'], ['accessible', '♿'], ['motorcycle', 'M'], ['ev', '⚡']] as const)
@@ -73,10 +68,8 @@ export const LotDetail = ({
             : tx.t('clearance', {m: (lot.clearanceInches * 0.0254).toFixed(2), in: lot.clearanceInches})
         : '';
     const walk = walkText(view, tx, {venueName});
-    // "For Sat, Oct 24", the date in bold.
     const [forBefore, forAfter] = tx.t('secEvent').split('{d}');
     const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lot.lat},${lot.lng}&travelmode=driving`;
-    // A pin on the lot, without starting a route.
     const mapUrl = `https://www.google.com/maps/search/?api=1&query=${lot.lat},${lot.lng}`;
 
     return (

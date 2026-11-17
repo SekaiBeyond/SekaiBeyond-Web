@@ -14,7 +14,6 @@ interface ToolDef {
     titleCn: string;
     description: string;
     descriptionCn: string;
-    // Hidden from staff (read-only), for tools whose callable is core-staff+.
     adminOnly?: boolean;
 }
 

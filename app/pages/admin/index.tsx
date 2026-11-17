@@ -30,7 +30,6 @@ import { SectionNav } from './SectionNav';
 import type { LocationListHandle } from './useCardHighlight';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
 
-/** Every tab a link can name. */
 const LINKABLE_TABS: Tab[] = ['users', 'events', 'locations', 'badges', 'passports', 'records', 'tools', 'config', 'con'];
 
 const ADMIN_TABS: {id: Tab; en: string; zh: string; generalStaffOnly?: boolean}[] = [
@@ -49,12 +48,9 @@ export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
     const {pastEvents, refresh: refreshEvents} = usePastEvents();
-    // Only staff and above may read the whole collection; for anyone else the
-    // read is refused, so it isn't made.
     const {upcomingEvents: allUpcomingEvents, refresh: refreshAllUpcoming} = useAllUpcomingEvents(
         !!profile && hasPermission(profile.group, 'staff'),
     );
-    // Per-ID fetch for event-staff: avoids collection-level permission errors.
     const staffEventIds = profile?.eventStaffEvents ?? [];
     const {
         upcomingEvents: staffUpcomingEvents,
@@ -63,28 +59,18 @@ export const AdminPage = () => {
     } = useUpcomingEventsByIds(staffEventIds);
 
     const isCoreStaffOrAbove = !!profile && hasPermission(profile.group, 'core-staff');
-    // Every tab, read-only below core-staff. Event staff get only their events.
     const isStaffOrAbove = !!profile && hasPermission(profile.group, 'staff');
-    // Staff group: view-only admin access + Tools. Superset of event-staff access.
     const isStaffGroup = isStaffOrAbove && !isCoreStaffOrAbove;
-    // Event staff is a per-event tag, independent of the group: staff for an
-    // upcoming event get scanner and admin access to it. Gated on upcoming events
-    // because eventStaffEvents keeps past ones, so access lapses on archive.
     const isEventStaffOnly = !!profile && !isStaffOrAbove && staffUpcomingEvents.length > 0;
 
-    // Core-staff and staff group see all events; event-staff only sees their assigned ones.
     const upcomingEvents = isStaffOrAbove ? allUpcomingEvents : staffUpcomingEvents;
     const refreshUpcoming = isStaffOrAbove ? refreshAllUpcoming : refreshStaffUpcoming;
 
     const [activeTab, selectTab] = useState<Tab>('users');
-    // Switching tabs unmounts the tab, so it goes through the exit guard (the
-    // generator's unsaved keys, above all).
     const setActiveTab = (tab: Tab) => {
         if (confirmExit()) selectTab(tab);
     };
     const activeTabRef = useRef<HTMLButtonElement>(null);
-    // On a phone the tabs scroll sideways: keep the open one in view, scrolling
-    // only the row, never the page.
     useEffect(() => {
         const tab = activeTabRef.current;
         const row = tab?.parentElement;
@@ -112,8 +98,6 @@ export const AdminPage = () => {
     const badgesTabRef = useRef<BadgesTabHandle>(null);
     const venuesTabRef = useRef<LocationListHandle>(null);
     const passportsTabRef = useRef<PassportsTabHandle>(null);
-    // Cross-tab "jump to this card" requests, in state with a nonce so the effect
-    // fires after the target tab mounts, and again when it's already active.
     const actionNonce = useRef(0);
     const [pendingAction, setPendingAction] = useState<{type: string; id: string; nonce: number} | null>(null);
     const queueAction = useCallback((type: string, id: string) => {
@@ -137,7 +121,6 @@ export const AdminPage = () => {
         if (!isStaffOrAbove && !isEventStaffOnly) return;
         const tab = searchParams.get('tab');
         const event = searchParams.get('event');
-        // Queued: the tab only mounts once setActiveTab lands.
         if (isEventStaffOnly) {
             setActiveTab('events');
             const firstEventId = event && staffUpcomingEvents.some(e => e.id === event)
@@ -197,7 +180,6 @@ export const AdminPage = () => {
         queueAction('editVenue', venueId);
     }, [queueAction]);
 
-    // Runs after the target tab mounts and registers its card refs.
     useEffect(() => {
         const action = pendingAction;
         if (!action) return;
@@ -227,8 +209,6 @@ export const AdminPage = () => {
         }
     }, [pendingAction]);
 
-    // Possible event staff can't be classified until we know which of their events
-    // are upcoming; hold the spinner rather than flash "Access Denied".
     const resolvingEventStaff = !!profile && !isStaffOrAbove
         && staffEventIds.length > 0 && staffEventsLoading;
     if (loading || resolvingEventStaff) {
@@ -300,12 +280,10 @@ export const AdminPage = () => {
                                 showToast={showToast}
                                 readOnly={!isCoreStaffOrAbove}
                                 onDetailChange={setUpcomingInDetail}
-                                // Event staff have no Users tab to open.
                                 onLookupUser={isStaffOrAbove ? handleLookupUser : undefined}
                             />
                         </div>
                         {isStaffOrAbove && (
-                            // Holds the Sekai Beyond Con and Past Events sections.
                             <div style={upcomingInDetail ? {display: 'none'} : undefined}>
                                 <EventsTab
                                     ref={eventsTabRef}
@@ -328,7 +306,6 @@ export const AdminPage = () => {
                                          readOnly={isStaffGroup}/>
                             </div>
                         )}
-                        {/* An open event's detail view is the only thing on screen. */}
                         {!upcomingInDetail && !eventsInDetail && (
                             <SectionNav
                                 sections={[

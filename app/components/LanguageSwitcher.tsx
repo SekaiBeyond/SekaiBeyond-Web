@@ -2,11 +2,6 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { FiCheck, FiGlobe } from 'react-icons/fi';
 import { LANGUAGES, useLanguage } from './LanguageContextProvider';
 
-/**
- * A globe button that opens a menu of the languages, the current one ticked.
- * It's an icon rather than a flag because Windows has no flag emoji, so Edge and
- * Chrome there showed the letters "CN" and "US" in their place.
- */
 export const LanguageSwitcher = () => {
     const {currentLanguage, setLanguage, isEnglish} = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
@@ -25,7 +20,6 @@ export const LanguageSwitcher = () => {
             setIsOpen(false);
             buttonRef.current?.focus();
         };
-        // Tabbing out of the menu closes it too.
         const handleFocusIn = (event: FocusEvent) => {
             if (!wrapperRef.current?.contains(event.target as Node)) setIsOpen(false);
         };

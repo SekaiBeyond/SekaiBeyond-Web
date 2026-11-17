@@ -40,13 +40,7 @@ import {
     requireRegisteredSession,
     requireStaff,
 } from "../utils/auth";
-import {
-    credentialsRef,
-    googleBindingOf,
-    googleIndexRef,
-    PASSWORD_PEPPER,
-    unlinkFirebaseGoogle,
-} from "../utils/credentials";
+import { credentialsRef, googleBindingOf, googleIndexRef, PASSWORD_PEPPER, } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
@@ -58,30 +52,13 @@ import { endSessions } from "../utils/sessions";
 import { isStorageUrl } from "../utils/storage";
 import { validateDocId } from "../utils/validation";
 
-/**
- * The account's side of linking it to an app's account (see utils/appLinks.ts):
- * Settings lists the apps it may link, starts a request, watches it for the
- * app's claim, and confirms it with the code the app shows, or removes a link.
- * The app's side is the API's (functions/api.ts). Staff see an account's links
- * and holds, and may lift a hold.
- *
- * Starting, confirming and removing need a device on the account's list
- * (requireRegisteredSession), as changing how it signs in does, and each tells
- * the account's address. The notice of a link carries a "This wasn't me" link
- * (undoAppLink), for an owner whose sign-in someone else used to link theirs.
- */
-
-/** Confirming checks the app's code against its peppered hash. */
 const LINK_CALL: CallableOptions = {maxInstances: 10, secrets: [RESEND_API_KEY, PASSWORD_PEPPER]};
 
-/** Requests one account may start an hour: enough for a few codes that ran out before anyone scanned them. */
 const LINK_REQUESTS_PER_HOUR = 10;
 const HOUR_MS = 60 * 60 * 1000;
 
-/** Hashing the new password takes the memory account calls have. */
 const LINK_UNDO_CALL: CallableOptions = {maxInstances: 20, memory: "512MiB", secrets: [PASSWORD_PEPPER]};
 
-/** "This wasn't me" links one network may follow an hour, as for an email change's. */
 const LINK_UNDOS_PER_HOUR_PER_NETWORK = 30;
 
 const badUndoLink = () => new HttpsError("not-found", "This link doesn't work.", {code: "bad-undo-link"});
@@ -89,14 +66,9 @@ const badUndoLink = () => new HttpsError("not-found", "This link doesn't work.",
 const linkingOff = () =>
     new HttpsError("failed-precondition", "This app doesn't link accounts.", {code: "linking-off"});
 
-/** Settings' word for a request that's gone; the API's, to the app, is link-request-not-found. */
 const requestGone = () =>
     new HttpsError("not-found", "This request has run out. Start again.", {code: "link-request-gone"});
 
-/**
- * An app that links accounts, read fresh, so turning it off counts at once.
- * The API's requireLinkingApp reads the same through registeredApps' cache.
- */
 async function requireLinkingApp(raw: unknown, txn?: FirebaseFirestore.Transaction): Promise<RegisteredApp> {
     const ref = appsCol().doc(validateAppId(raw));
     const app = readApp(txn ? await txn.get(ref) : await ref.get());
@@ -109,12 +81,6 @@ const readRequestId = (raw: unknown): string => {
     return raw;
 };
 
-/**
- * The apps the caller may link, and their links: every app that links
- * accounts, and any other they're still linked in, which they may only remove.
- * Oldest first, so an app keeps its place, whatever it's renamed, and a new
- * one joins at the end.
- */
 export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request, "account");
     const [appsSnap, linksSnap] = await Promise.all([
@@ -146,12 +112,6 @@ export const getAppLinks = onCall({maxInstances: 20}, async (request) => {
     };
 });
 
-/**
- * Starts a request to link the caller's account to their account in an app:
- * what Settings shows to scan, or type in, in the app. Any request of theirs
- * for the app still waiting is cancelled, so only the newest code works.
- * Answers with the server's time too, for Settings to count down by.
- */
 export const startAppLink = onCall(LINK_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const appId = validateAppId((request.data as {appId?: unknown} | null)?.appId);
@@ -202,7 +162,6 @@ export const startAppLink = onCall(LINK_CALL, async (request) => {
     };
 });
 
-/** The caller's claimed request, read in `txn`, or the refusal for one that isn't. */
 async function claimedRequest(
     txn: FirebaseFirestore.Transaction,
     ref: FirebaseFirestore.DocumentReference,
@@ -225,16 +184,6 @@ const wrongCode = (attemptsLeft: number) => new HttpsError("permission-denied", 
     attemptsLeft,
 });
 
-/**
- * Links the caller's account to the app's account that claimed their request,
- * once they've seen whose it is and typed in the code the app shows them. A
- * wrong code counts, and LINK_CONFIRM_ATTEMPTS of them cancel the request.
- * Either side may have been linked meanwhile, or be waiting out a hold, which
- * the claim checked too (assertCanLink).
- *
- * The code is checked, and a wrong one counted, before the notice is charged
- * for, so mistyping it doesn't use up the day's notices.
- */
 export const confirmAppLink = onCall(LINK_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {requestId?: unknown; code?: unknown; language?: unknown};
@@ -262,7 +211,6 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
 
     const linked = await db.runTransaction(async (txn) => {
         const req = await claimedRequest(txn, ref, uid);
-        // Claimed again meanwhile, with a new code: not counted, as this one was right.
         if (!linkConfirmCodeMatches(requestId, req, code)) throw wrongCode(LINK_CONFIRM_ATTEMPTS);
         const app = await requireLinkingApp(req.appId, txn);
         const user = await assertCanLink(txn, app.id, uid, req.appUserId);
@@ -303,7 +251,6 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
     return {linked: true};
 });
 
-/** Cancels the caller's request, unless it's linked already. Nothing to cancel is fine. */
 export const cancelAppLink = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "account");
     const ref = appLinkRequestsCol().doc(readRequestId((request.data as {requestId?: unknown} | null)?.requestId));
@@ -316,17 +263,11 @@ export const cancelAppLink = onCall({maxInstances: 10}, async (request) => {
     return {cancelled: true};
 });
 
-/**
- * Removes the caller's link in an app, which stops the app reading anything of
- * the account at once. Each side then waits out LINK_HOLD_DAYS before linking
- * anyone else. Works on an app that has since stopped linking accounts too.
- */
 export const removeAppLink = onCall(LINK_CALL, async (request) => {
     const uid = await requireRegisteredSession(request, "account");
     const input = (request.data ?? {}) as {appId?: unknown; language?: unknown};
     const appId = validateAppId(input.appId);
     const language = readMailLanguage(input.language);
-    // Nothing to remove costs none of the day's notices. Checked again below.
     if ((await accountLinkInAppQuery(appId, uid).get()).empty) return {unlinked: false};
     await limitNoticedChange(uid, "appLink");
 
@@ -365,22 +306,6 @@ export const removeAppLink = onCall(LINK_CALL, async (request) => {
     return {unlinked: !!unlinked};
 });
 
-/**
- * The "This wasn't me" link in a link's notice (AppLinkUndoDoc), for an owner
- * whose sign-in someone else used to link their own account in an app. Undoes
- * the link without holding the account to that app's account, and lifts the
- * hold if it's been unlinked since, so the owner can link their own at once;
- * the app's account waits out the hold before linking anyone. Only once in
- * LINK_HOLD_DAYS per app: after that, the account is held as unlinking in
- * Settings would hold it (disownLinkInTxn), which `heldUntil` says.
- *
- * Whoever linked it could sign in, and anyone signed in can bind a Google
- * account of their own from Settings, so, as undoing an email change does, it
- * replaces the password, takes off any Google account bound and signs every
- * device out, and the new password is the only way back in. The link is used
- * up only once every device is signed out: until then whoever linked it is
- * still in, so following it again finishes. Signs nobody in.
- */
 export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
     const input = (request.data ?? {}) as {token?: unknown; password?: unknown};
     await consumeRateLimit(
@@ -410,7 +335,6 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
             passwordChangedAt: FieldValue.serverTimestamp(),
             google: null,
         }, {merge: true});
-        // A photo that isn't an upload is the Google account's, and goes with it, as unbinding does.
         const photoURL: unknown = user.get("photoURL");
         if (photoURL && !isStorageUrl(photoURL)) txn.update(user.ref, {photoURL: ""});
         if (!undo.usedAt) {
@@ -430,17 +354,10 @@ export const undoAppLink = onCall(LINK_UNDO_CALL, async (request) => {
     });
 
     await endSessions(uid, null);
-    await unlinkFirebaseGoogle(uid);
     await undoRef.delete();
     return {appId, nameEn, nameCn, heldUntil: heldUntil?.toISOString() ?? null};
 });
 
-/**
- * An account's links and holds, app by app, for staff looking at it in the
- * Users tab: who it's linked to in each app, and which it's held to and until
- * when. Listed are the apps it has one or the other in, and those it could
- * link in, as its own Settings lists them, and in the same order: oldest first.
- */
 export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireStaff(uid);
@@ -479,12 +396,6 @@ export const getUserAppLinks = onCall({maxInstances: 10}, async (request) => {
     };
 });
 
-/**
- * Lifts the hold on an account in an app, so it can link another of its own
- * accounts there before LINK_HOLD_DAYS are up: for someone who linked the
- * wrong one, or was linked by someone else twice in that time. Core-staff and
- * above, for accounts below them, never their own. On the Records tab.
- */
 export const clearAppLinkHold = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const input = (request.data ?? {}) as {targetUid?: unknown; appId?: unknown};

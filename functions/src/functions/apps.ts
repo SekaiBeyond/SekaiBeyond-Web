@@ -1,5 +1,5 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 import { GoogleAuth } from "google-auth-library";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol } from "../utils/apiKeys";
@@ -23,7 +23,6 @@ import {
     readApp,
     type RegisteredApp,
     SERVICE_ACCOUNT_RE,
-    splitLegacyAppName,
     validateAppId,
 } from "../utils/apps";
 import { BATCH_LIMIT } from "../utils/config";
@@ -39,52 +38,31 @@ import {
     validateStr,
 } from "../utils/validation";
 
-/**
- * Registering apps people sign in to with their accounts here (see
- * utils/apps.ts), and signing them in. Registering is core staff's, as API
- * keys are: an app is the club's arrangement with its maintainers. Signing in
- * tells the app who someone is here; what of the site it reads is its keys'
- * scopes. What the app does with that, and who may do what in it, is its own
- * business.
- */
-
 const APP_NAME_MAX = 60;
 
 interface AppInput {
-    /** Either or both "", when it's shown by its ID. */
     nameEn: string;
     nameCn: string;
     maintainerUids: string[];
     redirectUris: string[];
     firebaseProjectId: string;
     serviceAccount: string;
-    /**
-     * Undefined when the caller didn't say, such as an Apps tool loaded before
-     * the switch existed: a new app is then off, and a saved one stays as it was.
-     */
-    accountLinking?: boolean;
-    /** As accountLinking: undefined leaves a saved app's as it was, and a new one's "". */
-    platform?: AppPlatform;
-    /** As platform. "" for none. */
-    iconUrl?: string;
+    accountLinking: boolean;
+    platform: AppPlatform;
+    iconUrl: string;
 }
 
 function parseAppInput(raw: unknown): AppInput {
     const input = (raw ?? {}) as Record<string, unknown>;
-    const readName = (field: "nameEn" | "nameCn" | "name") =>
+    const readName = (field: "nameEn" | "nameCn") =>
         sanitizeDisplayText(validateStr(input[field], field, APP_NAME_MAX));
-    // An Apps tool loaded before there were two names sends its one.
-    const names = input.nameEn === undefined && input.nameCn === undefined
-        ? splitLegacyAppName(readName("name"))
-        : {nameEn: readName("nameEn"), nameCn: readName("nameCn")};
-    const accountLinking = input.accountLinking === undefined
-        ? undefined
-        : validateBoolean(input.accountLinking, "accountLinking");
-    if (input.platform !== undefined && !isAppPlatform(input.platform)) {
+    const names = {nameEn: readName("nameEn"), nameCn: readName("nameCn")};
+    const accountLinking = validateBoolean(input.accountLinking ?? false, "accountLinking");
+    const platform = input.platform ?? "";
+    if (!isAppPlatform(platform)) {
         throw new HttpsError("invalid-argument", `platform must be "" or one of: ${APP_PLATFORMS.join(", ")}.`);
     }
-    const platform = input.platform as AppPlatform | undefined;
-    const iconUrl = input.iconUrl === undefined ? undefined : validateStr(input.iconUrl, "iconUrl", 500);
+    const iconUrl = validateStr(input.iconUrl, "iconUrl", 500);
     if (iconUrl) validateStorageImageUrl(iconUrl, "iconUrl");
 
     const rawMaintainers = input.maintainerUids;
@@ -110,8 +88,6 @@ function parseAppInput(raw: unknown): AppInput {
         return normalized;
     }))];
 
-    // An app that only holds API keys leaves sign-in blank; one that signs
-    // people in needs where to hand them back to, its project and its service account.
     if (redirectUris.length === 0 && rawProject === "" && rawServiceAccount === "") {
         return {
             ...names,
@@ -148,10 +124,6 @@ function parseAppInput(raw: unknown): AppInput {
 
 let signer: Promise<string> | null = null;
 
-/**
- * The service account this project's functions run as, which an app's
- * maintainers grant roles to, or "" where it can't be told, as in the emulator.
- */
 function signerAccount(): Promise<string> {
     signer ??= new GoogleAuth().getCredentials()
         .then(credentials => credentials.client_email ?? "")
@@ -159,21 +131,12 @@ function signerAccount(): Promise<string> {
     return signer;
 }
 
-/**
- * Refuses an app whose sign-ins would be for this project, or signed as a
- * service account of it. A custom token names the account that signed it and
- * no project, so one signed as an account of this project signs in to the site
- * itself, as whoever chose Continue on the app's sign-in page. The site refuses
- * such a sign-in whatever is registered (isSiteSignIn); this says so when the
- * app is saved.
- */
 async function requireOtherProject(app: Pick<AppInput, "firebaseProjectId" | "serviceAccount">): Promise<void> {
     if (!app.serviceAccount) return;
     const project = process.env.GCLOUD_PROJECT ?? "";
     const ofThisProject = project !== "" && (app.firebaseProjectId === project
         || app.serviceAccount.endsWith(`@${project}.iam.gserviceaccount.com`)
         || app.serviceAccount === `${project}@appspot.gserviceaccount.com`);
-    // The account the functions run as is this project's too, whatever it's called.
     if (ofThisProject || app.serviceAccount === await signerAccount()) {
         throw new HttpsError("invalid-argument",
             "An app signs people in to its own Firebase project, as a service account of that project, not this site's.",
@@ -181,7 +144,6 @@ async function requireOtherProject(app: Pick<AppInput, "firebaseProjectId" | "se
     }
 }
 
-/** The user docs of `uids`, by uid, read together. */
 async function usersByUid(uids: string[]): Promise<Map<string, FirebaseFirestore.DocumentSnapshot>> {
     const unique = [...new Set(uids.filter(Boolean))];
     if (unique.length === 0) return new Map();
@@ -189,16 +151,13 @@ async function usersByUid(uids: string[]): Promise<Map<string, FirebaseFirestore
     return new Map(snaps.map(snap => [snap.id, snap]));
 }
 
-/** An app's creator or maintainer as the Apps tool shows them. */
 interface AppPerson {
     uid: string;
     name: string;
     photoURL: string;
-    /** Their account no longer exists. */
     deleted: boolean;
 }
 
-/** `uid` as it is now among `users`, or, its account gone, by `nameIfDeleted`. */
 function appPerson(uid: string, users: Map<string, FirebaseFirestore.DocumentSnapshot>, nameIfDeleted = ""): AppPerson {
     const snap = users.get(uid);
     if (!snap?.exists) return {uid, name: nameIfDeleted, photoURL: "", deleted: true};
@@ -209,12 +168,6 @@ function appPerson(uid: string, users: Map<string, FirebaseFirestore.DocumentSna
     return {uid, name: text("displayName"), photoURL: text("photoURL"), deleted: false};
 }
 
-/**
- * Every app, newest first, with who registered it and who looks after it, by
- * their names and photos now, its API keys (expired ones too, newest first,
- * never the key itself), and the account maintainers grant roles to. Core
- * staff only.
- */
 export const listApps = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
@@ -278,13 +231,6 @@ export const listApps = onCall({maxInstances: 10}, async (request) => {
     };
 });
 
-/**
- * Registers an app (`create`) under an ID made for it (newAppId), or changes
- * the one `appId` names. Its ID is for good: it's in every sign-in the app
- * has. A change applies to the next sign-in at once and to the API within
- * seconds (see registeredApps). An icon it no longer has is deleted once it's
- * saved. Says the app's ID.
- */
 export const saveApp = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const input = (request.data ?? {}) as {appId?: unknown; create?: unknown};
@@ -293,7 +239,6 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
     const fields = parseAppInput(request.data);
     await requireOtherProject(fields);
 
-    // The icon it had, which the save stops linking if it sets another.
     const oldIconUrl = await adminTransaction(uid, async (txn, callerSnap) => {
         const ref = appsCol().doc(appId);
         const maintainerRefs = fields.maintainerUids.map(id => db.collection("users").doc(id));
@@ -301,7 +246,6 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
             txn.get(ref),
             maintainerRefs.length > 0 ? txn.getAll(...maintainerRefs) : [],
         ]);
-        // One in 2^64 a new ID is taken: create then fails rather than overwrite it.
         if (!create && !snap.exists) throw new HttpsError("not-found", "App not found.");
         if (maintainers.some(m => !m.exists)) {
             throw new HttpsError("not-found", "A maintainer's account no longer exists.", {code: "maintainer-not-found"});
@@ -311,33 +255,16 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
 
         const callerName: string = callerSnap.data()?.displayName ?? "";
         const now = Timestamp.now();
-        const {accountLinking, platform, iconUrl, ...rest} = fields;
         if (create) {
             txn.create(ref, {
-                ...rest,
-                accountLinking: accountLinking ?? false,
-                platform: platform ?? "",
-                iconUrl: iconUrl ?? "",
+                ...fields,
                 createdBy: uid,
                 createdByName: callerName,
                 createdAt: now,
                 updatedAt: now,
             });
         } else {
-            // Left over from before (see readApp): ownerUid, the one maintainer
-            // it had before it could have several, name, the one name it had
-            // before it had one in each language, and scopes, what it once
-            // read for the person signed in.
-            txn.update(ref, {
-                ...rest,
-                ...(accountLinking === undefined ? {} : {accountLinking}),
-                ...(platform === undefined ? {} : {platform}),
-                ...(iconUrl === undefined ? {} : {iconUrl}),
-                ownerUid: FieldValue.delete(),
-                name: FieldValue.delete(),
-                scopes: FieldValue.delete(),
-                updatedAt: now,
-            });
+            txn.update(ref, {...fields, updatedAt: now});
         }
         txn.set(recordRef(), recordDoc(create ? "app-create" : "app-update", {
             performedBy: uid,
@@ -348,21 +275,13 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
         return prevIconUrl;
     });
 
-    if (fields.iconUrl !== undefined && oldIconUrl && oldIconUrl !== fields.iconUrl) {
+    if (oldIconUrl && oldIconUrl !== fields.iconUrl) {
         await deleteStorageFile(oldIconUrl, [APP_ICON_PREFIX])
             .catch(logStorageCleanupError(`saveApp ${appId}`));
     }
     return {saved: true, appId};
 });
 
-/**
- * Removes an app and revokes its API keys. Its keys and sign-in to it stop at
- * once, and the API refuses its sign-ins within seconds. Its users and data in
- * its own project are its maintainers' to keep. Its icon goes after, and its
- * account links, each on its account's record, as there may be more than a
- * transaction holds: nothing reads them meanwhile, since every reader looks the
- * app up first.
- */
 export const deleteApp = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const appId = validateAppId((request.data as {appId?: unknown} | null)?.appId);
@@ -392,8 +311,6 @@ export const deleteApp = onCall({maxInstances: 10}, async (request) => {
             .catch(logStorageCleanupError(`deleteApp ${appId}`));
     }
 
-    // Each link goes on its account's record, under a fixed ID: a link and its
-    // record make two writes, so a batch holds half as many links.
     try {
         const links = await appLinksCol().where("appId", "==", appId).get();
         const perBatch = Math.floor(BATCH_LIMIT / 2);
@@ -423,7 +340,6 @@ export const deleteApp = onCall({maxInstances: 10}, async (request) => {
     return {deleted: true};
 });
 
-/** The app a sign-in is for, read fresh, so a change made a moment ago counts. Refuses one without sign-in. */
 async function findApp(raw: unknown): Promise<RegisteredApp> {
     const notFound = new HttpsError("not-found", "No such app.", {code: "unknown-app"});
     if (typeof raw !== "string" || !APP_ID_RE.test(raw)) throw notFound;
@@ -432,7 +348,6 @@ async function findApp(raw: unknown): Promise<RegisteredApp> {
     return app;
 }
 
-/** Where a sign-in for `app` goes: the place asked for, which must be one of its own, or its first. */
 function redirectFor(app: RegisteredApp, raw: unknown): string {
     if (raw === undefined || raw === null || raw === "") return app.redirectUris[0];
     const asked = normalizeRedirectUri(raw);
@@ -442,12 +357,6 @@ function redirectFor(app: RegisteredApp, raw: unknown): string {
     return asked;
 }
 
-/**
- * What the sign-in page shows of an app before anyone signs in: its names
- * (see appNameIn), its icon and the names of its maintainers. Refuses an
- * unknown app, or a place to hand back to that isn't its own, before anyone
- * is asked to sign in.
- */
 export const getAppSignInInfo = onCall({maxInstances: 20}, async (request) => {
     const input = (request.data ?? {}) as {appId?: unknown; redirectUri?: unknown};
     const app = await findApp(input.appId);
@@ -459,13 +368,6 @@ export const getAppSignInInfo = onCall({maxInstances: 20}, async (request) => {
     return {nameEn: app.nameEn, nameCn: app.nameCn, iconUrl: app.iconUrl, maintainerNames};
 });
 
-/**
- * Signs the caller in to an app: a one-time code (see issueSignInCode), and
- * where the sign-in page hands it, with the app's `state`. The app trades it
- * for the sign-in at POST /v1/token. Any account may sign in to any app: the
- * app decides what that account may do there, and its keys' scopes what of the
- * site it reads.
- */
 export const issueAppCode = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     const input = (request.data ?? {}) as {appId?: unknown; redirectUri?: unknown; codeChallenge?: unknown};

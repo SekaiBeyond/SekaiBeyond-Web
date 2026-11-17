@@ -15,7 +15,6 @@ interface PastEventAttendeesSectionProps {
     readOnly?: boolean;
 }
 
-/** The attendee list for a past event, plus a search box to add attendees retroactively. */
 export function PastEventAttendeesSection({
                                               eventId,
                                               attendees,
@@ -28,7 +27,6 @@ export function PastEventAttendeesSection({
     const [busyUid, setBusyUid] = useState<string | null>(null);
     const [staffUids, setStaffUids] = useState<Set<string>>(new Set());
 
-    // Staff are filtered out of the search up front, saving a rejected add.
     useEffect(() => {
         let stale = false;
         const load = async () => {
@@ -37,7 +35,6 @@ export function PastEventAttendeesSection({
                 if (stale) return;
                 setStaffUids(new Set(staff.map(u => u.uid)));
             } catch {
-                // Non-fatal — backend still rejects has-staff with a clear toast.
             }
         };
         void load();

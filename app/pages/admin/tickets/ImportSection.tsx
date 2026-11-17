@@ -31,7 +31,6 @@ const MAPPING_SELECT_STYLE = {
 
 const NO_MAPPING: ColumnMapping = {email: '', name: '', count: '', type: '', timestamp: ''};
 
-/** Each column to pick, with the headers it's matched to on its own, lowercased. */
 const MAPPING_FIELDS: {key: keyof ColumnMapping; en: string; zh: string; headers: string[]}[] = [
     {key: 'email', en: 'Email Column:', zh: '邮箱列：', headers: ['email', 'e-mail']},
     {key: 'name', en: 'Name Column:', zh: '姓名列：', headers: ['name', 'full name', 'display name']},
@@ -46,7 +45,6 @@ const MAPPING_FIELDS: {key: keyof ColumnMapping; en: string; zh: string; headers
     },
 ];
 
-/** The first of `fields` to match one of `headers`, in the order they're listed. */
 const guessColumn = (fields: string[], headers: string[]): string => {
     const lower = fields.map(f => f.toLowerCase().trim());
     for (const header of headers) {
@@ -162,7 +160,6 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
 
         setImporting(true);
         try {
-            // 'override': the duplicates to skip were filtered out locally, so any left are meant to be replaced.
             const result = await callImportEventAttendees({eventId, attendees: toSend, onDuplicate: 'override'});
             const {added, replaced, skipped} = result.data;
             const totalSkipped = skipped + manuallySkipped;

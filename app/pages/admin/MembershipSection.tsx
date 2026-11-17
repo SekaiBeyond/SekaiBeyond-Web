@@ -7,7 +7,6 @@ import type { ShowToast } from './utils';
 
 interface MembershipSectionProps {
     user: UserRecord;
-    /** Core-staff+ acting on someone below them. Read-only staff never see the controls. */
     canManage: boolean;
     onUpdated: (uid: string, changes: Partial<UserRecord>) => void;
     showToast: ShowToast;
@@ -17,7 +16,6 @@ const QUICK_EXTENSIONS = [30, 90, 365];
 
 const daysUntil = (date: Date) => Math.ceil((date.getTime() - Date.now()) / 86_400_000);
 
-/** Membership is time-boxed, not a group: editing it never touches the role. */
 export function MembershipSection({user, canManage, onUpdated, showToast}: MembershipSectionProps) {
     const {isEnglish} = useLanguage();
     const [editing, setEditing] = useState(false);
@@ -66,8 +64,6 @@ export function MembershipSection({user, canManage, onUpdated, showToast}: Membe
 
     const saveDate = () => {
         if (!dateInput) return;
-        // To the end of the chosen day on the Pacific calendar, so "expires on
-        // the 5th" covers the 5th.
         const iso = parseSiteTime(`${dateInput}T23:59:59`).toISOString();
         void apply({expiresAt: iso}, isEnglish ? 'Membership updated.' : '会员资格已更新。');
     };

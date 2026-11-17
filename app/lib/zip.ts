@@ -1,13 +1,5 @@
-/**
- * A minimal ZIP writer. Entries are stored, not deflated: it only packs PNGs,
- * which are deflate streams already. No Zip64: batches are hundreds of small
- * files.
- */
-
 export interface ZipEntry {
-    /** Path inside the archive. Kept ASCII so no UTF-8 name flag is needed. */
     name: string;
-    /** ArrayBuffer-backed, which is what Blob accepts as a BlobPart. */
     data: Uint8Array<ArrayBuffer>;
 }
 
@@ -31,7 +23,6 @@ function crc32(data: Uint8Array): number {
     return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
-/** MS-DOS date/time pair, the only timestamp format a base ZIP header carries. */
 function dosDateTime(date: Date): {time: number; date: number} {
     const time = (date.getHours() << 11) | (date.getMinutes() << 5) | (Math.floor(date.getSeconds() / 2));
     const dosDate = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
@@ -47,7 +38,6 @@ class ByteWriter {
         this.length += bytes.length;
     }
 
-    /** Little-endian scalars, which is what every ZIP field is. */
     pushFields(fields: {value: number; size: 2 | 4}[]): void {
         const total = fields.reduce((n, f) => n + f.size, 0);
         const buf = new Uint8Array(total);
@@ -61,7 +51,6 @@ class ByteWriter {
         this.push(buf);
     }
 
-    // ArrayBuffer-backed, as Blob requires of a BlobPart.
     concat(): Uint8Array<ArrayBuffer> {
         const out = new Uint8Array(this.length);
         let offset = 0;
@@ -87,7 +76,6 @@ export function buildZip(entries: ZipEntry[], now: Date = new Date()): Blob {
         const crc = crc32(entry.data);
         const offset = body.length;
 
-        // Local file header
         body.pushFields([
             u4(0x04034B50), u2(20), u2(0), u2(0), u2(time), u2(date),
             u4(crc), u4(entry.data.length), u4(entry.data.length),
@@ -96,7 +84,6 @@ export function buildZip(entries: ZipEntry[], now: Date = new Date()): Blob {
         body.push(name);
         body.push(entry.data);
 
-        // Central directory header
         central.pushFields([
             u4(0x02014B50), u2(20), u2(20), u2(0), u2(0), u2(time), u2(date),
             u4(crc), u4(entry.data.length), u4(entry.data.length),

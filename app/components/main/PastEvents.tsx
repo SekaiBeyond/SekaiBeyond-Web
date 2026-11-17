@@ -24,7 +24,6 @@ export const PastEvents = () => {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    // Cons show in the Sekai Beyond Con section instead.
     const publishedEvents = pastEvents.filter(e => e.published && !e.con);
     const initialCount = isMobile ? 3 : 6;
     const displayedEvents = showAll ? publishedEvents : publishedEvents.slice(0, initialCount);
@@ -138,6 +137,5 @@ export const PastEvents = () => {
                 />
             )}
         </section>
-
     );
 }

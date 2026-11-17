@@ -22,34 +22,11 @@ import {
     type SortKey,
 } from './PassportStockTable';
 
-/**
- * One design's passports as a sortable table: narrowed by status, sorted by the
- * clicked column, paged. All on the array the tab already holds, since a design
- * is a few hundred docs.
- *
- * Actions hang off ticked rows, the only way to act on a set that shares nothing
- * in the data (one envelope, a damaged batch): export codes, keys and stickers,
- * or delete in one call.
- *
- * Only unclaimed stock can be ticked: everything a selection does is
- * print-and-pack work on unsold passports, and it keeps the selection and the
- * delete the same set. Claimed passports are deleted from their own page.
- */
-
-/** About a screenful, and few enough rows that a re-sort is instant. */
 const PAGE_SIZE = 50;
 
-/**
- * A status, or the emailed passports activated on an account with another
- * address, whose tab shows only while there are some.
- */
 type StockFilter = 'all' | PassportStatus | 'mismatch';
 const STATUS_FILTERS: StockFilter[] = ['all', 'unclaimed', 'claimed'];
 
-/**
- * How the table is set: slice, column, direction, page. Held by the tab, since
- * opening a passport unmounts this and would otherwise lose your place.
- */
 export interface StockView {
     filter: StockFilter;
     sortKey: SortKey;
@@ -57,7 +34,6 @@ export interface StockView {
     page: number;
 }
 
-/** Newest first: the order stock is printed in, and the one an admin expects. */
 export const INITIAL_STOCK_VIEW: StockView = {
     filter: 'all',
     sortKey: 'generated',
@@ -65,13 +41,8 @@ export const INITIAL_STOCK_VIEW: StockView = {
     page: 0,
 };
 
-/** Sorting by status walks the lifecycle rather than the alphabet. */
 const STATUS_ORDER: Record<PassportStatus, number> = {unclaimed: 0, claimed: 1};
 
-/**
- * Text columns, where a blank sinks whichever way the column sorts, so
- * flipping reorders only what's filled in.
- */
 const compareFilled = (left: string, right: string, factor: number): number => {
     if (!left || !right) return left ? -1 : right ? 1 : 0;
     return left.localeCompare(right) * factor;
@@ -83,23 +54,15 @@ const stockFilterLabel = (filter: StockFilter, isEnglish: boolean): string =>
             : passportStatusLabel(filter, isEnglish);
 
 interface PassportStockProps {
-    /** Every passport of the selected design, newest first. */
     passports: Passport[];
-    /** The design's year, for naming export files. */
     year: number | undefined;
     view: StockView;
     onViewChange: (view: StockView) => void;
-    /** Ticked passport ids, lifted for the same reason as the view. */
     selected: string[];
     onSelectedChange: (selected: string[]) => void;
-    /** The passports a bulk delete removed, so the list drops those rows. */
     onDeleted: (passportIds: string[]) => void;
     onOpen: (id: string) => void;
     showToast: ShowToast;
-    /**
-     * Staff (read-only) can still export codes and stickers, but not keys or
-     * deletes.
-     */
     readOnly: boolean;
 }
 
@@ -126,14 +89,10 @@ export const PassportStock = ({
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
-    // Holders for the whole design, not a page, because the Holder column sorts.
-    // One read per claimed passport, 30 to a query.
     const ownerUids = useMemo(
         () => [...new Set(passports.flatMap(p => p.ownerUid ? [p.ownerUid] : []))],
         [passports],
     );
-    // Keyed on the uids, since patching the list makes a new array without
-    // changing who holds what.
     const ownerKey = ownerUids.join(',');
     useEffect(() => {
         setOwnersFailed(false);
@@ -148,7 +107,6 @@ export const PassportStock = ({
                 if (!stale) setOwners(map);
             })
             .catch(() => {
-                // An unreadable holder is a blank cell, never a broken table.
                 if (!stale) {
                     setOwners(new Map());
                     setOwnersFailed(true);
@@ -164,8 +122,6 @@ export const PassportStock = ({
     const isElsewhere = (passport: Passport): boolean => claimedElsewhere(
         passport, passport.ownerUid ? owners?.get(passport.ownerUid)?.email : undefined) !== null;
 
-    // Mismatches settle once the holders load, for those activated before the
-    // activating address was kept.
     const counts: Record<StockFilter, number> = useMemo(() => ({
         all: passports.length,
         unclaimed: passports.filter(p => p.status === 'unclaimed').length,
@@ -176,8 +132,6 @@ export const PassportStock = ({
         ? [...STATUS_FILTERS, 'mismatch' as const]
         : STATUS_FILTERS;
 
-    // Over the whole design, so the columns don't come and go between tabs and
-    // pages.
     const optional: OptionalColumns = useMemo(() => ({
         sentTo: passports.some(p => p.sentTo),
         note: passports.some(p => p.note),
@@ -207,26 +161,20 @@ export const PassportStock = ({
                     return ((a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0)) * factor;
             }
         };
-        // The id breaks ties, so equal rows don't shuffle when the list is
-        // patched.
         return [...filtered].sort((a, b) => compare(a, b) || a.id.localeCompare(b.id));
     }, [filtered, view.sortKey, view.sortDir, owners]);
 
     const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-    // Clamped, so deleting the final page's last row doesn't jump to the top.
     const page = Math.min(view.page, pageCount - 1);
     const from = page * PAGE_SIZE;
     const rows = sorted.slice(from, from + PAGE_SIZE);
 
     const selectedSet = useMemo(() => new Set(selected), [selected]);
-    // Resolved against the whole design, so a selection survives switching tabs,
-    // and ids deleted or claimed meanwhile drop out on their own.
     const selectedPassports = useMemo(
         () => passports.filter(p => selectedSet.has(p.id) && p.status === 'unclaimed'),
         [passports, selectedSet],
     );
 
-    // "All" means every tickable row in view (none on the Claimed tab).
     const selectableInView = useMemo(() => sorted.filter(p => p.status === 'unclaimed'), [sorted]);
     const viewSelectedCount = selectableInView.reduce((n, p) => n + (selectedSet.has(p.id) ? 1 : 0), 0);
     const allInViewSelected = selectableInView.length > 0 && viewSelectedCount === selectableInView.length;
@@ -234,7 +182,6 @@ export const PassportStock = ({
     const toggleOne = (id: string) => onSelectedChange(
         selectedSet.has(id) ? selected.filter(s => s !== id) : [...selected, id]);
 
-    // The whole filtered view, not the page: the same set the exports cover.
     const toggleView = () => {
         const inView = new Set(selectableInView.map(p => p.id));
         onSelectedChange(allInViewSelected
@@ -242,7 +189,6 @@ export const PassportStock = ({
             : [...new Set([...selected, ...inView])]);
     };
 
-    // Every ticked row is deletable, since claimed rows can't be ticked.
     const deleteSelected = async () => {
         const count = selectedPassports.length;
         if (count === 0) return;
@@ -267,8 +213,6 @@ export const PassportStock = ({
         }
         setDeleting(false);
 
-        // Claimed or deleted since loading: skipped, so the toast says what
-        // actually went.
         const skipped = result.claimed.length + result.missing.length;
         if (result.deleted.length === 0) {
             showToast(isEnglish
@@ -282,8 +226,6 @@ export const PassportStock = ({
         onDeleted(result.deleted);
     };
 
-    // One call per MAX_PASSPORT_KEY_EXPORT, each recorded. A passport with no key
-    // on file is left out and counted in the toast.
     const exportKeys = async () => {
         const ids = selectedPassports.map(p => p.id);
         if (ids.length === 0) return;
@@ -321,14 +263,12 @@ export const PassportStock = ({
     const sortBy = (column: Column) => onViewChange({
         ...view,
         sortKey: column.key,
-        // The sorted column flips; a new one starts its usual way.
         sortDir: view.sortKey === column.key
             ? (view.sortDir === 'asc' ? 'desc' : 'asc')
             : column.first,
         page: 0,
     });
 
-    // A selection export matches no filter, so its time tells downloads apart.
     const selectionBase = `passports-${year ?? ''}-selected-${fileStamp()}`;
 
     return (
@@ -352,10 +292,6 @@ export const PassportStock = ({
                 ))}
             </div>
 
-            {/* Always shown and always the same height, so the table doesn't jump
-                on the first tick. Select-all lives here because a header box
-                can't say it covers the whole view. Shown on an empty view too
-                while something is ticked, since a selection spans tabs. */}
             {(sorted.length > 0 || selectedPassports.length > 0) && (
                 <div className="admin-passport-bar">
                     <label className={`admin-passport-bar-all${
@@ -363,13 +299,10 @@ export const PassportStock = ({
                         <input
                             type="checkbox"
                             checked={allInViewSelected}
-                            // Partly ticked when the view holds some of the
-                            // selection.
                             ref={el => {
                                 if (el) el.indeterminate = viewSelectedCount > 0 && !allInViewSelected;
                             }}
                             onChange={toggleView}
-                            // Nothing to take on the Claimed tab.
                             disabled={selectableInView.length === 0}
                             aria-label={selectableInView.length === 0
                                 ? (isEnglish
@@ -402,8 +335,6 @@ export const PassportStock = ({
                             {isEnglish ? 'Clear' : '清除'}
                         </button>
                     )}
-                    {/* Disabled rather than absent, so what ticking is for is visible
-                        up front. */}
                     <div className="admin-passport-bar-actions">
                         <button
                             className="admin-toggle-btn admin-toggle-edit admin-btn-sm"

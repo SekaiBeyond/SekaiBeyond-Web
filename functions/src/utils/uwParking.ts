@@ -1,34 +1,17 @@
 import { PUBLIC_ORIGIN } from "./config";
 
-/**
- * Readers for the public data the parking guide is built from. None is a
- * documented API, so each validates what it gets and throws rather than return
- * something half-read; the sync then keeps its last good copy.
- *
- * - UW_LOTS_URL: the JSON behind UW Transportation Services' parking map,
- *   regenerated daily around 23:00 UTC.
- * - UW_EVENT_PRICING_URL: the Trumba feed behind UW's event-parking calendar.
- * - WALKING_ROUTER_URL: FOSSGIS's public OSRM foot router. Fair use only, so
- *   called once per venue per sync, and only when the venue or a lot moved.
- */
 const UW_LOTS_URL = "https://depts.washington.edu/tsevents/data/master-data.json";
 const UW_EVENT_PRICING_URL = "https://www.trumba.com/calendars/sea_commute.json";
 const WALKING_ROUTER_URL = "https://routing.openstreetmap.de/routed-foot/table/v1/foot/";
 
-// The format UW's own map checks for (EXPECTED_VERSION in its bundle).
 const UW_LOTS_VERSION = "1";
-// Fewer visitor lots than this means a broken or truncated file, not a real change.
 const MIN_VISITOR_LOTS = 10;
 const FETCH_TIMEOUT_MS = 20_000;
 const USER_AGENT = `SekaiBeyond parking guide (+${PUBLIC_ORIGIN})`;
 
-/** UW facility codes: "N22", "C07-3", "W04V", "TRI". */
 export const UW_LOT_CODE_RE = /^[A-Z0-9][A-Z0-9-]{0,11}$/;
-/** UW building codes: "HUB", "KNE", "MGH". */
 export const UW_BUILDING_CODE_RE = /^[A-Z0-9]{2,8}$/;
 
-// The access levels a visitor can park under; "Permits Only", "Restricted" and
-// load zones are left out.
 const VISITOR_ACCESS = ["Permits or Pay", "Pay to Park"] as const;
 const CLOCK_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -40,9 +23,7 @@ interface ClockRange {
 export interface UwLot {
     code: string;
     name: string;
-    /** As UW words it: "Surface Lot", "Garage" or "Underground Garage". */
     type: string;
-    /** UW's campus area: "North", "Central", "South", "East" or "West". */
     area: string;
     lat: number;
     lng: number;
@@ -60,25 +41,16 @@ export interface UwLot {
     zipcar: boolean;
     ucar: boolean;
     dialARide: boolean;
-    /** When visitors can pay to park, as HH:mm on the site clock. Null on a day with no paid hours. */
     paidHours: {weekday: ClockRange | null; saturday: ClockRange | null};
-    /**
-     * When a permit is required: usually paidHours, but sometimes longer, and
-     * outside paidHours a visitor can't park then.
-     */
     permitHours: {weekday: ClockRange | null; saturday: ClockRange | null};
-    /** When a gated garage is open, if UW lists it. */
     gateHours: ClockRange | null;
 }
 
 interface UwEventPricing {
-    /** YYYY-MM-DD on the site clock. */
     date: string;
-    /** HH:mm, or both null when the rate is in effect all day. An end of 00:00 is the midnight closing the day. */
     start: string | null;
     end: string | null;
     price: number;
-    /** True when the rate covers every campus lot; `lots` is then empty. */
     allLots: boolean;
     lots: string[];
     title: string;
@@ -112,7 +84,6 @@ function clockRange(start: unknown, end: unknown): ClockRange | null {
     return s && e ? {start: s, end: e} : null;
 }
 
-/** One facility from UW's file as a visitor lot, or null for a permit-only, malformed or unusable one. */
 function toVisitorLot(raw: unknown): UwLot | null {
     if (!isRecord(raw)) return null;
     const access = VISITOR_ACCESS.find(a => a === raw.accessRestrictions);
@@ -157,7 +128,6 @@ function toVisitorLot(raw: unknown): UwLot | null {
     };
 }
 
-/** UW's visitor lots, sorted by code, with the time UW generated the file. */
 export async function fetchUwLots(): Promise<{lots: UwLot[]; generatedAt: string}> {
     const raw = await fetchJson(UW_LOTS_URL);
     if (!isRecord(raw) || !Array.isArray(raw.facilities)) {
@@ -180,23 +150,17 @@ export async function fetchUwLots(): Promise<{lots: UwLot[]; generatedAt: string
     };
 }
 
-// "$14 Event Parking in E01, E17, E18" / "$70 Event Parking in All Campus Lots"
 const PRICING_TITLE_RE = /^\$(\d+(?:\.\d{1,2})?)\s+event parking in\s+(.+)$/i;
-// Between the lot codes in a title: "E01, E17 and E18", "E01, E17, and E18", "E01 & E17".
 const LOT_LIST_SEPARATOR_RE = /\s*(?:,|&|\band\b)\s*/i;
 const FEED_TIME_RE = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/;
-// Longer than any real run of event days, so a longer entry is taken for a mistake and left out.
 const MAX_PRICING_DAYS = 31;
 
-/** The YYYY-MM-DD date `n` days after `date`. */
 function addDays(date: string, n: number): string {
     const [y, m, d] = date.split("-").map(Number);
     return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 }
 
-/** Event-rate days from `fromDay` (YYYY-MM-DD) on, in date order. */
 export async function fetchUwEventPricing(fromDay: string): Promise<UwEventPricing[]> {
-    // Twelve months ahead; the feed starts at the current month by default.
     const raw = await fetchJson(`${UW_EVENT_PRICING_URL}?months=12`);
     if (!Array.isArray(raw)) throw new Error("UW's event-parking feed is not a list");
 
@@ -219,9 +183,6 @@ export async function fetchUwEventPricing(fromDay: string): Promise<UwEventPrici
             .filter(c => UW_LOT_CODE_RE.test(c));
         if (!allLots && lots.length === 0) continue;
 
-        // An entry can span days: an all-day one ends at the midnight after its last day (Fri 00:00
-        // to Sun 00:00 is Friday and Saturday), and a timed one can run past midnight. Each day gets
-        // its own record with that day's hours.
         const firstDay = start[1];
         const [endDay, endClock] = end ? [end[1], end[2]] : [addDays(firstDay, 1), "00:00"];
         const lastDay = endClock === "00:00" && endDay > firstDay ? addDays(endDay, -1) : endDay;
@@ -233,7 +194,6 @@ export async function fetchUwEventPricing(fromDay: string): Promise<UwEventPrici
 
         for (const day of covered) {
             if (day < fromDay) continue;
-            // An end of 00:00 is the midnight that closes the day.
             const from = allDay || day !== firstDay ? "00:00" : start[2];
             const to = allDay || day !== endDay ? "00:00" : endClock;
             if (to !== "00:00" && to <= from) continue;
@@ -252,7 +212,6 @@ export async function fetchUwEventPricing(fromDay: string): Promise<UwEventPrici
     return days.sort((a, b) => a.date.localeCompare(b.date) || (a.start ?? "").localeCompare(b.start ?? ""));
 }
 
-/** Walking time and distance from a point to each lot, keyed by lot code. Unroutable lots are left out. */
 export async function fetchWalkingTimes(
     origin: {lat: number; lng: number},
     lots: Pick<UwLot, "code" | "lat" | "lng">[],
@@ -277,8 +236,6 @@ export async function fetchWalkingTimes(
     return times;
 }
 
-// UW Facilities' public ArcGIS layers: building outlines, and the accessibility
-// guide's per-building notes, which name the parking UW recommends.
 const UW_GIS = "https://gis.maps.uw.edu/federated/rest/services";
 const UW_BUILDINGS_LAYER = `${UW_GIS}/BaseComponents/UW_Seattle_Buildings_and_Paths/FeatureServer/1/query`;
 const UW_BUILDING_INFO_LAYER = `${UW_GIS}/PublicData/PUBLIC_ADA/MapServer/6/query`;
@@ -287,17 +244,11 @@ export interface UwBuilding {
     code: string;
     name: string;
     address: string;
-    /** The building's footprint centroid. */
     lat: number;
     lng: number;
-    /** UW's own parking note for the building, e.g. "N22: Pay at Gatehouse", or ''. */
     parkingTip: string;
 }
 
-/**
- * Lot codes named in UW's parking notes, written the way the lot data writes
- * them: "N22", "C9" → "C09", and "Central Plaza Garage (C1-C5)" → C01…C05.
- */
 export function lotCodesInText(note: string): string[] {
     const codes: string[] = [];
     const add = (letter: string, n: number) => {
@@ -307,7 +258,6 @@ export function lotCodesInText(note: string): string[] {
     for (const m of note.toUpperCase().matchAll(/\b([CENSW])(\d{1,2})(?:\s*[-–]\s*\1?(\d{1,2}))?\b/g)) {
         const from = Number(m[2]);
         const to = m[3] ? Number(m[3]) : from;
-        // A range is a run of numbered sections ("C1-C5"); anything wider is not one.
         if (to < from || to - from > 10) continue;
         for (let n = from; n <= to; n++) add(m[1], n);
     }
@@ -331,7 +281,6 @@ function ringCentroid(ring: unknown): {area: number; x: number; y: number} | nul
     return {area: Math.abs(a / 2), x: cx / (3 * a), y: cy / (3 * a)};
 }
 
-/** The active parts of a UW Seattle building, as GeoJSON features in lng/lat. */
 async function fetchBuildingFeatures(code: string): Promise<Record<string, unknown>[]> {
     const query = new URLSearchParams({
         where: `FacCode='${code}' AND FeatureStatus='Active'`,
@@ -346,7 +295,6 @@ async function fetchBuildingFeatures(code: string): Promise<Record<string, unkno
     return buildings.features.filter(isRecord);
 }
 
-/** A feature's polygons, each a list of rings, whether it is a Polygon or a MultiPolygon. */
 function polygonsOf(feature: Record<string, unknown>): unknown[][] {
     const geometry = feature.geometry;
     if (!isRecord(geometry) || !Array.isArray(geometry.coordinates)) return [];
@@ -355,7 +303,6 @@ function polygonsOf(feature: Record<string, unknown>): unknown[][] {
     return [];
 }
 
-/** A UW Seattle building by its code, or null when UW has no active building with that code. */
 export async function fetchUwBuilding(code: string): Promise<UwBuilding | null> {
     if (!UW_BUILDING_CODE_RE.test(code)) return null;
     const infoQuery = new URLSearchParams({
@@ -366,11 +313,9 @@ export async function fetchUwBuilding(code: string): Promise<UwBuilding | null> 
     });
     const [features, info] = await Promise.all([
         fetchBuildingFeatures(code),
-        // The parking note is a nicety; a building is still found without it.
         fetchJson(`${UW_BUILDING_INFO_LAYER}?${infoQuery}`).catch(() => null),
     ]);
 
-    // A building can come back as several parts; weight their centroids by area.
     let name = "", address = "", area = 0, x = 0, y = 0;
     for (const feature of features) {
         const props = isRecord(feature.properties) ? feature.properties : {};
@@ -398,19 +343,13 @@ export async function fetchUwBuilding(code: string): Promise<UwBuilding | null> 
     };
 }
 
-/**
- * A building's footprint, shaped for Firestore, which can't nest arrays: each
- * polygon maps ring index to a flat [lng, lat, …] list, outline first.
- */
 export interface UwBuildingOutline {
     code: string;
     polygons: Record<string, number[]>[];
 }
 
-// Six decimals of a degree is about 10 cm, far finer than the map ever shows.
 const roundCoord = (n: number) => Math.round(n * 1e6) / 1e6;
 
-/** A UW Seattle building's footprint, or null when UW has no active building with that code. */
 export async function fetchUwBuildingOutline(code: string): Promise<UwBuildingOutline | null> {
     if (!UW_BUILDING_CODE_RE.test(code)) return null;
     const polygons: Record<string, number[]>[] = [];
@@ -428,7 +367,6 @@ export async function fetchUwBuildingOutline(code: string): Promise<UwBuildingOu
                 }
                 rings[String(i)] = flat;
             });
-            // A polygon whose outline didn't parse is dropped whole; its holes mean nothing alone.
             if (rings["0"]) polygons.push(rings);
         }
     }
