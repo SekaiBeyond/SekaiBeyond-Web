@@ -33,7 +33,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { formatSiteTime } from '~/lib/siteTime';
 import { useUploadLimits } from '~/lib/uploadLimits';
 import { isValidHttpUrl } from '~/lib/urls';
-import { PassportShelf, usePassportsByOwner } from '~/pages/PassportShelf';
+import { PassportShelf, useOwnPassports } from '~/pages/PassportShelf';
 import { ProfileCard, ProfileCardNote, ProfileSection, ProfileWelcome, type SectionState, } from '~/pages/ProfileCards';
 import { ProfileSettingsTab } from '~/pages/ProfileSettingsTab';
 import { ProfileTickets, useHeldTickets } from '~/pages/ProfileTickets';
@@ -204,7 +204,7 @@ export const ProfilePage = () => {
     const [selectedBadge, setSelectedBadge] = useState<BadgeDef | null>(null);
     const badgeModalRef = useRef<HTMLDivElement>(null);
     useModalEffects(!!selectedBadge, badgeModalRef, () => setSelectedBadge(null));
-    const {passports, failed: passportsFailed} = usePassportsByOwner(isViewingOther ? null : user?.uid ?? null);
+    const {passports, failed: passportsFailed} = useOwnPassports(isViewingOther ? null : user?.uid ?? null);
     const {ticketEvents, failed: ticketsFailed} = useHeldTickets(isViewingOther ? null : user?.uid ?? null);
 
     useEffect(() => {

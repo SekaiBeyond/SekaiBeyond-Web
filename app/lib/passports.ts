@@ -42,8 +42,7 @@ export interface Passport {
     claimedEmail: string | null;
     /**
      * Staff's note, such as why it was made; blank without one. Kept in
-     * passportNotes, which only staff can read, so it's blank wherever the
-     * holder reads their own passports.
+     * passportNotes, and blank where a passport is read without it.
      */
     note: string;
 }
@@ -262,8 +261,8 @@ export async function fetchPassportsSentTo(prefix: string): Promise<Passport[]> 
 }
 
 /**
- * Everything one account owns. The rules only let users read their own
- * passports through this exact filter.
+ * Everything one account owns, for staff looking at it. Staff only: an
+ * account's own shelf comes from getMyPassports (useOwnPassports).
  */
 export async function fetchPassportsByOwner(uid: string): Promise<Passport[]> {
     const snap = await getDocs(query(collection(getFirebaseDb(), 'passports'), where('ownerUid', '==', uid)));

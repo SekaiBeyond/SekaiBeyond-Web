@@ -1,7 +1,14 @@
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminTransaction, requireAdmin, requireAuth, requireCanManage } from "../utils/auth";
+import {
+    adminTransaction,
+    isStaffOrAbove,
+    normalizeGroup,
+    requireAdmin,
+    requireAuth,
+    requireCanManage,
+} from "../utils/auth";
 import { cancelDeletion, type Deletable, requestDeletion } from "../utils/deletion";
 import {
     conForDay,
@@ -10,6 +17,7 @@ import {
     readConInfo,
     requireConYearFree,
     requireVenueRooms,
+    staffEventsIn,
     validateConInput,
     validateRoomIds,
     validateVenueId,
@@ -686,6 +694,44 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         };
     });
 });
+/**
+ * An event's staff as its own staff see them: each one's name, photo, group
+ * and title, as a public profile has them, and never an address. Staff and
+ * above read the accounts themselves; the event's own staff can't (see
+ * firestore.rules), and are shown this instead, while the event is upcoming:
+ * eventStaffEvents keeps an event once it's archived, and their work on it is
+ * over by then.
+ */
+export const getEventStaff = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    const eventId = validateDocId((request.data as {eventId?: unknown} | null)?.eventId, "eventId");
+
+    const [caller, {snap: eventSnap, archived}] = await Promise.all([
+        db.collection("users").doc(uid).get(),
+        getEventDoc(eventId),
+    ]);
+    if (!isStaffOrAbove(caller.get("group")) && (archived || !staffEventsIn(caller).includes(eventId))) {
+        throw new HttpsError("permission-denied", "Not authorized to read this event's staff.");
+    }
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+
+    const text = (value: unknown): string => typeof value === "string" ? value : "";
+    const staff = await db.collection("users")
+        .where("eventStaffEvents", "array-contains", eventId)
+        .select("displayName", "photoURL", "group", "title", "titleCn")
+        .get();
+    return {
+        staff: staff.docs.map(doc => ({
+            uid: doc.id,
+            displayName: text(doc.get("displayName")),
+            photoURL: text(doc.get("photoURL")),
+            group: normalizeGroup(doc.get("group")),
+            title: text(doc.get("title")),
+            titleCn: text(doc.get("titleCn")),
+        })),
+    };
+});
+
 export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 

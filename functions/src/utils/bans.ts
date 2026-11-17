@@ -17,6 +17,11 @@ import { db } from "./firebase";
  * older accounts still have. Every sign-in the functions give out checks it
  * first (signInToken). There's no scheduled job: a ban that has run out is
  * cleared the next time the account signs in (requireNotBanned).
+ *
+ * An account can read its own user doc, so staff's note and who made the ban
+ * are only on it while the account has no way to: banUser writes them once
+ * every device is signed out, and they're cleared with the ban before it can
+ * sign in again.
  */
 
 export interface Ban {
@@ -26,13 +31,18 @@ export interface Ban {
 
 const usersCol = () => db.collection("users");
 
+/** What clears staff's note on a ban, and who made it, off a user doc. */
+export const BAN_NOTES_CLEARED = {
+    banReason: FieldValue.delete(),
+    bannedBy: FieldValue.delete(),
+    bannedByName: FieldValue.delete(),
+};
+
 /** What clears a ban off a user doc. */
 export const BAN_CLEARED = {
     bannedAt: FieldValue.delete(),
     bannedUntil: FieldValue.delete(),
-    banReason: FieldValue.delete(),
-    bannedBy: FieldValue.delete(),
-    bannedByName: FieldValue.delete(),
+    ...BAN_NOTES_CLEARED,
 };
 
 /** Whether the user doc `user` has a ban on it, in force or run out. */

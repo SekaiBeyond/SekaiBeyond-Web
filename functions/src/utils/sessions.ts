@@ -66,15 +66,26 @@ export async function signInToken(uid: string): Promise<string> {
 }
 
 /**
+ * Whether a token is a sign-in to the site: one signInToken gave out, which
+ * Firebase Auth knows as a custom token's. Nothing else signs in here, so a
+ * token from one of Firebase Auth's own providers, should one be left on,
+ * never passed the password, the ban or the notices the functions keep. Nor is
+ * a sign-in to a registered app (mintAppToken), which says which app it's for:
+ * it's for that app's project alone, even were an app registered with a
+ * service account of this one. Written into firestore.rules (siteSignIn) as
+ * well, so keep the two the same.
+ */
+export const isSiteSignIn = (token: DecodedIdToken): boolean =>
+    token.firebase?.sign_in_provider === "custom" && token.app === undefined;
+
+/**
  * When a sign-in began, in milliseconds: the earlier of when its token was
- * made (`mintedAt`) and its `auth_time`, or `auth_time` alone for Firebase
- * Auth's own providers. A custom-token sign-in that doesn't say when it was
- * made, which no token from signInToken is, counts as the oldest.
+ * made (`mintedAt`) and its `auth_time`. One that doesn't say when it was
+ * made, which no token from signInToken or mintAppToken is, counts as the
+ * oldest.
  */
 function signInBeganMillis(token: DecodedIdToken): number {
-    const authMillis = token.auth_time * 1000;
-    if (typeof token.mintedAt === "number") return Math.min(token.mintedAt, authMillis);
-    return token.firebase?.sign_in_provider === "custom" ? 0 : authMillis;
+    return typeof token.mintedAt === "number" ? Math.min(token.mintedAt, token.auth_time * 1000) : 0;
 }
 
 /**

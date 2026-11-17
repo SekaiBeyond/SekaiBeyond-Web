@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Resolver } from "node:dns/promises";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "./firebase";
 import { isApiOrder, isScannedTicket } from "./tickets";
 
@@ -11,8 +11,12 @@ import { isApiOrder, isScannedTicket } from "./tickets";
  *
  * An account keeps the addresses it has moved off in users/{uid}.formerEmails,
  * since tickets are matched by address: one bought under an old address stays
- * its holder's. Taking an address off one account's former list is part of
- * another claiming it, so an address only ever leads to one account.
+ * its holder's. Only one bought while the account was still on that address,
+ * though: users/{uid}.formerEmailsLeftAt says when it left each, and whoever
+ * buys under the address after that holds its mailbox now, which the account
+ * may not (addressLedToAccount). Taking an address off one account's former
+ * list is part of another claiming it, so an address only ever leads to one
+ * account.
  *
  * Addresses are stored and matched trimmed and lowercased.
  */
@@ -68,9 +72,12 @@ export function maskEmail(email: string): string {
 /** Old addresses an account remembers, the oldest going first. Well within a Firestore `in` query's 30. */
 export const FORMER_EMAILS_MAX = 10;
 
-/** The doc that says who holds `email`, named by a hash since an address can hold a "/". */
+/** What names `email` where the address itself can't: a hash, since an address holds a "." and can hold a "/". */
+const emailKey = (email: string): string => createHash("sha256").update(normalizeEmail(email)).digest("hex");
+
+/** The doc that says who holds `email`, named by its hash. */
 export function emailIndexRef(email: string): FirebaseFirestore.DocumentReference {
-    return db.collection("emailIndex").doc(createHash("sha256").update(normalizeEmail(email)).digest("hex"));
+    return db.collection("emailIndex").doc(emailKey(email));
 }
 
 /**
@@ -94,12 +101,67 @@ export function accountEmails(user: FirebaseFirestore.DocumentData | undefined):
 }
 
 /**
- * The account `email` leads to, its current holder before a former one, or null
- * when none does or more than one does. Reads inside `txn` when given one, so a
- * credit locks what it read.
+ * Whether a ticket bought at `boughtAt` under `email` is the account in
+ * `user`'s: under its own address whenever, and under a former one if the
+ * account was still on it then. An account's former address may be someone
+ * else's mailbox by now, and what they buy under it isn't the account's.
+ *
+ * `boughtAt` is the attendee doc's createdAt, which an import with purchase
+ * times and a HomeTown order sync both set to when it was bought. A former
+ * address left before leave times were kept has none, and leads to the account
+ * as it always did.
+ */
+export function addressLedToAccount(
+    user: FirebaseFirestore.DocumentData | undefined,
+    email: unknown,
+    boughtAt: unknown,
+): boolean {
+    if (typeof email !== "string" || !email) return false;
+    if (email === user?.email) return true;
+    if (!accountEmails(user).includes(email)) return false;
+    const leftAt: unknown = user?.formerEmailsLeftAt?.[emailKey(email)];
+    return !(leftAt instanceof Timestamp)
+        || (boughtAt instanceof Timestamp && boughtAt.toMillis() <= leftAt.toMillis());
+}
+
+/**
+ * An account's former addresses once it has moved: `left`, the one it just
+ * moved off, first, then those it had, less any in `gone` (the one it's on
+ * now, above all), the oldest dropping off past FORMER_EMAILS_MAX. With them,
+ * when it left each (formerEmailsLeftAt, by emailKey): `left` now, the rest as
+ * they said.
+ */
+export function formerEmailsAfter(
+    user: FirebaseFirestore.DocumentData | undefined,
+    {left = "", gone}: {left?: string; gone: string[]},
+): {formerEmails: string[]; formerEmailsLeftAt: Record<string, Timestamp>} {
+    const had: unknown = user?.formerEmails;
+    const kept = (address: unknown): address is string =>
+        typeof address === "string" && address !== "" && !gone.includes(address);
+    const formerEmails = [left, ...(Array.isArray(had) ? had : [])]
+        .filter(kept)
+        .filter((address, i, all) => all.indexOf(address) === i)
+        .slice(0, FORMER_EMAILS_MAX);
+
+    const saidLeftAt: Record<string, unknown> = user?.formerEmailsLeftAt ?? {};
+    const now = Timestamp.now();
+    const formerEmailsLeftAt: Record<string, Timestamp> = {};
+    for (const address of formerEmails) {
+        const leftAt = address === left ? now : saidLeftAt[emailKey(address)];
+        if (leftAt instanceof Timestamp) formerEmailsLeftAt[emailKey(address)] = leftAt;
+    }
+    return {formerEmails, formerEmailsLeftAt};
+}
+
+/**
+ * The account a ticket bought at `boughtAt` under `email` is, its current
+ * holder before a former one that was still on it then (addressLedToAccount),
+ * or null when it's nobody's or more than one account's. Reads inside `txn`
+ * when given one, so a credit locks what it read.
  */
 export async function accountByEmail(
     email: string,
+    boughtAt: unknown,
     txn?: FirebaseFirestore.Transaction,
 ): Promise<FirebaseFirestore.QueryDocumentSnapshot | null> {
     if (!email) return null;
@@ -111,7 +173,8 @@ export async function accountByEmail(
     if (current.size > 0) return current.size === 1 ? current.docs[0] : null;
 
     const former = await read(users.where("formerEmails", "array-contains", normalized).limit(2));
-    return former.size === 1 ? former.docs[0] : null;
+    if (former.size !== 1) return null;
+    return addressLedToAccount(former.docs[0].data(), normalized, boughtAt) ? former.docs[0] : null;
 }
 
 /**

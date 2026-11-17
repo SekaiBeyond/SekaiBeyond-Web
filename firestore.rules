@@ -38,13 +38,11 @@ service cloud.firestore {
         }
 
         // When the caller's sign-in began, in milliseconds: the earlier of when
-        // the functions made its token (mintedAt) and its auth_time, or its
-        // auth_time alone for Firebase Auth's own providers. A custom-token one
-        // that doesn't say counts as the oldest.
+        // the functions made its token (mintedAt) and its auth_time. One that
+        // doesn't say when it was made counts as the oldest.
         function signInBeganMillis() {
             let authMillis = request.auth.token.auth_time * 1000;
-            let mintedAt = request.auth.token.get('mintedAt',
-                request.auth.token.firebase.sign_in_provider == 'custom' ? 0 : authMillis);
+            let mintedAt = request.auth.token.get('mintedAt', 0);
             return mintedAt < authMillis ? mintedAt : authMillis;
         }
 
@@ -58,21 +56,30 @@ service cloud.firestore {
                 || signInBeganMillis() > get(user).data.sessionsEndedAt.toMillis();
         }
 
+        // Whether the caller's token is a sign-in to the site: one the functions
+        // gave out (signInToken), which Firebase Auth knows as a custom token's.
+        // Not one from Firebase Auth's own providers, which nothing here uses,
+        // nor a sign-in to a registered app, which says which app it's for.
+        // Written into functions/src/utils/sessions.ts (isSiteSignIn) as well,
+        // so keep the two the same.
+        function siteSignIn() {
+            return request.auth != null
+                && request.auth.token.firebase.sign_in_provider == 'custom'
+                && request.auth.token.get('app', null) == null;
+        }
+
         function signedIn() {
-            return request.auth != null && liveSession();
+            return siteSignIn() && liveSession();
         }
 
         match /users/{userId} {
             // Users can read their own profile; staff+ can read any profile.
-            // Event-staff can read profiles of users who share at least one staff event with them
-            // (needed for the event staff list in the admin panel).
             // Other users' public data is served via the getPublicProfile Cloud Function
-            // to avoid exposing email to all authenticated users.
+            // to avoid exposing email to all authenticated users, and an event's staff
+            // list, to that event's own staff, via getEventStaff: a user doc holds an
+            // address and staff's notes, which they have no need of.
             allow read: if signedIn()
-                && (request.auth.uid == userId
-                    || isStaffOrAbove()
-                    || (callerEventStaffEvents().size() > 0
-                        && resource.data.get('eventStaffEvents', []).hasAny(callerEventStaffEvents())));
+                && (request.auth.uid == userId || isStaffOrAbove());
 
             // All user mutations (displayName, photoURL, bannerURL, badges, attendedEvents, group,
             // membershipExpiresAt, membershipStartedAt) via Cloud Functions
@@ -81,10 +88,11 @@ service cloud.firestore {
             // the Settings tab lists them, and each device watches its own so it
             // signs out when ended from another, which is why this alone doesn't
             // ask for signedIn(): an ended device has to read its row to see it.
+            // Its token still has to be a sign-in to the site.
             // Writes via Cloud Functions (touchSession, endSession,
             // endOtherSessions, endAllSessions) only.
             match /sessions/{sessionId} {
-                allow read: if request.auth != null && request.auth.uid == userId;
+                allow read: if siteSignIn() && request.auth.uid == userId;
             }
         }
 
@@ -127,11 +135,11 @@ service cloud.firestore {
             allow read: if true;
 
             // Paid event subcollections, moved here from upcomingEvents on archive.
-            // Staff+ read every event's attendees (staff read-only in the panel);
-            // event-staff read only their own events'.
+            // Staff+ read every event's attendees (staff read-only in the panel).
+            // Not the event's own staff any longer: they work its door while it's
+            // upcoming, and eventStaffEvents keeps the event for good.
             match /attendees/{attendeeId} {
-                allow read: if signedIn()
-                    && (isStaffOrAbove() || isEventStaffFor(eventId));
+                allow read: if signedIn() && isStaffOrAbove();
             }
             match /emailTemplate/{docId} {
                 allow read: if signedIn()
@@ -318,14 +326,14 @@ service cloud.firestore {
         }
 
         // Physical passports. Staff+ read the whole collection for the admin
-        // dashboard; an owner may read their own passports (the profile shelf),
-        // which is why the shelf query MUST filter on ownerUid — an unfiltered
-        // read is rejected. Public scanners never read this: they call
-        // getPassportPublicProfile, which resolves the sticker server-side.
-        // All writes (status, ownerUid) go through Cloud Functions.
+        // dashboard. A holder's own shelf comes from getMyPassports, with only
+        // what a shelf card shows: a passport also holds the address its key was
+        // emailed to, which may not be its holder's. Public scanners never read
+        // this either: they call getPassportPublicProfile, which resolves the
+        // sticker server-side. All writes (status, ownerUid) go through Cloud
+        // Functions.
         match /passports/{passportId} {
-            allow read: if signedIn()
-                && (isStaffOrAbove() || resource.data.ownerUid == request.auth.uid);
+            allow read: if signedIn() && isStaffOrAbove();
         }
 
         // Activation keys and their hashes. Server-only, no exceptions — an
@@ -336,9 +344,9 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
-        // Staff's notes on passports, such as why one was made. Apart from
-        // the passport because its holder can read that; staff+ read these
-        // (staff read-only in the panel), and writes go through the functions.
+        // Staff's notes on passports, such as why one was made. Staff+ read
+        // these (staff read-only in the panel), and writes go through the
+        // functions.
         match /passportNotes/{passportId} {
             allow read: if signedIn() && isStaffOrAbove();
         }

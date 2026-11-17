@@ -22,7 +22,7 @@ import {
     creditScannedTickets,
     domainTakesMail,
     emailIndexRef,
-    FORMER_EMAILS_MAX,
+    formerEmailsAfter,
     nextEmailChangeAt,
 } from "../utils/accountEmail";
 import {
@@ -54,6 +54,7 @@ import { CODE_MAIL_HOURLY_CAP } from "../utils/config";
 import { deletionPending } from "../utils/deletion";
 import {
     CODE_ATTEMPTS,
+    CODE_LENGTH,
     type CodePurpose,
     consumeEmailCode,
     emailCodeKey,
@@ -190,8 +191,9 @@ function requireEmailChangeAllowed(user: FirebaseFirestore.DocumentData | undefi
 }
 
 function readCode(value: unknown): string {
-    if (typeof value !== "string" || !/^\d{6}$/.test(value.trim())) throw badCode();
-    return value.trim();
+    const code = typeof value === "string" ? value.trim() : "";
+    if (code.length !== CODE_LENGTH || !/^\d+$/.test(code)) throw badCode();
+    return code;
 }
 
 function readDisplayName(value: unknown): string {
@@ -378,6 +380,9 @@ export const signUpWithEmail = onCall(ACCOUNT_CALL, async (request) => {
     return {token: await signInToken(uid)};
 });
 
+/** Names the credentials doc of no account: a uid is a Firestore ID or one of Firebase Auth's, never this. */
+const NO_ACCOUNT = "-";
+
 /**
  * The account `password` opens at `email`, or a refusal that doesn't say which
  * part was wrong. Only the right password learns that the account is banned.
@@ -389,7 +394,9 @@ async function checkPassword(request: CallableRequest, email: string, password: 
     await consumeRateLimit(`signin_day_${address}`, SIGN_INS_PER_ADDRESS_PER_DAY, DAY_MS);
 
     const uid: string | undefined = (await emailIndexRef(email).get()).get("uid");
-    const stored: string | null | undefined = uid ? (await credentialsRef(uid).get()).get("passwordHash") : null;
+    // Read either way, of nobody's when there's no account, so the answer takes
+    // as long whether or not the address has one.
+    const stored: string | null | undefined = (await credentialsRef(uid || NO_ACCOUNT).get()).get("passwordHash");
     if (!await verifyPassword(password, stored) || !uid) throw wrongCredentials();
     await requireNotBanned(uid);
     return uid;
@@ -677,10 +684,11 @@ interface OwnMove {
 
 /**
  * Moves an account to `email`, whose owner has been proven or vouched for by now.
- * The old address joins the account's former list, and leaves the index for
- * anyone else to take. `by` is who's acting. An `own` move is held to the month
- * between changes, starts the next one, and can be undone from the old address
- * (undoEmailChange); staff stepping in does none of that.
+ * The old address joins the account's former list, dated, so tickets bought
+ * under it from now on aren't the account's (formerEmailsAfter), and leaves the
+ * index for anyone else to take. `by` is who's acting. An `own` move is held to
+ * the month between changes, starts the next one, and can be undone from the
+ * old address (undoEmailChange); staff stepping in does none of that.
  */
 async function moveEmail(
     uid: string,
@@ -716,10 +724,9 @@ async function moveEmail(
             if (holder.id !== uid) txn.update(holder.ref, {formerEmails: FieldValue.arrayRemove(email)});
         }
 
-        const former: string[] = user.get("formerEmails") ?? [];
         txn.update(userRef, {
             email,
-            formerEmails: [oldEmail, ...former].filter(a => a && a !== email).slice(0, FORMER_EMAILS_MAX),
+            ...formerEmailsAfter(user.data(), {left: oldEmail, gone: [email]}),
             ...(own ? {emailChangedAt: FieldValue.serverTimestamp()} : {}),
         });
         txn.set(recordRef(), recordDoc("account-email-change", {
@@ -877,11 +884,10 @@ export const undoEmailChange = onCall(ACCOUNT_CALL, async (request) => {
             }
         }
 
-        const former: string[] = user.get("formerEmails") ?? [];
         txn.update(user.ref, {
             ...(finishing ? {} : {
                 email: oldEmail,
-                formerEmails: former.filter(a => a !== oldEmail && a !== newEmail),
+                ...formerEmailsAfter(user.data(), {gone: [oldEmail, newEmail]}),
             }),
             ...(hasUploadedAvatar(user) ? {} : {photoURL: ""}),
             ...(user.get("deletionRequestedBy") === uid ? {

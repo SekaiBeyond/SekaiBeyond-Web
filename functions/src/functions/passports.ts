@@ -28,7 +28,9 @@ import {
     validateStorageImageUrl,
     validateStr
 } from "../utils/validation";
+import { shelfPassports } from "../utils/publicProfile";
 import { recordDoc, recordRef } from "../utils/records";
+import { isSiteSignIn } from "../utils/sessions";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 
 /**
@@ -289,7 +291,8 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
     if (!ownerSnap.exists) return {status: "invalid" as const};
 
     const owner = ownerSnap.data()!;
-    const isOwner = request.auth?.uid === ownerUid;
+    // By a sign-in to the site, as everything else of an account's own is.
+    const isOwner = !!request.auth && isSiteSignIn(request.auth.token) && request.auth.uid === ownerUid;
     if (owner.hidePassportPage === true && !isOwner) return {status: "private" as const};
 
     return {
@@ -504,6 +507,17 @@ export const setPassportNote = onCall({maxInstances: 10}, async (request) => {
         }));
         return {note, updated: true};
     });
+});
+
+/**
+ * The caller's own shelf: the passports bound to them, as a shelf card shows
+ * one, and as their public profile lists them for everyone else. The passports
+ * themselves are staff's to read (see firestore.rules): one emailed to someone
+ * holds that address in full, which whoever activated it may not own.
+ */
+export const getMyPassports = onCall({maxInstances: 20}, async (request) => {
+    const uid = await requireAuth(request, "account");
+    return {passports: await shelfPassports(uid)};
 });
 
 /** Hide or show the caller's own passport page. Self only, no admin path. */

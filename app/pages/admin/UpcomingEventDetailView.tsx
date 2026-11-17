@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callArchiveUpcomingEvent,
@@ -51,6 +52,7 @@ export const UpcomingEventDetailView = ({
                                             onLookupUser,
                                         }: UpcomingEventDetailViewProps) => {
     const {isEnglish} = useLanguage();
+    const {profile} = useAuth();
     const [showArchive, setShowArchive] = useState(false);
     const [archiveTagIds, setArchiveTagIds] = useState<string[]>([]);
     const [archiving, setArchiving] = useState(false);
@@ -69,10 +71,12 @@ export const UpcomingEventDetailView = ({
         showToast,
     });
 
-    // The view is keyed on the event's id, so this runs once per event.
+    // The view is keyed on the event's id, so this runs once per event. The
+    // event's own staff can't read accounts, and count them another way.
+    const viewer = profile && hasPermission(profile.group, 'staff') ? 'staff' : 'event-staff';
     useEffect(() => {
         let active = true;
-        void fetchEventStaff(event.id)
+        void fetchEventStaff(event.id, viewer)
             .then(staff => {
                 if (active) setStaffCount(staff.length);
             })
@@ -83,7 +87,7 @@ export const UpcomingEventDetailView = ({
         return () => {
             active = false;
         };
-    }, [event.id]);
+    }, [event.id, viewer]);
 
     const loadEventAttendees = async (eventId: string) => {
         setSearchingAttendees(true);

@@ -8,6 +8,7 @@ import {
     callChangePassword,
     callGetSignInMethods,
     callSendEmailCode,
+    EMAIL_CODE_LENGTH,
     type SignInMethods,
 } from '~/lib/firebase';
 import type { ShowToast } from '~/lib/useToasts';
@@ -16,10 +17,13 @@ const CODE_FIELD = {
     type: 'text',
     inputMode: 'numeric',
     autoComplete: 'one-time-code',
-    maxLength: 6,
+    maxLength: EMAIL_CODE_LENGTH,
     required: true,
     className: 'admin-input auth-input auth-code-input',
 } as const;
+
+const codePlaceholder = (isEnglish: boolean) =>
+    isEnglish ? `${EMAIL_CODE_LENGTH}-digit code` : `${EMAIL_CODE_LENGTH} 位验证码`;
 
 /** How the account signs in, which the Account and Connected Accounts cards both show. */
 export interface SignInState {
@@ -137,7 +141,7 @@ const EmailForm = ({onDone, onCancel, showToast}: {onDone: () => void; onCancel:
                         {...CODE_FIELD}
                         value={code}
                         onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
-                        placeholder={isEnglish ? '6-digit code' : '6 位验证码'}
+                        placeholder={codePlaceholder(isEnglish)}
                     />
                 </>
             )}
@@ -195,7 +199,7 @@ const PasswordForm = ({email, onDone, onCancel, showToast}: {
                         {...CODE_FIELD}
                         value={code}
                         onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
-                        placeholder={isEnglish ? '6-digit code' : '6 位验证码'}
+                        placeholder={codePlaceholder(isEnglish)}
                     />
                     <input
                         type="password"

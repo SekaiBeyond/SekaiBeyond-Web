@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { callGetMyPassports } from '~/lib/firebase';
 import {
     fetchPassportsByOwner,
     type Passport,
@@ -40,8 +41,9 @@ const PassportShelfCard = ({designId, year, date, code, to}: {
 };
 
 /**
- * Every passport bound to `uid`: null in flight, `failed` on error. Pass null
- * to skip; someone else's shelf comes with their public profile.
+ * Every passport bound to `uid`, whole, for staff looking at an account: null
+ * in flight, `failed` on error. Pass null to skip. Only staff can read
+ * passports; an account's own shelf is useOwnPassports.
  */
 export function usePassportsByOwner(uid: string | null): {passports: Passport[] | null; failed: boolean} {
     const [passports, setPassports] = useState<Passport[] | null>(null);
@@ -55,6 +57,40 @@ export function usePassportsByOwner(uid: string | null): {passports: Passport[] 
         fetchPassportsByOwner(uid)
             .then(list => {
                 if (!stale) setPassports(list);
+            })
+            .catch(() => {
+                if (!stale) setFailed(true);
+            });
+        return () => {
+            stale = true;
+        };
+    }, [uid]);
+
+    return {passports, failed};
+}
+
+/**
+ * The shelf of the account signed in, `uid`: null in flight, `failed` on
+ * error. Pass null to skip; someone else's shelf comes with their public
+ * profile. From getMyPassports, as the passports themselves are staff's to
+ * read: one emailed to someone holds that address.
+ */
+export function useOwnPassports(uid: string | null): {passports: ShelfPassport[] | null; failed: boolean} {
+    const [passports, setPassports] = useState<ShelfPassport[] | null>(null);
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        setPassports(null);
+        setFailed(false);
+        if (!uid) return;
+        let stale = false;
+        callGetMyPassports()
+            .then(({data}) => {
+                if (stale) return;
+                setPassports(data.passports.map(p => ({
+                    ...p,
+                    claimedAt: p.claimedAt ? new Date(p.claimedAt) : null,
+                })));
             })
             .catch(() => {
                 if (!stale) setFailed(true);

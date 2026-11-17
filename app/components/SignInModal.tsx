@@ -11,6 +11,7 @@ import {
     callSignInWithGoogle,
     callSignInWithPassword,
     callSignUpWithEmail,
+    EMAIL_CODE_LENGTH,
     type GoogleSignIn,
 } from '~/lib/firebase';
 import { onOpenSignInModal } from '~/lib/signInModal';
@@ -219,12 +220,12 @@ export const SignInModal = () => {
             type="text"
             inputMode="numeric"
             autoComplete="one-time-code"
-            maxLength={6}
+            maxLength={EMAIL_CODE_LENGTH}
             required
             readOnly={busy}
             value={code}
             onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
-            placeholder={isEnglish ? '6-digit code' : '6 位验证码'}
+            placeholder={isEnglish ? `${EMAIL_CODE_LENGTH}-digit code` : `${EMAIL_CODE_LENGTH} 位验证码`}
             className="admin-input auth-input auth-code-input"
         />
     );

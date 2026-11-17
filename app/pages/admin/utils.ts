@@ -14,7 +14,7 @@ import {
     where,
 } from 'firebase/firestore';
 import { getDocsByIds, toDate } from '~/lib/collectionCache';
-import { getFirebaseDb } from '~/lib/firebase';
+import { callGetEventStaff, getFirebaseDb } from '~/lib/firebase';
 import { isMembershipActive, normalizeGroup, type UserGroup } from '~/components/AuthProvider';
 import type { UserBan, UserRecord } from './types';
 import type { ShowToast } from '~/lib/useToasts';
@@ -163,7 +163,20 @@ const usersListing = async (field: 'attendedEvents' | 'eventStaffEvents', eventI
 
 export const fetchEventAttendees = (eventId: string) => usersListing('attendedEvents', eventId);
 
-export const fetchEventStaff = (eventId: string) => usersListing('eventStaffEvents', eventId);
+/**
+ * An event's staff. Staff and above (`viewer` 'staff') read the accounts
+ * themselves. The event's own staff can't, so they're given what getEventStaff
+ * shows of each, a public profile's worth: the rest of each record is blank,
+ * its address above all.
+ */
+export const fetchEventStaff = async (
+    eventId: string,
+    viewer: 'staff' | 'event-staff' = 'staff',
+): Promise<UserRecord[]> => {
+    if (viewer === 'staff') return usersListing('eventStaffEvents', eventId);
+    const {data} = await callGetEventStaff({eventId});
+    return data.staff.map(person => docToUserRecord({id: person.uid, data: () => person}));
+};
 
 export const getClaimUrl = (code: string): string => {
     return `${window.location.origin}/claim?code=${code}`;

@@ -25,7 +25,7 @@ import {
 } from "../utils/accountMail";
 import { liveEmailUndos } from "../utils/emailUndo";
 import { RESEND_API_KEY } from "../utils/resendClient";
-import { BAN_CLEARED, enableSignIn, hasBan, setAuthDisabled } from "../utils/bans";
+import { BAN_CLEARED, BAN_NOTES_CLEARED, enableSignIn, hasBan, setAuthDisabled } from "../utils/bans";
 import { deletionExpiresAt } from "../utils/config";
 import { credentialsRef, googleBindingOf, googleIndexRef } from "../utils/credentials";
 import { deletionPending } from "../utils/deletion";
@@ -623,12 +623,13 @@ export const banUser = onCall({maxInstances: 10}, async (request) => {
         requireCanManage(callerSnap.data()!.group, targetData.group);
 
         const callerName: string = callerSnap.data()!.displayName ?? "";
+        // Without staff's note and who made it, which go on below once every
+        // device is signed out: the account can read its own user doc while one
+        // is still signed in, and is watching it.
         txn.update(targetRef, {
             bannedAt: FieldValue.serverTimestamp(),
             bannedUntil: until ?? FieldValue.delete(),
-            banReason: reason,
-            bannedBy: uid,
-            bannedByName: callerName,
+            ...BAN_NOTES_CLEARED,
         });
         txn.set(recordRef(), recordDoc("account-ban", {
             performedBy: uid,
@@ -647,6 +648,15 @@ export const banUser = onCall({maxInstances: 10}, async (request) => {
     } finally {
         await endSessions(targetUid, null);
     }
+
+    // No device is left signed in to read the account's user doc now, and none
+    // can sign in. Only onto a ban still there: one lifted meanwhile has had
+    // these cleared, and they'd be left on an account that can sign in again.
+    const targetRef = db.collection("users").doc(targetUid);
+    await db.runTransaction(async (txn) => {
+        if (!hasBan((await txn.get(targetRef)).data())) return;
+        txn.update(targetRef, {banReason: ban.reason, bannedBy: uid, bannedByName: ban.byName});
+    });
     return {ban: {...ban, at: new Date().toISOString()}};
 });
 

@@ -159,6 +159,28 @@ function signerAccount(): Promise<string> {
     return signer;
 }
 
+/**
+ * Refuses an app whose sign-ins would be for this project, or signed as a
+ * service account of it. A custom token names the account that signed it and
+ * no project, so one signed as an account of this project signs in to the site
+ * itself, as whoever chose Continue on the app's sign-in page. The site refuses
+ * such a sign-in whatever is registered (isSiteSignIn); this says so when the
+ * app is saved.
+ */
+async function requireOtherProject(app: Pick<AppInput, "firebaseProjectId" | "serviceAccount">): Promise<void> {
+    if (!app.serviceAccount) return;
+    const project = process.env.GCLOUD_PROJECT ?? "";
+    const ofThisProject = project !== "" && (app.firebaseProjectId === project
+        || app.serviceAccount.endsWith(`@${project}.iam.gserviceaccount.com`)
+        || app.serviceAccount === `${project}@appspot.gserviceaccount.com`);
+    // The account the functions run as is this project's too, whatever it's called.
+    if (ofThisProject || app.serviceAccount === await signerAccount()) {
+        throw new HttpsError("invalid-argument",
+            "An app signs people in to its own Firebase project, as a service account of that project, not this site's.",
+            {code: "own-project"});
+    }
+}
+
 /** The user docs of `uids`, by uid, read together. */
 async function usersByUid(uids: string[]): Promise<Map<string, FirebaseFirestore.DocumentSnapshot>> {
     const unique = [...new Set(uids.filter(Boolean))];
@@ -269,6 +291,7 @@ export const saveApp = onCall({maxInstances: 10}, async (request) => {
     const create = input.create === true;
     const appId = create ? newAppId() : validateAppId(input.appId);
     const fields = parseAppInput(request.data);
+    await requireOtherProject(fields);
 
     // The icon it had, which the save stops linking if it sets another.
     const oldIconUrl = await adminTransaction(uid, async (txn, callerSnap) => {

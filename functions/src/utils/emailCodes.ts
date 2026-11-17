@@ -4,14 +4,24 @@ import { accountPepper } from "./credentials";
 import { db } from "./firebase";
 
 /**
- * The 6-digit codes that prove someone holds an address. One doc per purpose and
- * address in emailCodes, so a new code replaces the last, and they're stored
- * hashed with the pepper. A code is used up by the action it was for, and dies
- * after CODE_ATTEMPTS wrong tries, so guessing one is 5 in a million per code.
+ * The codes that prove someone holds an address, CODE_LENGTH digits each. One
+ * doc per purpose and address in emailCodes, so a new code replaces the last,
+ * and they're stored hashed with the pepper. A code is used up by the action it
+ * was for, and dies after CODE_ATTEMPTS wrong tries, so guessing one is 5 in a
+ * hundred million per code.
+ *
+ * Eight digits rather than six because an address can be sent a new code as
+ * often as SENDS_PER_WINDOW allows, each with its own tries, and a right guess
+ * at a password code signs in: at six, asking and guessing for months on end
+ * came to a real chance at one account, and nothing but the day's mail held it
+ * back. A limit on wrong tries across codes would have done as well, and let
+ * anyone lock an address out of its codes by spending it.
  */
 
 export type CodePurpose = "signup" | "password" | "email-change";
 
+/** Mirrored by EMAIL_CODE_LENGTH in app/lib/firebase.ts, which the code fields go by. */
+export const CODE_LENGTH = 8;
 export const CODE_TTL_MINUTES = 10;
 export const CODE_ATTEMPTS = 5;
 const MIN_GAP_MS = 60_000;
@@ -42,7 +52,7 @@ interface IssuedCode {
  */
 export async function issueEmailCode(purpose: CodePurpose, email: string): Promise<IssuedCode | null> {
     const ref = codeRef(purpose, email);
-    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const code = String(randomInt(0, 10 ** CODE_LENGTH)).padStart(CODE_LENGTH, "0");
     const now = Date.now();
 
     return db.runTransaction(async (txn) => {

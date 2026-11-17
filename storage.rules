@@ -1,17 +1,19 @@
 rules_version = '2';
 service firebase.storage {
     match /b/{bucket}/o {
-        // Allow public read for all our asset directories
-        match /avatars/{allPaths=**} { allow read: if true; }
-        match /banners/{allPaths=**} { allow read: if true; }
-        match /events/{allPaths=**} { allow read: if true; }
-        match /upcoming-events/{allPaths=**} { allow read: if true; }
-        match /badges/{allPaths=**} { allow read: if true; }
-        match /config/{allPaths=**} { allow read: if true; }
-        match /team/{allPaths=**} { allow read: if true; }
-        match /passports/{allPaths=**} { allow read: if true; }
-        match /con/{allPaths=**} { allow read: if true; }
-        match /apps/{allPaths=**} { allow read: if true; }
+        // Anyone may fetch a file in our asset directories by its path, but not
+        // list them: a listing would name every uid with an avatar, and every file
+        // uploaded for an event or con that isn't published yet.
+        match /avatars/{allPaths=**} { allow get: if true; }
+        match /banners/{allPaths=**} { allow get: if true; }
+        match /events/{allPaths=**} { allow get: if true; }
+        match /upcoming-events/{allPaths=**} { allow get: if true; }
+        match /badges/{allPaths=**} { allow get: if true; }
+        match /config/{allPaths=**} { allow get: if true; }
+        match /team/{allPaths=**} { allow get: if true; }
+        match /passports/{allPaths=**} { allow get: if true; }
+        match /con/{allPaths=**} { allow get: if true; }
+        match /apps/{allPaths=**} { allow get: if true; }
 
         // Deny everything else
         match /{allPaths=**} {

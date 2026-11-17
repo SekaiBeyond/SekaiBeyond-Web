@@ -110,8 +110,8 @@ export const SECRETS = "passportSecrets";
 
 /**
  * Staff's note on a passport, such as why it was made. Kept apart from the
- * passport, which its holder can read, under the same id. The design is copied
- * so the stock table can read a design's notes in one query.
+ * passport, as it was while its holder could read that, under the same id. The
+ * design is copied so the stock table can read a design's notes in one query.
  */
 export const passportNoteRef = (passportId: string) => db.collection("passportNotes").doc(passportId);
 

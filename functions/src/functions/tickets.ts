@@ -13,6 +13,7 @@ import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE } fro
 import { db } from "../utils/firebase";
 import { syncProviderUsage } from "../utils/emailProvider";
 import { isOnEventDay } from "../utils/eventDays";
+import { getEventDoc } from "../utils/events";
 import { type BatchOp, commitInChunks, isoOrNull } from "../utils/helpers";
 import {
     computeEmailQuota,
@@ -31,7 +32,7 @@ import {
     validateOptionalEmail,
     validateStr,
 } from "../utils/validation";
-import { accountByEmail, accountEmails } from "../utils/accountEmail";
+import { accountByEmail, accountEmails, addressLedToAccount } from "../utils/accountEmail";
 import { contactEmailFor, EMAIL_HTML_SANITIZE_OPTIONS, readSavedTemplate } from "../utils/emailTemplate";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
 import {
@@ -88,16 +89,18 @@ function worksEvent(caller: FirebaseFirestore.DocumentData, eventId: string): bo
 }
 
 /**
- * Credits the one account registered to `email`, if any, with attending
- * `eventId`, as a scan does. Reads before it writes, so it goes before the
- * caller's own writes. Whether there was an account.
+ * Credits the one account a ticket bought at `boughtAt` under `email` is, if
+ * any (accountByEmail), with attending `eventId`, as a scan does. `boughtAt`
+ * is its attendee doc's createdAt. Reads before it writes, so it goes before
+ * the caller's own writes. Whether there was an account.
  */
 async function creditAccountAttendance(
     txn: FirebaseFirestore.Transaction,
     email: string,
     eventId: string,
+    boughtAt: unknown,
 ): Promise<boolean> {
-    const account = await accountByEmail(email, txn);
+    const account = await accountByEmail(email, boughtAt, txn);
     if (!account) return false;
     const attended: string[] = account.data().attendedEvents ?? [];
     if (!attended.includes(eventId)) {
@@ -437,7 +440,7 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
                     {code: "attendee-exists"});
             }
         }
-        const userCheckedIn = checkIn && await creditAccountAttendance(txn, email, eventId);
+        const userCheckedIn = checkIn && await creditAccountAttendance(txn, email, eventId, now);
 
         const callerName: string = callerData.displayName ?? "";
         const {tickets, ticketIds} = buildFreshTickets(ticketCount, type, notes);
@@ -613,11 +616,11 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
     const creditScannedBuyer = async (
         txn: FirebaseFirestore.Transaction,
         email: string,
-        prevEmail: string,
+        data: FirebaseFirestore.DocumentData,
         tickets: NewTicket[],
     ): Promise<boolean> => {
-        if (email === prevEmail || !tickets.some(isScannedTicket)) return false;
-        return creditAccountAttendance(txn, email, eventId);
+        if (email === (data.email ?? "") || !tickets.some(isScannedTicket)) return false;
+        return creditAccountAttendance(txn, email, eventId, data.createdAt);
     };
 
     // Copies a row's buyer and type onto a ticket on file, along with `fields`.
@@ -629,7 +632,7 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
         fields: Record<string, FieldValue>,
     ): Promise<void> => {
         const tickets = (data.tickets ?? []) as NewTicket[];
-        const credited = await creditScannedBuyer(txn, row.email, data.email ?? "", tickets);
+        const credited = await creditScannedBuyer(txn, row.email, data, tickets);
         txn.update(ref, {
             email: row.email,
             name: row.name,
@@ -911,7 +914,9 @@ interface HeldTicket {
  * this is the only way holders reach their tickets. They're matched by the
  * account's addresses, current and former: each was verified when it was set, so
  * nobody can read someone else's tickets through an address they don't own, and
- * changing address doesn't lose the tickets bought under the old one.
+ * changing address doesn't lose the tickets bought under the old one. One bought
+ * under an old address since the account left it isn't the account's, though:
+ * that mailbox may be someone else's by now (addressLedToAccount).
  *
  * The cut is the event's end, not the scan: a scanned ticket stays visible while
  * the event runs, and once `endAt` passes nothing comes back. Only paid,
@@ -924,7 +929,8 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
     const userRef = db.collection("users").doc(uid);
     const userSnap = await userRef.get();
-    const emails = accountEmails(userSnap.data());
+    const userData = userSnap.data();
+    const emails = accountEmails(userData);
     if (emails.length === 0) return {events: []};
 
     // endAt alone stays on the automatic single-field index; there are only a
@@ -945,6 +951,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
         const tickets: HeldTicket[] = [];
         for (const doc of attendeeSnap.docs) {
             if (isApiOrder(doc.data())) continue;
+            if (!addressLedToAccount(userData, doc.get("email"), doc.get("createdAt"))) continue;
             const rawTickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
             for (const raw of rawTickets) {
                 const ticket = raw as Partial<NewTicket>;
@@ -1008,12 +1015,19 @@ const ACCOUNT_LOOKUP_MAX = 500;
  * Which of these ticket emails belong to a registered account, for staff adding
  * an attendee or reading the list.
  *
- * It matches as the scanner does, on the lowercased address, and leaves out an
- * address more than one account holds, which check-in credits to neither (see
- * utils/accountEmail.ts), so staff see what check-in will actually find.
+ * It matches as the scanner does, on the lowercased address: it leaves out an
+ * address more than one account holds, which check-in credits to neither, and
+ * a former address its account had left before the ticket was bought (see
+ * utils/accountEmail.ts), so staff see what check-in will actually find. An
+ * address with several attendee docs, as a HomeTown buyer of several tickets
+ * has, goes by the earliest, and one not on the list yet by now, as the
+ * walk-in being typed in would.
  *
  * Staff and above get who the account is; event staff only get whether there is
- * one.
+ * one, and only for the addresses on their event's list, which they can read
+ * anyway, and the one a walk-in form is checking, on the days walk-ins can be
+ * added. Asked of any address at any time, it would tell a volunteer, hundreds
+ * at a go, who has an account here.
  */
 export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -1045,11 +1059,48 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
     ));
     if (emails.length === 0) return {accounts: []};
 
-    const chunks: string[][] = [];
-    for (let i = 0; i < emails.length; i += 30) {
-        chunks.push(emails.slice(i, i + 30));
+    // From whichever collection holds the event: staff read an archived
+    // event's tickets too. Its own staff work it while it's upcoming, as
+    // firestore.rules has it.
+    const event = await getEventDoc(eventId);
+    if (!event.snap.exists) throw new HttpsError("not-found", "Event not found.");
+    if (!namesAccounts && event.archived) {
+        throw new HttpsError("permission-denied", "Not authorized to read this event's attendees.");
     }
 
+    // Chunked for the `in` operator's 30-value limit.
+    const chunked = (list: string[]): string[][] => {
+        const chunks: string[][] = [];
+        for (let i = 0; i < list.length; i += 30) chunks.push(list.slice(i, i + 30));
+        return chunks;
+    };
+
+    // When each address on the list first bought, null for one that doesn't say.
+    const attendeesCol = event.snap.ref.collection("attendees");
+    const listedSnaps = await Promise.all(
+        chunked(emails).map(chunk => attendeesCol.where("email", "in", chunk).get()));
+    const boughtAt = new Map<string, Timestamp | null>();
+    for (const doc of listedSnaps.flatMap(snap => snap.docs)) {
+        const email: unknown = doc.get("email");
+        if (typeof email !== "string") continue;
+        const at: unknown = doc.get("createdAt");
+        const earliest = boughtAt.get(email);
+        if (!(at instanceof Timestamp)) {
+            if (earliest === undefined) boughtAt.set(email, null);
+        } else if (!earliest || at.toMillis() < earliest.toMillis()) {
+            boughtAt.set(email, at);
+        }
+    }
+
+    let asked = emails;
+    if (!namesAccounts) {
+        const walkInDay = isOnEventDay(event.snap.get("startAt"), event.snap.get("endAt"), Date.now());
+        const walkIn = walkInDay ? emails.find(email => !boughtAt.has(email)) : undefined;
+        asked = emails.filter(email => boughtAt.has(email) || email === walkIn);
+        if (asked.length === 0) return {accounts: []};
+    }
+
+    const chunks = chunked(asked);
     const users = db.collection("users");
     const [currentSnaps, formerSnaps] = await Promise.all([
         Promise.all(chunks.map(chunk => users.where("email", "in", chunk).get())),
@@ -1072,7 +1123,7 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
         if (typeof email === "string") addHolder(currentHolders, email, doc);
     }
 
-    const wanted = new Set(emails);
+    const wanted = new Set(asked);
     const formerHolders = new Map<string, Map<string, FirebaseFirestore.QueryDocumentSnapshot>>();
     for (const doc of formerSnaps.flatMap(snap => snap.docs)) {
         const former: unknown = doc.get("formerEmails");
@@ -1082,11 +1133,15 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
         }
     }
 
+    const now = Timestamp.now();
     const accounts: {email: string; uid?: string; displayName?: string}[] = [];
-    for (const email of emails) {
-        const docs = currentHolders.get(email) ?? formerHolders.get(email);
+    for (const email of asked) {
+        const current = currentHolders.get(email);
+        const docs = current ?? formerHolders.get(email);
         if (docs?.size !== 1) continue;
         const [doc] = docs.values();
+        // A former holder only if it was still on the address when the ticket was bought.
+        if (!current && !addressLedToAccount(doc.data(), email, boughtAt.get(email) ?? now)) continue;
         accounts.push(namesAccounts
             ? {email, uid: doc.id, displayName: doc.get("displayName") ?? ""}
             : {email});
@@ -1275,7 +1330,8 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
 
         // Try to link to a registered user by email; a walk-in may have none,
         // and an app order never does (see creditedEmail).
-        const userCheckedIn = await creditAccountAttendance(txn, creditedEmail(attendeeData), eventId);
+        const userCheckedIn = await creditAccountAttendance(
+            txn, creditedEmail(attendeeData), eventId, attendeeData.createdAt);
         tickets[idx] = admitted(ticket, {uid, name: callerName}, now, userCheckedIn);
 
         txn.update(attendeeDoc.ref, {
@@ -1425,7 +1481,8 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
 
             // A check-in by hand credits the account exactly as the scanner does
             // (see redeemTicket).
-            const userCheckedIn = await creditAccountAttendance(txn, creditedEmail(data), target.eventId);
+            const userCheckedIn = await creditAccountAttendance(
+                txn, creditedEmail(data), target.eventId, data.createdAt);
             return {
                 ticket: admitted(ticket, {uid, name: callerName}, Timestamp.now(), userCheckedIn),
                 reply: {redeemed: true},

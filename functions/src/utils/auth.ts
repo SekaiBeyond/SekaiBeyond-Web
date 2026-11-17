@@ -3,7 +3,7 @@ import type { DecodedIdToken } from "firebase-admin/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { activeBan } from "./bans";
 import { db } from "./firebase";
-import { sessionIdOf, sessionRef, signedInSinceSessionsEnded, UNLISTED_GRACE_SECONDS } from "./sessions";
+import { isSiteSignIn, sessionIdOf, sessionRef, signedInSinceSessionsEnded, UNLISTED_GRACE_SECONDS, } from "./sessions";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
@@ -180,10 +180,14 @@ export async function requireRegisteredSession(
  * longer than a new device needs to list itself (UNLISTED_GRACE_SECONDS), or
  * one unlisted from before the account's devices were last signed out
  * (signedInSinceSessionsEnded), or one to an account under a ban, which has
- * had its listed ones ended (utils/bans.ts). firestore.rules holds reads to
- * the same (liveSession), bans aside. Says whether the device is listed.
+ * had its listed ones ended (utils/bans.ts), or with a token that isn't a
+ * sign-in to the site at all (isSiteSignIn). firestore.rules holds reads to
+ * the same (signedIn), bans aside. Says whether the device is listed.
  */
 async function requireLiveSession(uid: string, token: DecodedIdToken): Promise<boolean> {
+    if (!isSiteSignIn(token)) {
+        throw new HttpsError("unauthenticated", "This device isn't signed in properly.", {code: "session-ended"});
+    }
     const sessionId = sessionIdOf(token);
     const snap = sessionId ? await sessionRef(uid, sessionId).get() : null;
     const unlistedLive = async () => {

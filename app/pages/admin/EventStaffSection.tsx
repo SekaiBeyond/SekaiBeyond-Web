@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { callAssignEventStaff, callRemoveEventStaff, functionsErrorCode } from '~/lib/firebase';
+import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { UserRow } from './UserRow';
 import { UserSearchAdd } from './UserSearchAdd';
@@ -28,6 +29,9 @@ export function EventStaffSection({
                                       onLookupUser,
                                   }: EventStaffSectionProps) {
     const {isEnglish} = useLanguage();
+    const {profile} = useAuth();
+    // The event's own staff can't read accounts, and are shown less of each.
+    const viewer = profile && hasPermission(profile.group, 'staff') ? 'staff' : 'event-staff';
     const [staffList, setStaffList] = useState<UserRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [loaded, setLoaded] = useState(false);
@@ -46,7 +50,7 @@ export function EventStaffSection({
             setLoading(true);
             setLoaded(false);
             try {
-                const staff = await fetchEventStaff(eventId);
+                const staff = await fetchEventStaff(eventId, viewer);
                 if (stale) return;
                 setStaffList(staff);
                 setLoaded(true);
@@ -66,7 +70,7 @@ export function EventStaffSection({
             stale = true;
         };
         // Not keyed on isEnglish: a language toggle shouldn't refetch.
-    }, [eventId, showToast]);
+    }, [eventId, viewer, showToast]);
 
     const addStaff = async (user: UserRecord) => {
         setBusyUid(user.uid);

@@ -112,6 +112,9 @@ function getFunctions() {
     return functions;
 }
 
+/** How many digits an emailed code has. Mirrors CODE_LENGTH in functions/src/utils/emailCodes.ts. */
+export const EMAIL_CODE_LENGTH = 8;
+
 /** Emails a code proving an address. Answers the same whether or not it has an account. */
 export const callSendEmailCode = (data: {
     purpose: 'signup' | 'password' | 'email-change';
@@ -760,6 +763,12 @@ export const callAssignEventStaff = (data: {targetUid: string; eventId: string})
 export const callRemoveEventStaff = (data: {targetUid: string; eventId: string}) =>
     httpsCallable<typeof data, {removed: boolean}>(getFunctions(), 'removeEventStaff')(data);
 
+/** An event's staff as its own staff are shown them: no more of each than a public profile has. */
+export const callGetEventStaff = (data: {eventId: string}) =>
+    httpsCallable<typeof data, {
+        staff: {uid: string; displayName: string; photoURL: string; group: string; title: string; titleCn: string}[];
+    }>(getFunctions(), 'getEventStaff')(data);
+
 export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'savePolicy')(data);
 
@@ -955,6 +964,12 @@ export const callDeleteClaimedPassport = (data: {passportId: string; subtractDay
 /** A blank note clears it. `updated` is false when it already said that. */
 export const callSetPassportNote = (data: {passportId: string; note: string}) =>
     httpsCallable<typeof data, {note: string; updated: boolean}>(getFunctions(), 'setPassportNote')(data);
+
+/** The caller's own shelf, as their public profile lists it for everyone else. */
+export const callGetMyPassports = () =>
+    httpsCallable<Record<string, never>, {
+        passports: {id: string; designId: string; year: number; claimedAt: string | null}[];
+    }>(getFunctions(), 'getMyPassports')({});
 
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
     httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);
