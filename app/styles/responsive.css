@@ -40,7 +40,14 @@
     }
 
     .about-realm-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .about-realm-tab {
         justify-content: center;
+        width: 100%;
     }
 
     .about-realm-stage {

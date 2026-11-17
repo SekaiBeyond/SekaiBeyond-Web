@@ -230,10 +230,24 @@
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
     border-radius: 24px;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
 }
 
 .mika-face--front {
     display: flex;
+    transform: rotateY(0deg);
+}
+
+.mika-dossier.is-flipped .mika-face--front {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.mika-dossier:not(.is-flipped) .mika-face--back {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .mika-card-btn {
@@ -277,8 +291,9 @@
     z-index: 1;
     padding: 5px 12px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.96);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
     color: var(--color-primary);
     font-size: 12px;
     font-weight: 700;
