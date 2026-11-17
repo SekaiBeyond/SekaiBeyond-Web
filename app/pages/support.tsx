@@ -172,7 +172,7 @@ export const SupportPage = () => {
 
     return (
         <>
-            <PageNav title={isEnglish ? 'Support' : '求助'} account={false}/>
+            <PageNav account={false}/>
             <div className="policy-page">
                 <main className="policy-container support-container">
                     <h1 className="support-title">

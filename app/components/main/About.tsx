@@ -1,155 +1,367 @@
-import { useRef, useState } from "react";
+import { type KeyboardEvent, useState } from "react";
+import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from "react-icons/si";
+import { FaLinkedin } from "react-icons/fa";
 import { useLanguage } from "~/components/LanguageContextProvider";
-import { useModalEffects } from "~/lib/useModalEffects";
+import { SOCIAL_LINK_NAMES, type SocialLinks, useSiteConfig } from "~/lib/siteConfig";
+
+const SOCIALS = [
+    {key: 'discord', Icon: SiDiscord, tagEn: 'Chat & Hangout', tagZh: '群聊与开黑'},
+    {key: 'instagram', Icon: SiInstagram, tagEn: 'Photos & Reels', tagZh: '返图与动态'},
+    {key: 'bilibili', Icon: SiBilibili, tagEn: 'Stage & Videos', tagZh: '舞台与视频'},
+    {key: 'xiaohongshu', Icon: SiXiaohongshu, tagEn: 'Event Notes', tagZh: '活动笔记'},
+    {key: 'linkedin', Icon: FaLinkedin, tagEn: 'Network', tagZh: '社团主页'},
+] as const;
+
+const hasFollowLinks = (links: SocialLinks): boolean => SOCIALS.some(({key}) => links[key]);
+
+interface Realm {
+    id: string;
+    icon: string;
+    labelEn: string;
+    labelZh: string;
+    badgeEn: string;
+    badgeZh: string;
+    titleEn: string;
+    titleZh: string;
+    bodyEn: string[];
+    bodyZh: string[];
+}
+
+const REALMS: Realm[] = [
+    {
+        id: 'story',
+        icon: '🌸',
+        labelEn: 'Our Story',
+        labelZh: '社团简介',
+        badgeEn: 'Dimension 00 · The Portal',
+        badgeZh: '第零次元 · 平行时空入口',
+        titleEn: 'A space for students who love anime to freely explore and become any version of themselves',
+        titleZh: '专为热爱二次元文化的学生们打造自由的探险之地',
+        bodyEn: [
+            "Whether you're a passionate cosplayer, a creative artist, or an energetic dancer, Sekai Beyond offers a short escape from the everyday world. From manga and anime to films and games, we enjoy it all.",
+            "While we love recreating and cosplaying our favorite series, we also encourage you to create brand-new stories—designing new IPs, crafting original characters, or making games together. The portal to a multiverse can appear in every corner of campus!",
+        ],
+        bodyZh: [
+            "在彼世界中，我们支持你成为任何形式的自己——无论是喜爱角色扮演的 Coser、富有创意的画师，还是充满活力的舞者。漫画、动漫、电影与游戏都是我们热爱的领域。",
+            "在复刻与还原经典作品的同时，我们更鼓励你用天马行空的想象力创造全新的故事：设计原创 IP、绘制 OC，或是合力开发一款游戏。通往平行时空的传送门会出现在校园的每一个角落，我们在彼世界等你！",
+        ],
+    },
+    {
+        id: 'events',
+        icon: '🎉',
+        labelEn: 'Campus Events',
+        labelZh: '校园活动',
+        badgeEn: 'Dimension 01 · Campus Life',
+        badgeZh: '第一次元 · 校园日常与盛会',
+        titleEn: 'From cozy game nights and cosplay meetups to our annual convention',
+        titleZh: '从游戏之夜、Cosplay 聚会到一年一度的校园漫展',
+        bodyEn: [
+            "Throughout the school year, we host anime screenings, tabletop and console game nights, creative workshops, cosplay gatherings, and pop-up Maid Cafes right here on campus.",
+            "Every event is a chance to hang out, meet fellow fans, and celebrate the things we love—culminating in our annual Sekai Beyond Con!",
+        ],
+        bodyZh: [
+            "在整个学年里，我们会在校园内举办动漫放映会、桌游与主机游戏夜、创作工作坊、Cosplay 交流会以及限定女仆咖啡厅等丰富多彩的活动。",
+            "每一次聚会都是结识同好、分享热爱的契机，并在一年一度的彼世界动漫游戏展（Sekai Beyond Con）迎来高潮！",
+        ],
+    },
+    {
+        id: 'gamedev',
+        icon: '🎮',
+        labelEn: 'Game Dev',
+        labelZh: '游戏开发',
+        badgeEn: 'Dimension 02 · Creation Lab',
+        badgeZh: '第二次元 · 创作工坊',
+        titleEn: 'Crafting original worlds, characters, and indie games together',
+        titleZh: '从零开始，合力打造原创 IP、角色与独立游戏',
+        bodyEn: [
+            "Let your imagination run wild! Our creators team up across art, storywriting, music, and code to design original characters (OCs), build new IPs, and develop games from the ground up.",
+            "Whether you're a seasoned developer, a digital illustrator, or writing your very first visual novel script, you'll find collaborators ready to bring new worlds to life.",
+        ],
+        bodyZh: [
+            "尽管大胆提出奇思妙想吧！在这里，画师、剧本、音乐与程序跨界组队，从零设计原创角色（OC）、构建世界观，并亲手制作属于我们自己的独立游戏。",
+            "无论你是经验丰富的开发者、原画师，还是第一次尝试写视觉小说剧本的新手，都能在这里找到志同道合的伙伴，把脑海中的幻想变成现实。",
+        ],
+    },
+    {
+        id: 'idol',
+        icon: '🎤',
+        labelEn: 'Idol Performance',
+        labelZh: '地偶表演',
+        badgeEn: 'Dimension 03 · Center Stage',
+        badgeZh: '第三次元 · 舞台闪耀',
+        titleEn: 'From Red Square random dance play to live house stages',
+        titleZh: '从 Red Square 随机宅舞到 Live House 乐队与地偶舞台',
+        bodyEn: [
+            "You might find yourself watching a Love Live! dance cover, cheering with glowsticks at a J-pop live house band performance, or jumping into a spontaneous random dance in Red Square.",
+            "Our dancers and musicians rehearse together all year round to light up campus showcases and Sekai Beyond Con!",
+        ],
+        bodyZh: [
+            "你可能会在 Red Square 偶遇并加入我们的随机宅舞，在校园里挥舞荧光棒欣赏 Live House 乐队演出，或是观看元气满满的 Love Live! 与地下偶像宅舞舞台。",
+            "我们的舞见与乐手们全年排练，只为在校园演出与彼世界漫展的舞台上绽放光芒！",
+        ],
+    },
+];
+
+const MIKA_TRAITS = [
+    {
+        icon: '🦋',
+        labelEn: 'MBTI',
+        labelZh: 'MBTI',
+        valueEn: 'INFP — The Dreamer',
+        valueZh: 'INFP（小蝴蝶捏~）',
+    },
+    {
+        icon: '🐱',
+        labelEn: 'Companion',
+        labelZh: '动物偏好',
+        valueEn: 'Neko! Loves her fluffy white odd-eyed cat, Mino.',
+        valueZh: 'Neko！最爱自家的白色长毛异瞳猫“米诺”。',
+    },
+    {
+        icon: '🍡',
+        labelEn: 'Favorite Sweet',
+        labelZh: '食物偏好',
+        valueEn: 'Matcha daifuku (though icy food upsets her tummy).',
+        valueZh: '抹茶大福等甜食（但胃对太冰的食物不太耐受）。',
+    },
+    {
+        icon: '🎮',
+        labelEn: 'Ideal Hangout',
+        labelZh: '交友偏好',
+        valueEn: 'Shy at first, but loves Switch games & anime marathons at home!',
+        valueZh: '慢热社恐，最喜欢和朋友窝在家里打 Switch 或连看动漫！',
+    },
+] as const;
 
 export const About = () => {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isHovering, setIsHovering] = useState(false);
+    const [activeRealmId, setActiveRealmId] = useState<string>('story');
+    const [isFlipped, setIsFlipped] = useState(false);
     const {isEnglish} = useLanguage();
-    const modalRef = useRef<HTMLDivElement>(null);
-    useModalEffects(isModalOpen, modalRef, () => setIsModalOpen(false));
+    const {config} = useSiteConfig();
+
+    const activeRealm = REALMS.find(r => r.id === activeRealmId) ?? REALMS[0];
+
+    const onRealmKeyDown = (e: KeyboardEvent) => {
+        const idx = REALMS.findIndex(r => r.id === activeRealm.id);
+        const nextIdx = e.key === 'ArrowRight'
+            ? (idx + 1) % REALMS.length
+            : e.key === 'ArrowLeft'
+                ? (idx - 1 + REALMS.length) % REALMS.length
+                : -1;
+        if (nextIdx === -1) return;
+        e.preventDefault();
+        const next = REALMS[nextIdx];
+        setActiveRealmId(next.id);
+        document.getElementById(`about-realm-tab-${next.id}`)?.focus();
+    };
 
     return (
         <section id="about" className="about-section section">
             <div className="section-header">
                 <h2 className="section-title">{isEnglish ? "About Sekai Beyond" : "关于彼世界动漫社"}</h2>
                 <p className="section-subtitle">
-                    {isEnglish ? "The intersection of dream and reality is where the multiverse breaks the dimensional wall." : "现实与幻想的交汇处，是打破次元壁的平行时空。"}
+                    {isEnglish
+                        ? "The intersection of dream and reality is where the multiverse breaks the dimensional wall."
+                        : "现实与幻想的交汇处，是打破次元壁的平行时空。"}
                 </p>
             </div>
+
             <div className="about-content">
-                <div className="about-text">
-                    <h3>{isEnglish ? "A diverse anime club created as a space for students who love anime to freely explore" : "专为热爱二次元文化的学生们打造自由的探险之地"}</h3>
-                    {isEnglish ? (<p>
-                            Here, we support you to become any version of yourself—whether you're a passionate
-                            cosplayer, a creative artist, or an energetic dancer.<br/>
-                            Sekai Beyond offers you a short escape from the original world. From manga and anime to films
-                            and games, we enjoy it all. You might find yourself watching a Lovelive dance performance,
-                            enjoying J-pop music in a live house, or chatting with cosplayers at one of our events. We
-                            bridge the gap between dream and reality.<br/>
-                            While we focus on recreating and cosplaying, we also encourage you to create brand-new stories.
-                            Let your imagination run wild! Whether it’s designing new IPs, crafting original characters, or
-                            even making a game, Sekai Beyond is where dream and reality merge together. The portal to a
-                            multiverse can appear in every corner of campus.<br/>
-                            Let’s reach into the Sekai beyond the original world!
-                        </p>) :
-                        (<p>
-                            彼世界 Sekai Beyond 是一个多元化的动漫社团。在彼世界中，我们支持你成为任何形式的自己，无论是喜爱角色扮演的
-                            coser、富有创意的画师，还有充满活力的舞者。<br/>
-                            探险之途也是回家之路，彼世界是梦想的归宿。它能够带你暂时逃离繁琐的日常生活，坐上通往动漫世界的快车。漫画、动漫、电影，还有游戏都是我们会涉及的领域。你可以在
-                            Red Square 参与我们的随机宅舞，在学校里看到live house中的乐队表演，也可以在我们举办的小型漫展上和Coser们来一场打破次元壁的畅谈。<br/>
-                            我们专注于复刻和还原动漫中的角色与故事的同时，更希望你来用与时俱进的技术创造全新的故事。尽管大胆提出奇思妙想吧！设计新的IP、绘制原创oc，甚至制作一款游戏……彼世界让现实和幻想鱼水交汇，通往平行时空的传送门会出现在学校的每一个角落。<br/>
-                            我们在彼世界等你。
-                        </p>)
-                    }
-                    <div className="about-features">
-                        <div className="feature-item">
-                            <span className="feature-icon">🎮</span>
-                            <span className="feature-text">{isEnglish ? "Game Dev" : "游戏开发"}</span>
-                        </div>
-                        <div className="feature-item">
-                            <span className="feature-icon">⛏️</span>
-                            <span className="feature-text">{isEnglish ? "Minecraft Server" : "我的世界"}</span>
-                        </div>
-                        <div className="feature-item">
-                            <span className="feature-icon">🎤</span>
-                            <span className="feature-text">{isEnglish ? "Idol Performance" : "地偶表演"}</span>
-                        </div>
-                        <div className="feature-item">
-                            <span className="feature-icon">☕</span>
-                            <span className="feature-text">{isEnglish ? "Maid Cafe" : "女仆咖啡"}</span>
+                {/* Left: Interactive Dimensional Realm Switcher */}
+                <div className="about-explorer">
+                    <div
+                        className="about-realm-tabs"
+                        role="tablist"
+                        aria-label={isEnglish ? "Explore Sekai Beyond realms" : "探索彼世界领域"}
+                        onKeyDown={onRealmKeyDown}
+                    >
+                        {REALMS.map(realm => {
+                            const selected = realm.id === activeRealm.id;
+                            return (
+                                <button
+                                    key={realm.id}
+                                    id={`about-realm-tab-${realm.id}`}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={selected}
+                                    aria-controls="about-realm-panel"
+                                    tabIndex={selected ? 0 : -1}
+                                    className="about-realm-tab"
+                                    onClick={() => setActiveRealmId(realm.id)}
+                                >
+                                    <span className="about-realm-tab-icon" aria-hidden="true">{realm.icon}</span>
+                                    <span className="about-realm-tab-label">
+                                        {isEnglish ? realm.labelEn : realm.labelZh}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div
+                        id="about-realm-panel"
+                        key={activeRealm.id}
+                        role="tabpanel"
+                        aria-labelledby={`about-realm-tab-${activeRealm.id}`}
+                        className="about-realm-stage"
+                    >
+                        <div className="about-realm-watermark" aria-hidden="true">{activeRealm.icon}</div>
+                        <span className="about-realm-badge">
+                            {isEnglish ? activeRealm.badgeEn : activeRealm.badgeZh}
+                        </span>
+                        <h3 className="about-realm-title">
+                            {isEnglish ? activeRealm.titleEn : activeRealm.titleZh}
+                        </h3>
+                        <div className="about-prose">
+                            {(isEnglish ? activeRealm.bodyEn : activeRealm.bodyZh).map((para, i) => (
+                                <p key={i}>{para}</p>
+                            ))}
                         </div>
                     </div>
                 </div>
+
+                {/* Right: 3D Flipping Mascot Dossier / Polaroid Card */}
                 <div className="about-image">
-                    <button
-                        type="button"
-                        className={`image-container ${isHovering ? 'hovering' : ''}`}
-                        onMouseEnter={() => setIsHovering(true)}
-                        onMouseLeave={() => setIsHovering(false)}
-                        onClick={() => setIsModalOpen(true)}
-                        aria-label={isEnglish ? "Learn about Mika" : "了解米卡"}
-                    >
-                        <img
-                            src="/mika.webp"
-                            alt="Sekai Beyond Anime Club"
-                            className="about-main-image"
-                        />
-                        {isHovering && (
-                            <span className="hover-prompt">
-                                <span className="click-hint">{isEnglish ? "Learn about Mika" : "了解米卡"}</span>
-                            </span>
-                        )}
-                    </button>
+                    <div className={`mika-dossier${isFlipped ? ' is-flipped' : ''}`}>
+                        <div className="mika-dossier-inner">
+                            {/* Front: Washi-taped Polaroid Portrait */}
+                            <div className="mika-face mika-face--front" aria-hidden={isFlipped}>
+                                <button
+                                    type="button"
+                                    className="mika-card-btn"
+                                    onClick={() => setIsFlipped(true)}
+                                    tabIndex={isFlipped ? -1 : 0}
+                                    aria-label={isEnglish
+                                        ? "Flip card to read Mika's character profile"
+                                        : "翻转卡片查看吉祥物米卡的人设档案"}
+                                >
+                                    <div className="mika-polaroid-art">
+                                        <span className="mika-id-pill">
+                                            {isEnglish ? "✨ Mascot ID · #001" : "✨ 吉祥物档案 · #001"}
+                                        </span>
+                                        <img
+                                            src="/mika.webp"
+                                            alt="Mika, Sekai Beyond Mascot"
+                                            className="about-main-image"
+                                        />
+                                    </div>
+                                    <div className="mika-polaroid-footer">
+                                        <div className="mika-polaroid-meta">
+                                            <span className="mika-polaroid-name">
+                                                {isEnglish ? "Mika" : "米卡"}
+                                            </span>
+                                            <span className="mika-polaroid-quote">
+                                                {isEnglish
+                                                    ? "“Tap to flip my character card!”"
+                                                    : "“点击翻转，查看我的人设卡吧！”"}
+                                            </span>
+                                        </div>
+                                        <span className="mika-flip-pill" aria-hidden="true">
+                                            {isEnglish ? "Flip ↻" : "翻转 ↻"}
+                                        </span>
+                                    </div>
+                                </button>
+                            </div>
+
+                            {/* Back: Anime Character Sheet (設定資料) */}
+                            <div className="mika-face mika-face--back" aria-hidden={!isFlipped}>
+                                <div className="mika-sheet-top">
+                                    <img
+                                        src="/mika.webp"
+                                        alt=""
+                                        aria-hidden="true"
+                                        className="mika-sheet-avatar"
+                                    />
+                                    <div className="mika-sheet-heading">
+                                        <span className="mika-sheet-kicker">
+                                            {isEnglish ? "Character File" : "人设档案"}
+                                        </span>
+                                        <h4 className="mika-sheet-name">
+                                            {isEnglish ? "Mika" : "米卡"}
+                                        </h4>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="mika-flip-back-btn"
+                                        onClick={() => setIsFlipped(false)}
+                                        tabIndex={isFlipped ? 0 : -1}
+                                        aria-label={isEnglish ? "Flip back to photo" : "翻回照片正面"}
+                                    >
+                                        {isEnglish ? "↺ Photo" : "↺ 立绘"}
+                                    </button>
+                                </div>
+
+                                <p className="mika-sheet-bio">
+                                    {isEnglish
+                                        ? "A J-Pop dance enthusiast who’d rather spend a cozy night in than hit a big party. Because of her cute jellyfish-like haircut, everyone lovingly calls her “Jelly” ≡:). Super relatable—often cringing at past memories when alone 😅—and stays in shape through dancing and skipping sleepy carbs!"
+                                        : "热爱跳宅舞的微社恐宅女，比起热闹派对更享受独处时光。因为发型是水母头，大家喜欢叫她“小水母”(:≡。偶尔会在四下无人时回想起往事尴尬到扣地（），平时靠跳宅舞和少吃容易犯困的碳水意外保持着好身材！"}
+                                </p>
+
+                                <ul className="mika-sheet-traits">
+                                    {MIKA_TRAITS.map(trait => (
+                                        <li key={trait.labelEn} className="mika-sheet-trait">
+                                            <span className="mika-sheet-trait-icon" aria-hidden="true">
+                                                {trait.icon}
+                                            </span>
+                                            <div className="mika-sheet-trait-text">
+                                                <span className="mika-sheet-trait-label">
+                                                    {isEnglish ? trait.labelEn : trait.labelZh}
+                                                </span>
+                                                <span className="mika-sheet-trait-val">
+                                                    {isEnglish ? trait.valueEn : trait.valueZh}
+                                                </span>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {isModalOpen && (
-                <div ref={modalRef} className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <button
-                            className="modal-close"
-                            onClick={() => setIsModalOpen(false)}
-                            aria-label={isEnglish ? "Close" : "关闭"}
-                        >
-                            ×
-                        </button>
-                        <div className="modal-body">
-                            <img
-                                src="/mika.webp"
-                                alt="Mika"
-                                className="modal-image"
-                            />
-                            <div className="modal-intro">
-                                <h4>{isEnglish ? "Meet Mika, Our Anime Club's Adorable Mascot!" : "这是我们的吉祥物 - Mika"}</h4>
-                                <p>
-                                    {isEnglish ? (
-                                        <>
-                                            Hey everyone! Say hello to Mika—a total J-Pop dance enthusiast who’d rather
-                                            spend a cozy night in than hit up a big party.<br/>
-                                            Because of her cute jellyfish-like haircut, everyone lovingly calls her
-                                            “Jelly” ≡:)<br/><br/>
-                                            She’s super relatable—often cringing at past memories when she’s alone
-                                            (we’ve all been there 😅).<br/>
-                                            She’s not a gym person, but thanks to her love for dancing and avoiding too
-                                            many carbs (they make her sleepy), she naturally stays in great shape.
-                                        </>
-                                    ) : (
-                                        <>
-                                            米卡是个会跳舞的宅女，不太擅长社交，更加享受独处的时间。<br/>
-                                            因为发型是水母头，所以大家喜欢叫她小水母(:≡<br/><br/>
-                                            米卡有替人尴尬的毛病....会在四下无人的时候回想起之前的事情尴尬地扣地（）<br/>
-                                            对自己的身材并没有太苛刻的规划，但由于平时有跳宅舞的爱好，外加吃碳水容易犯困不怎么吃，于是身材意外的保持得还不错。
-                                        </>
-                                    )}
-                                </p>
-                                <p>
-                                    {isEnglish ?
-                                        "Whether you're a newcomer to the anime world or an experienced otaku, Mika will guide you to find your own path in Sekai Beyond." :
-                                        "无论你是刚踏入动漫世界的新人，还是经验丰富的老宅，Mika 都会引导你找到属于自己的彼世界之路。"
-                                    }
-                                </p>
-
-                                <div className="intro-features">
-                                    <div className="intro-item">
-                                        <span className="intro-icon">🦋</span>
-                                        <span>{isEnglish ? "MBTI: INFP" : "MBTI类型：INFP （小蝴蝶捏~）"}</span>
-                                    </div>
-                                    <div className="intro-item">
-                                        <span className="intro-icon">🐱</span>
-                                        <span>{isEnglish ? "Animal Preference: Neko! But her heart belongs only to her own fluffy white cat, Mino, who has stunning heterochromatic eyes." : "动物偏好：Neko！但只爱自己的猫，名字叫米诺，是个白色长毛异瞳猫。"}</span>
-                                    </div>
-                                    <div className="intro-item">
-                                        <span className="intro-icon">🍡</span>
-                                        <span>{isEnglish ? "Food Preference:  Sweets! Especially matcha daifuku—though her tummy isn’t a big fan of anything too icy. " : "食物偏好：甜食，尤其是冰冻的，例如抹茶大福，不过胃对太冷的食物不耐受。"}</span>
-                                    </div>
-                                    <div className="intro-item">
-                                        <span className="intro-icon">🎮</span>
-                                        <span>{isEnglish ? "Social Preference: Mika may be shy to make the first move, but she LOVES gaming at home with fellow introverts. Hang out with her for a chill session of controller games or anime marathon!" : "交友偏好：一般不主动交朋友，但喜欢窝在家里和同样社恐的人打游戏。和好朋友聚在一起时喜欢打switch，或者看动漫。"}</span>
-                                    </div>
-                                </div>
-                            </div>
+            {/* Bottom Perforated Ticket Strip: Social Portals */}
+            {hasFollowLinks(config.socialLinks) && (
+                <div className="about-follow">
+                    <div className="about-follow-header">
+                        <div className="about-follow-heading-group">
+                            <span className="about-follow-kicker">
+                                {isEnglish ? "Warp Channels" : "次元传送门"}
+                            </span>
+                            <h3 className="about-follow-title">
+                                {isEnglish ? "Follow Us Across the Sekai" : "关注我们的社交媒体"}
+                            </h3>
                         </div>
+                        <p className="about-follow-subtitle">
+                            {isEnglish
+                                ? "Hop into our Discord or follow our socials for event drops, photos, and stage recaps."
+                                : "加入 Discord 或关注各大平台官号，获取最新活动预告、返图与舞台回顾。"}
+                        </p>
+                    </div>
+                    <div className="social-links-grid">
+                        {SOCIALS.filter(({key}) => config.socialLinks[key]).map(({key, Icon, tagEn, tagZh}) => (
+                            <a
+                                key={key}
+                                className="social-card"
+                                data-platform={key}
+                                href={config.socialLinks[key]}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <span className="social-icon-wrap" aria-hidden="true">
+                                    <Icon className="social-icon"/>
+                                </span>
+                                <span className="social-meta">
+                                    <span className="social-name">
+                                        {isEnglish ? SOCIAL_LINK_NAMES[key].en : SOCIAL_LINK_NAMES[key].zh}
+                                    </span>
+                                    <span className="social-tag">
+                                        {isEnglish ? tagEn : tagZh}
+                                    </span>
+                                </span>
+                                <span className="social-arrow" aria-hidden="true">↗</span>
+                            </a>
+                        ))}
                     </div>
                 </div>
             )}

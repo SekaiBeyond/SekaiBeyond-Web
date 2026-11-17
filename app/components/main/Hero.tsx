@@ -59,7 +59,7 @@ export const Hero = () => {
                 </p>
                 <div className="hero-buttons hero-actions">
                     <a href="#contact" className="btn btn-primary" onClick={(e) => scrollTo(e, "contact")}>
-                        <span>{isEnglish ? "Become a Member" : "成为会员"}</span>
+                        <span>{isEnglish ? "Contact Us" : "联系我们"}</span>
                         <span>🌸</span>
                     </a>
                     {showUpcoming ? (

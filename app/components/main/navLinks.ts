@@ -59,22 +59,10 @@ export const FOOTER_LINKS: NavLink[] = [
         labelCn: 'GitHub',
     },
     {
-        id: 'email',
-        href: '',
-        labelEn: 'Contact Us',
-        labelCn: '联系我们',
-    },
-    {
         id: 'policy',
         href: '/policy',
         labelEn: 'Policy',
         labelCn: '政策',
-    },
-    {
-        id: 'support',
-        href: '/support',
-        labelEn: 'Safety & Support',
-        labelCn: '安全与求助',
     },
 ];
 
@@ -89,7 +77,7 @@ export const NAVIGATION_LINKS: NavLink[] = [
     {
         id: 'contact',
         href: '#contact',
-        labelEn: 'Follow Us',
-        labelCn: '关注我们'
+        labelEn: 'Contact Us',
+        labelCn: '联系我们'
     }
 ];

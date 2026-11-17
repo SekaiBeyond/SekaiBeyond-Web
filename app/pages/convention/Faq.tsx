@@ -47,9 +47,13 @@ export const Faq = () => {
                         </h3>
                         <p className="sbc-callout-body">
                             {t({
-                                en: 'Reach us by email or drop into the Discord — we answer both.',
-                                zh: '可以发邮件或加入我们的 Discord——两边都有人回复。',
+                                en: 'Reach us by email or drop into the Discord — we answer both. For harassment or safety concerns, see ',
+                                zh: '可以发邮件或加入我们的 Discord——两边都有人回复。如遇骚扰或安全问题，请查看',
                             })}
+                            <Link className="sbc-faq-policy-link" to="/support">
+                                {t({en: 'Harassment & Safety Support', zh: '反骚扰与安全求助'})}
+                            </Link>
+                            {t({en: '.', zh: '。'})}
                         </p>
                     </div>
                     <div className="sbc-callout-actions">

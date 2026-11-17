@@ -16,7 +16,6 @@ export const Footer = () => {
     const conPublished = useConContent().content.settings.published;
 
     const hrefFor = (link: NavLink): string => {
-        if (link.id === 'email') return config.contactEmail && `mailto:${config.contactEmail}`;
         if (link.id === 'github') return config.socialLinks.github;
         return resolveNavHref(link, conPublished);
     };
