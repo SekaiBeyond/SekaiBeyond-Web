@@ -1,4 +1,4 @@
-import { type MouseEvent, useState } from "react";
+import { type MouseEvent, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { FaBars, FaTimes } from "react-icons/fa";
 import { LanguageSwitcher } from "~/components/LanguageSwitcher";
@@ -16,6 +16,13 @@ export const Navigation = () => {
     const upcomingHidden = !upcomingLoading && !hasActive;
     const [mobileOpen, setMobileOpen] = useState(false);
     const singleUpcoming = activeEvents.length === 1;
+
+    useEffect(() => {
+        document.body.style.overflow = mobileOpen ? 'hidden' : '';
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [mobileOpen]);
 
     const handleNavClick = (e: MouseEvent, href: string) => {
         e.preventDefault();

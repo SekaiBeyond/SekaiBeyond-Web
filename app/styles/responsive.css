@@ -407,3 +407,25 @@
         font-size: 18px;
     }
 }
+
+@media (max-width: 370px) {
+    .navbar {
+        padding-inline: 12px;
+    }
+
+    .nav-container {
+        column-gap: 8px;
+    }
+
+    .logo {
+        font-size: 18px;
+    }
+
+    .nav-actions {
+        gap: 4px;
+    }
+
+    .login-btn {
+        padding-inline: 10px;
+    }
+}

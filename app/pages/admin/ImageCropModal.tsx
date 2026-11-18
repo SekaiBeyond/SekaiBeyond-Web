@@ -93,7 +93,7 @@ export const ImageCropModal = ({
                                }: ImageCropModalProps) => {
     const {isEnglish} = useLanguage();
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const dragRef = useRef<{startX: number; startY: number; ox: number; oy: number} | null>(null);
+    const dragRef = useRef<{startX: number; startY: number; ox: number; oy: number; ratio: number} | null>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
     useModalEffects(true, overlayRef);
 
@@ -160,12 +160,14 @@ export const ImageCropModal = ({
 
     const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
         e.currentTarget.setPointerCapture(e.pointerId);
-        dragRef.current = {startX: e.clientX, startY: e.clientY, ox: offset.x, oy: offset.y};
+        const shown = e.currentTarget.getBoundingClientRect().width;
+        const ratio = shown ? boxW / shown : 1;
+        dragRef.current = {startX: e.clientX, startY: e.clientY, ox: offset.x, oy: offset.y, ratio};
     };
     const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
         if (!dragRef.current) return;
-        const dx = e.clientX - dragRef.current.startX;
-        const dy = e.clientY - dragRef.current.startY;
+        const dx = (e.clientX - dragRef.current.startX) * dragRef.current.ratio;
+        const dy = (e.clientY - dragRef.current.startY) * dragRef.current.ratio;
         setOffset(clampOffset(scale, dragRef.current.ox + dx, dragRef.current.oy + dy));
     };
     const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -220,7 +222,7 @@ export const ImageCropModal = ({
                     </p>
                 ) : (
                     <>
-                        <div className="image-crop-canvas-wrap" style={{width: boxW, height: boxH}}>
+                        <div className="image-crop-canvas-wrap" style={{width: boxW}}>
                             <canvas
                                 ref={canvasRef}
                                 width={boxW}

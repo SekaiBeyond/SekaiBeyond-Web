@@ -47,6 +47,8 @@ interface ParkingMapProps {
 
 export const narrowScreen = () => window.matchMedia('(max-width: 1024px)').matches;
 
+const TWO_FINGER_PAN = '(pointer: coarse) and (max-width: 1024px)';
+
 const fitPadding = (): PaddingOptions => narrowScreen()
     ? {top: 80, bottom: 70, left: 50, right: 50}
     : {top: 100, bottom: 110, left: 240, right: 100};
@@ -178,6 +180,21 @@ export const ParkingMap = (props: ParkingMapProps) => {
             setStyleReady(false);
         };
     }, []);
+
+    useEffect(() => {
+        if (!map) return;
+        const query = window.matchMedia(TWO_FINGER_PAN);
+        const apply = () => {
+            map.cooperativeGestures.disable();
+            if (!query.matches) return;
+            map.cooperativeGestures.enable();
+            const hint = map.getCanvasContainer().querySelector('.maplibregl-mobile-message');
+            if (hint) hint.textContent = tx.t('twoFingers');
+        };
+        apply();
+        query.addEventListener('change', apply);
+        return () => query.removeEventListener('change', apply);
+    }, [map, tx]);
 
     const {elements: lotElements} = useMarkerElements(map, views.map(v => ({
         key: v.lot.code,

@@ -505,7 +505,7 @@
     color: var(--color-primary);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 600px), (hover: none) {
     .admin-detail-avatar-editable .admin-detail-avatar-overlay,
     .admin-detail-avatar-editable .admin-detail-avatar-delete {
         opacity: 1;
@@ -2570,6 +2570,12 @@
 
 .image-crop-canvas:active {
     cursor: grabbing;
+}
+
+.image-crop-canvas-wrap .spinner {
+    position: absolute;
+    inset: 0;
+    margin: auto;
 }
 
 .image-crop-zoom {

@@ -1722,7 +1722,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     .profile-banner-actions {
         top: 8px;
         right: 10px;
-        opacity: 1;
     }
 
     .profile-banner-btn {
@@ -1874,6 +1873,33 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         grid-template-columns: 1fr;
     }
 
+    .profile-avatar-hint-overlay {
+        display: none;
+    }
+
+    .profile-avatar-nonmember-hint {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .profile-avatar-hint-tooltip {
+        position: static;
+        transform: none;
+        opacity: 1;
+        width: min(260px, calc(100vw - 72px));
+        max-width: none;
+        margin-top: 8px;
+        padding: 0;
+        background: none;
+        color: var(--color-text-light);
+        font-size: 12px;
+        pointer-events: auto;
+    }
+}
+
+@media (max-width: 600px), (hover: none) {
+    .profile-banner-actions,
     .profile-avatar-delete {
         opacity: 1;
     }
@@ -1897,30 +1923,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         width: 14px;
         height: 14px;
         border-width: 2px;
-    }
-
-    .profile-avatar-hint-overlay {
-        display: none;
-    }
-
-    .profile-avatar-nonmember-hint {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .profile-avatar-hint-tooltip {
-        position: static;
-        transform: none;
-        opacity: 1;
-        width: min(260px, calc(100vw - 72px));
-        max-width: none;
-        margin-top: 8px;
-        padding: 0;
-        background: none;
-        color: var(--color-text-light);
-        font-size: 12px;
-        pointer-events: auto;
     }
 }
 
