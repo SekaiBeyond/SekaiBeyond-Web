@@ -73,7 +73,6 @@ export type RecordType =
     | "venue-create"
     | "venue-edit"
     | "venue-delete"
-    | "parking-sync"
     | "passport-generate"
     | "passport-claim"
     | "passport-delete"
@@ -102,6 +101,7 @@ export type RecordType =
     | "avatar-remove"
     | "banner-remove"
     | "account-password-set"
+    | "account-sessions-end"
     | "account-google-bind"
     | "account-google-unbind"
     | "account-app-link"
@@ -121,8 +121,7 @@ export type RecordType =
     | "app-create"
     | "app-update"
     | "app-delete"
-    | "app-link-email-template-update"
-    | "scheduled-mail-drain";
+    | "app-link-email-template-update";
 
 export interface RecordFields {
     performedBy?: string;
@@ -147,7 +146,6 @@ export interface RecordFields {
     platformLabel?: string;
     conSection?: string;
     configSections?: string[];
-    lotCount?: number;
     code?: string;
     oldGroup?: string;
     newGroup?: string;
@@ -167,6 +165,13 @@ export interface RecordFields {
     replacedCount?: number;
     sentCount?: number;
     ticketCount?: number;
+    oldTicketCount?: number;
+    redeemedCount?: number;
+    redeemedBy?: string;
+    redeemedByName?: string;
+    redeemedAt?: string | null;
+    sessionCount?: number;
+    everywhere?: boolean;
     checkedIn?: boolean;
     confirmedCount?: number;
     updatedCount?: number;

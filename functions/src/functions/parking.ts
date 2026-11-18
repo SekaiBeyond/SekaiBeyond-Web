@@ -5,7 +5,6 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { requireAdmin, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
-import { performer, recordDoc, recordRef } from "../utils/records";
 import { SITE_TIME_ZONE, siteDay } from "../utils/siteTime";
 import {
     fetchUwBuilding,
@@ -185,13 +184,8 @@ export const uwParkingNightlySync = onSchedule({
 
 export const syncUwParking = onCall({maxInstances: 2, timeoutSeconds: 300}, async (request) => {
     const uid = await requireAuth(request, "staff");
-    const callerSnap = await requireAdmin(uid);
-    const summary = await runUwParkingSync();
-    await recordRef().set(recordDoc("parking-sync", {
-        ...performer(uid, callerSnap),
-        lotCount: summary.lotCount,
-    }));
-    return summary;
+    await requireAdmin(uid);
+    return runUwParkingSync();
 });
 
 export const lookUpUwBuilding = onCall({maxInstances: 5, timeoutSeconds: 60}, async (request) => {

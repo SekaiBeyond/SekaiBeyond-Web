@@ -4,7 +4,6 @@ import { syncProviderUsage } from "../utils/emailProvider";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
 import { fillActivationKey, SECRETS } from "../utils/passports";
-import { recordDoc, recordRef } from "../utils/records";
 import {
     computeEmailQuota,
     computeEmailQuotaInTxn,
@@ -151,14 +150,6 @@ export const scheduledMailDrain = onSchedule({
         } catch (err) {
             console.error("scheduledMailDrain: failed to clean up doc", doc.id, err);
         }
-    }
-
-    if (drained > 0) {
-        await recordRef().set(recordDoc("scheduled-mail-drain", {
-            sentCount: drained,
-        })).catch(err => {
-            console.error("scheduledMailDrain: failed to write audit record", err);
-        });
     }
 
     console.log(`scheduledMailDrain: drained=${drained} orphans=${droppedOrphans} ` +

@@ -1246,6 +1246,11 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
             checkedIn: false,
             checkedInAt: null,
         },
+        record: ticket.redeemed ? {
+            redeemedBy: ticket.redeemedBy ?? "",
+            redeemedByName: ticket.redeemedByName ?? "",
+            redeemedAt: isoOrNull(ticket.redeemedAt),
+        } : {},
     }));
 });
 export const updateEventAttendee = onCall({maxInstances: 10}, async (request) => {
@@ -1332,6 +1337,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             emailSentAt: null,
             updatedAt: FieldValue.serverTimestamp(),
         });
+        const redeemedCount = prevTickets.filter(t => t.redeemed).length;
         txn.set(recordRef(), recordDoc("ticket-regenerate", {
             performedBy: uid,
             performedByName: callerName,
@@ -1339,6 +1345,12 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: name,
+            oldTicketCount: prevTicketCount,
+            ticketCount,
+            oldType: prevType,
+            newType: type,
+            ...(name !== (data.name ?? "") && {oldName: attendeeRecordName(data), newName: name}),
+            ...(redeemedCount > 0 && {redeemedCount}),
         }));
         return {regenerated: true};
     });

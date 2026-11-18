@@ -98,7 +98,7 @@ export const RECORD_CATEGORIES = {
     },
     location: {
         en: 'Location', zh: '场地',
-        types: ['venue-create', 'venue-edit', 'venue-delete', 'parking-sync'],
+        types: ['venue-create', 'venue-edit', 'venue-delete'],
     },
     passport: {
         en: 'Passport', zh: '通行证',
@@ -115,17 +115,13 @@ export const RECORD_CATEGORIES = {
     account: {
         en: 'Account', zh: '账号',
         types: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
-            'name-set', 'avatar-set', 'avatar-remove', 'banner-remove', 'account-email-release',
-            'account-password-set', 'account-google-bind', 'account-google-unbind', 'account-app-link',
+            'name-set', 'avatar-set', 'avatar-remove', 'banner-remove',
+            'account-password-set', 'account-sessions-end', 'account-google-bind', 'account-google-unbind', 'account-app-link',
             'account-app-unlink', 'account-app-link-undo', 'account-app-hold-clear', 'account-email-change', 'account-email-undo', 'account-ban', 'account-unban'],
     },
     config: {
         en: 'Config', zh: '配置',
         types: ['policy-update', 'config-update', 'con-content-update'],
-    },
-    email: {
-        en: 'Email', zh: '邮件',
-        types: ['scheduled-mail-drain'],
     },
     api: {
         en: 'API', zh: 'API',
@@ -162,7 +158,6 @@ export interface ActivityRecord {
     platformLabel?: string;
     conSection?: string;
     configSections?: string[];
-    lotCount?: number;
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;
@@ -184,6 +179,13 @@ export interface ActivityRecord {
     replacedCount?: number;
     sentCount?: number;
     ticketCount?: number;
+    oldTicketCount?: number;
+    redeemedCount?: number;
+    redeemedBy?: string;
+    redeemedByName?: string;
+    redeemedAt?: string | null;
+    sessionCount?: number;
+    everywhere?: boolean;
     checkedIn?: boolean;
     confirmedCount?: number;
     updatedCount?: number;

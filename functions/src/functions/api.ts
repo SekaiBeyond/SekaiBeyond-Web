@@ -669,21 +669,19 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
         }
     };
 
-    let sendRecord: FirebaseFirestore.DocumentReference | null;
+    let quotaReserved: boolean;
     try {
-        sendRecord = await db.runTransaction(async (txn) => {
+        quotaReserved = await db.runTransaction(async (txn) => {
             const {sentToday, dailyCap, reserved} = await computeEmailQuotaInTxn(txn);
-            if (sentToday >= dailyCap) return null;
+            if (sentToday >= dailyCap) return false;
             reserveQuotaInTxn(txn, 1, reserved);
-            const record = recordRef();
-            txn.set(record, recordDoc("ticket-email-send", recordFields));
-            return record;
+            return true;
         });
     } catch (err) {
         console.error(`[api] order ${doc.apiOrderId}: email neither sent nor queued`, err);
         return release();
     }
-    if (sendRecord === null) return queue();
+    if (!quotaReserved) return queue();
 
     try {
         await sendEmails([envelope], ORDER_EMAIL_TIMEOUT_MS);
@@ -691,8 +689,6 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
         console.error(`[api] order ${doc.apiOrderId}: email send failed`, err);
         if (!(err instanceof ResendSendError && err.dailyConsumed !== null)) await rollbackQuotaReservation(1);
         if (err instanceof ResendSendError && err.status === null) return {};
-        await sendRecord.delete()
-            .catch(e => console.error(`[api] order ${doc.apiOrderId}: failed to drop send record`, e));
         return err instanceof ResendSendError && err.status === 429 ? queue() : release();
     }
     return settle({emailSending: false, emailSentAt: now, updatedAt: now}, "sent");

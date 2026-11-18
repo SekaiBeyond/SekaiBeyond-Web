@@ -73,7 +73,7 @@ export const deleteSocialPlatform = onCall({maxInstances: 10}, async (request) =
 
 export const seedSocialPlatforms = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
-    await requireAdmin(uid);
+    const callerSnap = await requireAdmin(uid);
 
     const col = db.collection("socialPlatforms");
     const existing = await Promise.all(
@@ -83,6 +83,12 @@ export const seedSocialPlatforms = onCall({maxInstances: 10}, async (request) =>
     const missing = DEFAULT_SOCIAL_PLATFORMS.filter((_, i) => !existing[i].exists);
     if (missing.length === 0) return;
     const batch = db.batch();
-    for (const {id, ...data} of missing) batch.set(col.doc(id), data);
+    for (const {id, ...data} of missing) {
+        batch.set(col.doc(id), data);
+        batch.set(recordRef(), recordDoc("social-platform-create", {
+            ...performer(uid, callerSnap),
+            platformLabel: data.label,
+        }));
+    }
     await batch.commit();
 });

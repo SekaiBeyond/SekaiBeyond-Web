@@ -92,6 +92,15 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             });
     };
 
+    const fmtTime = (iso: string) => {
+        const d = new Date(iso);
+        return isNaN(d.getTime())
+            ? iso
+            : d.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            });
+    };
+
     const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
     const event = clickableEvent(r.eventId, r.eventTitle);
     const badge = clickableBadge(r.badgeId, r.badgeName);
@@ -167,13 +176,19 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>removed {target}'s profile banner</>
                 : <>删除了 {target} 的主页横幅</>;
-        case 'account-email-release':
-            return isEnglish
-                ? <>signed in with {r.targetEmail}, taking it off {target}'s account, whose Google account no longer
-                    uses it</>
-                : <>以 {r.targetEmail} 登录，该邮箱已从 {target} 的账号中移除（其 Google 账号已不再使用此邮箱）</>;
         case 'account-password-set':
             return isEnglish ? <>set a new password</> : <>设置了新密码</>;
+        case 'account-sessions-end': {
+            const n = r.sessionCount ?? 0;
+            if (r.everywhere) {
+                return isEnglish
+                    ? <>signed out on every device ({n} session{n === 1 ? '' : 's'})</>
+                    : <>退出了所有设备上的登录（{n} 个会话）</>;
+            }
+            return isEnglish
+                ? <>signed out on {n} other device{n === 1 ? '' : 's'}</>
+                : <>退出了其他 {n} 台设备上的登录</>;
+        }
         case 'account-email-change': {
             const self = r.performedBy && r.performedBy === r.targetUid;
             const change = <>{r.oldEmail || '—'} → {r.targetEmail}</>;
@@ -395,12 +410,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>deleted venue {r.venueName ?? ''}</>
                 : <>删除了场地 {r.venueName ?? ''}</>;
-        case 'parking-sync': {
-            const lots = r.lotCount ?? 0;
-            return isEnglish
-                ? <>synced UW parking data ({lots} visitor lot{lots === 1 ? '' : 's'})</>
-                : <>同步了 UW 停车数据（{lots} 个访客停车场）</>;
-        }
         case 'account-deletion-requested': {
             const selfRequest = r.performedBy && r.targetUid && r.performedBy === r.targetUid;
             if (selfRequest) {
@@ -479,10 +488,19 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>restored a voided ticket for {attendee} at {event}</>
                 : <>恢复了 {attendee} 在 {event} 的一张作废门票</>;
-        case 'ticket-reset':
+        case 'ticket-reset': {
+            if (!r.redeemedBy) {
+                return isEnglish
+                    ? <>reset the check-in state of a ticket for {attendee} at {event}</>
+                    : <>重置了 {attendee} 在 {event} 的门票签到状态</>;
+            }
+            const scanner = clickableName(r.redeemedBy, r.redeemedByName ?? '');
+            const at = r.redeemedAt ? fmtTime(r.redeemedAt) : '';
             return isEnglish
-                ? <>reset the check-in state of a ticket for {attendee} at {event}</>
-                : <>重置了 {attendee} 在 {event} 的门票签到状态</>;
+                ? <>reset the check-in state of a ticket for {attendee} at {event}, which {scanner} had scanned
+                    in{at && ` on ${at}`}</>
+                : <>重置了 {attendee} 在 {event} 的门票签到状态（原由 {scanner} {at && `于 ${at} `}验票）</>;
+        }
         case 'ticket-type-edit': {
             const from = ticketTypeLabel(r.oldType ?? '', isEnglish);
             const to = ticketTypeLabel(r.newType ?? '', isEnglish);
@@ -509,15 +527,33 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>renamed attendee {oldName} to {r.newName} at {event}</>
                 : <>将 {event} 的参加者 {oldName} 改名为 {r.newName}</>;
         }
-        case 'ticket-regenerate':
+        case 'ticket-regenerate': {
+            const changes: string[] = [];
+            if (r.oldTicketCount !== undefined && r.ticketCount !== undefined && r.oldTicketCount !== r.ticketCount) {
+                changes.push(isEnglish
+                    ? `${r.oldTicketCount} → ${r.ticketCount} tickets`
+                    : `${r.oldTicketCount} → ${r.ticketCount} 张`);
+            }
+            if (r.oldType && r.newType && r.oldType !== r.newType) {
+                changes.push(`${ticketTypeLabel(r.oldType, isEnglish)} → ${ticketTypeLabel(r.newType, isEnglish)}`);
+            }
+            if (r.oldName) changes.push(isEnglish ? `renamed from "${r.oldName}"` : `原名"${r.oldName}"`);
+            if (r.redeemedCount) {
+                changes.push(isEnglish
+                    ? `${r.redeemedCount} had been scanned in`
+                    : `其中 ${r.redeemedCount} 张已验票`);
+            }
+            const detail = changes.length === 0 ? ''
+                : isEnglish ? ` (${changes.join(', ')})` : `（${changes.join('，')}）`;
             return isEnglish
-                ? <>re-issued tickets for {attendee} at {event}</>
-                : <>为 {attendee} 在 {event} 重新签发门票</>;
+                ? <>re-issued tickets for {attendee} at {event}{detail}</>
+                : <>为 {attendee} 在 {event} 重新签发门票{detail}</>;
+        }
         case 'ticket-email-send': {
             const sent = r.sentCount ?? 0;
             return isEnglish
-                ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}{apiOrderNote}</>
-                : <>为 {event} 发送了 {sent} 封门票邮件{apiOrderNote}</>;
+                ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}</>
+                : <>为 {event} 发送了 {sent} 封门票邮件</>;
         }
         case 'ticket-email-queue': {
             const queued = r.sentCount ?? 0;
@@ -575,12 +611,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>updated the {r.language === 'zh' ? 'Chinese' : 'English'} email sent when an app is linked</>
                 : <>更新了{r.language === 'zh' ? '中文' : '英文'}应用绑定通知邮件</>;
-        case 'scheduled-mail-drain': {
-            const sent = r.sentCount ?? 0;
-            return isEnglish
-                ? <>sent {sent} queued email{sent === 1 ? '' : 's'} from the scheduled mail queue</>
-                : <>从邮件队列中发送了 {sent} 封排队邮件</>;
-        }
         case 'upcoming-event-email-template-update':
             return isEnglish
                 ? <>updated the ticket email template for {event}</>

@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { requireAuth, requireRegisteredSession } from "../utils/auth";
 import { activeBan } from "../utils/bans";
 import { db } from "../utils/firebase";
+import { recordDoc, recordRef } from "../utils/records";
 import {
     describeUserAgent,
     endSessions,
@@ -66,13 +67,27 @@ export const endSession = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
+async function recordSessionsEnded(uid: string, sessionCount: number, everywhere: boolean): Promise<void> {
+    const displayName: string = (await db.collection("users").doc(uid).get()).get("displayName") ?? "";
+    await recordRef().set(recordDoc("account-sessions-end", {
+        performedBy: uid,
+        performedByName: displayName,
+        targetUid: uid,
+        targetName: displayName,
+        sessionCount,
+        everywhere,
+    }));
+}
+
 export const endOtherSessions = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireRegisteredSession(request);
     const own = sessionIdOf(request.auth!.token);
-    return {ended: await endSessions(uid, own, {revoke: false})};
+    const ended = await endSessions(uid, own, {revoke: false});
+    await recordSessionsEnded(uid, ended, false);
+    return {ended};
 });
 
 export const endAllSessions = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
-    await endSessions(uid, null);
+    await recordSessionsEnded(uid, await endSessions(uid, null), true);
 });
