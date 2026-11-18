@@ -5,6 +5,10 @@ export const LINK_SHARED_FIELDS = {
     zh: '名称、头像、打码的邮箱、组别与团队头衔、会员状态、活动工作人员身份、封禁状态及截止时间，以及预定删除时间',
 } as const;
 
+export const LINK_UNDO_DAYS = 7;
+
+export const LINK_HOLD_DAYS = 30;
+
 export const linkSharedFields = (isEnglish: boolean): string =>
     isEnglish ? LINK_SHARED_FIELDS.en : LINK_SHARED_FIELDS.zh;
 

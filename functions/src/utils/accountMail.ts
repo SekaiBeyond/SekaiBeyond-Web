@@ -5,7 +5,7 @@ import { maskEmail } from "./accountEmail";
 import { LINK_HOLD_DAYS, LINK_SHARED_FIELDS, LINK_UNDO_DAYS } from "./appLinks";
 import { CODE_TTL_MINUTES, type CodePurpose } from "./emailCodes";
 import { EMAIL_UNDO_DAYS } from "./emailUndo";
-import { escapeHtml } from "./emailTemplate";
+import { CONTACT_EMAIL_PLACEHOLDER, escapeHtml, subjectLine } from "./emailTemplate";
 import { db } from "./firebase";
 import { computeEmailQuotaDetail, computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "./quota";
 import { type ResendEnvelope, ResendSendError, sendEmails } from "./resendClient";
@@ -183,9 +183,13 @@ export function addressHeldMail(to: string, until: Date, language: MailLanguage)
     };
 }
 
-async function contactLine(language: MailLanguage): Promise<string> {
+async function savedContactEmail(): Promise<string> {
     const saved: unknown = (await db.collection("config").doc("main").get()).get("contactEmail");
-    const contact = typeof saved === "string" ? escapeHtml(saved) : "";
+    return typeof saved === "string" ? saved : "";
+}
+
+async function contactLine(language: MailLanguage): Promise<string> {
+    const contact = escapeHtml(await savedContactEmail());
     if (language === "zh") {
         return contact ? `如果这不是您本人的操作，请立即联系 ${contact}。` : "如果这不是您本人的操作，请立即联系我们。";
     }
@@ -328,6 +332,67 @@ export async function appLinkChangedMail(
             contact,
         ]),
     };
+}
+
+export const appLinkEmailTemplateRef = (language: MailLanguage) =>
+    db.collection("appLinkEmailTemplate").doc(language);
+
+export const UNDO_URL_PLACEHOLDER = /{{\s*undoUrl\s*}}/;
+
+const linkedAppAccount = (appName: string, appUserName: string, language: MailLanguage): string => {
+    if (language === "zh") return appUserName ? `${appName}账号“${appUserName}”` : `一个${appName}账号`;
+    return appUserName ? `the ${appName} account "${appUserName}"` : `a ${appName} account`;
+};
+
+async function savedAppLinkedMail(
+    to: string,
+    appName: string,
+    appUserName: string,
+    language: MailLanguage,
+    undoUrl: string,
+): Promise<ResendEnvelope | null> {
+    const data = (await appLinkEmailTemplateRef(language).get()).data();
+    const subject = typeof data?.subject === "string" ? data.subject : "";
+    const bodyHtml = typeof data?.bodyHtml === "string" ? data.bodyHtml : "";
+    if (!subject.trim() || bodyHtml.search(UNDO_URL_PLACEHOLDER) === -1) return null;
+    const usesContactEmail = [subject, bodyHtml].some(t => t.search(CONTACT_EMAIL_PLACEHOLDER) !== -1);
+    const contactEmail = usesContactEmail ? await savedContactEmail() : "";
+    if (usesContactEmail && !contactEmail) return null;
+
+    const values = new Map<string, string>([
+        ["appName", appName],
+        ["appUserName", appUserName],
+        ["appAccount", linkedAppAccount(appName, appUserName, language)],
+        ["sharedFields", LINK_SHARED_FIELDS[language]],
+        ["undoUrl", undoUrl],
+        ["undoDays", String(LINK_UNDO_DAYS)],
+        ["holdDays", String(LINK_HOLD_DAYS)],
+        ["siteUrl", PUBLIC_ORIGIN],
+        ["contactEmail", contactEmail],
+    ]);
+    const fill = (text: string, html: boolean) => text.replace(/{{\s*(\w+)\s*}}/g, (placeholder, name: string) => {
+        const value = values.get(name);
+        if (value === undefined) return placeholder;
+        return html ? escapeHtml(value) : value;
+    });
+    const filledSubject = subjectLine(fill(subject, false));
+    return filledSubject ? {to, subject: filledSubject, html: fill(bodyHtml, true)} : null;
+}
+
+export async function appLinkedMail(
+    to: string,
+    appName: string,
+    appUserName: string,
+    language: MailLanguage,
+    undoUrl: string,
+): Promise<ResendEnvelope> {
+    try {
+        const saved = await savedAppLinkedMail(to, appName, appUserName, language, undoUrl);
+        if (saved) return saved;
+    } catch (err) {
+        console.error("appLinkedMail: couldn't use the saved email", err);
+    }
+    return appLinkChangedMail(to, appName, appUserName, "linked", language, undoUrl);
 }
 
 export async function accountDeletionMail(

@@ -1,6 +1,8 @@
+import sanitizeHtml from "sanitize-html";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { GoogleAuth } from "google-auth-library";
+import { appLinkEmailTemplateRef, UNDO_URL_PLACEHOLDER } from "../utils/accountMail";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol } from "../utils/apiKeys";
 import { type AppLinkDoc, appLinksCol, appLinkUserName } from "../utils/appLinks";
@@ -26,9 +28,10 @@ import {
     validateAppId,
 } from "../utils/apps";
 import { BATCH_LIMIT } from "../utils/config";
+import { EMAIL_HTML_SANITIZE_OPTIONS } from "../utils/emailTemplate";
 import { db } from "../utils/firebase";
 import { isoOrNull } from "../utils/helpers";
-import { recordDoc, recordRef } from "../utils/records";
+import { performer, recordDoc, recordRef } from "../utils/records";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 import {
     sanitizeDisplayText,
@@ -377,4 +380,30 @@ export const issueAppCode = onCall({maxInstances: 10}, async (request) => {
     }
     const code = await issueSignInCode(app, uid, redirectUri, input.codeChallenge);
     return {code, redirectUri};
+});
+
+export const updateAppLinkEmailTemplate = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+
+    const input = (request.data ?? {}) as {language?: unknown; subject?: unknown; bodyHtml?: unknown};
+    const language = input.language;
+    if (language !== "en" && language !== "zh") {
+        throw new HttpsError("invalid-argument", "language must be \"en\" or \"zh\".");
+    }
+    const subject = validateStr(input.subject, "subject", 500, true);
+    const bodyHtml = sanitizeHtml(validateStr(input.bodyHtml, "bodyHtml", 20000), EMAIL_HTML_SANITIZE_OPTIONS);
+    if (bodyHtml.search(UNDO_URL_PLACEHOLDER) === -1) {
+        throw new HttpsError("invalid-argument",
+            "The body needs {{ undoUrl }}, so someone whose account was linked by somebody else can undo it.",
+            {code: "no-undo-link"});
+    }
+
+    await adminTransaction(uid, async (txn, callerSnap) => {
+        txn.set(appLinkEmailTemplateRef(language), {
+            subject, bodyHtml,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: uid,
+        });
+        txn.set(recordRef(), recordDoc("app-link-email-template-update", {...performer(uid, callerSnap), language}));
+    });
 });

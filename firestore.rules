@@ -366,6 +366,14 @@ service cloud.firestore {
                 && isCoreStaffOrAbove();
         }
 
+        // The email a member gets when an app is linked to their account, one
+        // per language (en, zh) for every app. Admins read it in the Apps tool;
+        // writes via updateAppLinkEmailTemplate only.
+        match /appLinkEmailTemplate/{language} {
+            allow read: if signedIn()
+                && isCoreStaffOrAbove();
+        }
+
         // Editable social-platform templates for the QR "Social profile" mode.
         // Only consumed in the admin UI (staff+), never by public scanners; all
         // writes go through Cloud Functions.

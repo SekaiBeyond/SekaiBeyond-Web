@@ -21,6 +21,7 @@ import { APP_PLATFORM_NAMES, APP_PLATFORMS, appNameIn, type AppPlatform, LINK_SH
 import { localized } from '~/lib/localized';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
+import { confirmExit } from '~/lib/useExitGuard';
 import { appBrand, ConnectionIcon } from '~/pages/ProfileConnectionRow';
 import { Banner } from '../Banner';
 import { BilingualFormField } from '../BilingualFormField';
@@ -30,6 +31,7 @@ import { UserAvatar } from '../UserRow';
 import { UserSearchAdd } from '../UserSearchAdd';
 import type { ShowToast } from '../utils';
 import { RefreshButton, ToolHeader, useToolLoader } from '../ToolHeader';
+import { AppLinkEmailSection } from './AppLinkEmailSection';
 
 interface AppsToolProps {
     onBack: () => void;
@@ -178,6 +180,8 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     const [renameDraft, setRenameDraft] = useState('');
     const [savingRename, setSavingRename] = useState(false);
     const [revokingId, setRevokingId] = useState<string | null>(null);
+
+    const [showLinkEmail, setShowLinkEmail] = useState(false);
 
     const {loading, error, load} = useToolLoader(callListApps, data => {
             setApps(data.apps);
@@ -483,7 +487,9 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
     return (
         <div className="admin-section">
             <ToolHeader title={isEnglish ? 'Apps' : '应用'} back={isEnglish ? 'Back to Tools' : '返回工具'}
-                        onBack={onBack}>
+                        onBack={() => {
+                            if (confirmExit()) onBack();
+                        }}>
                 <RefreshButton className="admin-toggle-btn admin-toggle-edit admin-quota-refresh"
                                onClick={() => load(true)} busy={loading}/>
             </ToolHeader>
@@ -747,6 +753,21 @@ export const AppsTool = ({onBack, showToast}: AppsToolProps) => {
                     )}
                 </div>
             </CreateSection>
+
+            {showLinkEmail ? (
+                <AppLinkEmailSection
+                    sampleApp={apps?.find(app => app.accountLinking) ?? apps?.[0]}
+                    showToast={showToast}
+                    onClose={() => {
+                        if (confirmExit()) setShowLinkEmail(false);
+                    }}
+                />
+            ) : (
+                <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={() => setShowLinkEmail(true)}
+                        type="button">
+                    {isEnglish ? 'Edit Link Notice Email' : '编辑绑定通知邮件'}
+                </button>
+            )}
 
             {error && !apps && (
                 <Banner tone="error">

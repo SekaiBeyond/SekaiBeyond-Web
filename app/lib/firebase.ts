@@ -894,6 +894,9 @@ export const callEmailPassports = (data: {designId: string; emails: string[]; no
 export const callUpdatePassportEmailTemplate = (data: {subject: string; bodyHtml: string}) =>
     httpsCallable<typeof data>(getFunctions(), 'updatePassportEmailTemplate')(data);
 
+export const callUpdateAppLinkEmailTemplate = (data: {language: 'en' | 'zh'; subject: string; bodyHtml: string}) =>
+    httpsCallable<typeof data>(getFunctions(), 'updateAppLinkEmailTemplate')(data);
+
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<typeof data, {
         displayName: string; photoURL: string; bannerURL: string; joinedAt: string;

@@ -121,6 +121,7 @@ export type RecordType =
     | "app-create"
     | "app-update"
     | "app-delete"
+    | "app-link-email-template-update"
     | "scheduled-mail-drain";
 
 export interface RecordFields {
@@ -180,6 +181,7 @@ export interface RecordFields {
     appName?: string;
     appUserName?: string;
     linkEndedBy?: "email-undo" | "account-deleted" | "app-removed";
+    language?: "en" | "zh";
     banUntil?: string;
     banReason?: string;
 }

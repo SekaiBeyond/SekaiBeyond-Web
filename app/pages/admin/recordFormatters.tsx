@@ -571,6 +571,10 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>removed app {r.appName && <>{r.appName} </>}<span className="record-code">{r.appId}</span></>
                 : <>移除了应用 {r.appName && <>{r.appName} </>}<span className="record-code">{r.appId}</span></>;
+        case 'app-link-email-template-update':
+            return isEnglish
+                ? <>updated the {r.language === 'zh' ? 'Chinese' : 'English'} email sent when an app is linked</>
+                : <>更新了{r.language === 'zh' ? '中文' : '英文'}应用绑定通知邮件</>;
         case 'scheduled-mail-drain': {
             const sent = r.sentCount ?? 0;
             return isEnglish

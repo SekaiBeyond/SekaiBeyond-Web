@@ -129,7 +129,8 @@ export const RECORD_CATEGORIES = {
     },
     api: {
         en: 'API', zh: 'API',
-        types: ['api-key-create', 'api-key-rename', 'api-key-revoke', 'app-create', 'app-update', 'app-delete'],
+        types: ['api-key-create', 'api-key-rename', 'api-key-revoke', 'app-create', 'app-update', 'app-delete',
+            'app-link-email-template-update'],
     },
 } as const satisfies Record<string, {en: string; zh: string; types: readonly string[]}>;
 
@@ -197,5 +198,6 @@ export interface ActivityRecord {
     appName?: string;
     appUserName?: string;
     linkEndedBy?: 'email-undo' | 'account-deleted' | 'app-removed';
+    language?: 'en' | 'zh';
     timestamp: Date;
 }

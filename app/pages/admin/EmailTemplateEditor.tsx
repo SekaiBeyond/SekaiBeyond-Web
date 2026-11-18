@@ -18,6 +18,7 @@ interface UseEmailTemplateOptions {
     defaultSubject: string;
     defaultBody: string;
     write: (template: TemplateFields) => Promise<unknown>;
+    check?: (template: TemplateFields) => string | null;
     showToast: ShowToast;
     onUnsavedChange: (unsaved: boolean) => void;
 }
@@ -29,6 +30,7 @@ export function useEmailTemplate({
                                      defaultSubject,
                                      defaultBody,
                                      write,
+                                     check,
                                      showToast,
                                      onUnsavedChange,
                                  }: UseEmailTemplateOptions) {
@@ -101,6 +103,11 @@ export function useEmailTemplate({
             showToast(isEnglish ? 'Subject is required.' : '邮件主题必填。', 'error');
             return;
         }
+        const problem = check?.(template);
+        if (problem) {
+            showToast(problem, 'error');
+            return;
+        }
         setSaving(true);
         try {
             await write({subject: template.subject, bodyHtml: template.bodyHtml});
@@ -129,19 +136,23 @@ type RenderPreview = (template: EmailTemplate, contactEmail: string) => {subject
 
 export function EmailTemplateSection({
                                          editor,
+                                         title,
                                          failedText,
                                          status,
                                          placeholders,
                                          warning,
+                                         noContactEmailText,
                                          footer,
                                          readOnly,
                                          renderPreview
                                      }: {
     editor: EmailTemplateState;
+    title?: string;
     failedText: string;
     status?: ReactNode;
     placeholders: string;
     warning?: ReactNode;
+    noContactEmailText?: string;
     footer?: ReactNode;
     readOnly?: boolean;
     renderPreview: RenderPreview;
@@ -154,15 +165,15 @@ export function EmailTemplateSection({
 
     return (
         <div className="admin-tickets-template">
-            <h3>{isEnglish ? 'Email template' : '邮件模板'}</h3>
+            <h3>{title ?? (isEnglish ? 'Email template' : '邮件模板')}</h3>
             {status}
             <p className="admin-helper-text">{placeholders}</p>
             {warning}
             {!config.contactEmail && usesContactEmail(editor.template) && (
                 <p className="admin-helper-text admin-tickets-edit-warning">
-                    {isEnglish
+                    {noContactEmailText ?? (isEnglish
                         ? 'This template uses {{ contactEmail }}, but Site Config has no Contact Email. Sending is refused until one is set.'
-                        : '此模板使用了 {{ contactEmail }}，但网站设置中尚未填写联系邮箱。填写之前将无法发送。'}
+                        : '此模板使用了 {{ contactEmail }}，但网站设置中尚未填写联系邮箱。填写之前将无法发送。')}
                 </p>
             )}
             <EmailTemplateFields

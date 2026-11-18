@@ -1,6 +1,12 @@
 import { type CallableOptions, HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { appLinkChangedMail, limitNoticedChange, readMailLanguage, sendNotice } from "../utils/accountMail";
+import {
+    appLinkChangedMail,
+    appLinkedMail,
+    limitNoticedChange,
+    readMailLanguage,
+    sendNotice,
+} from "../utils/accountMail";
 import {
     accountLinkInAppQuery,
     accountLinksQuery,
@@ -252,8 +258,8 @@ export const confirmAppLink = onCall(LINK_CALL, async (request) => {
     });
 
     if (linked.email) {
-        await sendNotice(await appLinkChangedMail(
-            linked.email, linked.appName, linked.appUserName, "linked", language, linkUndoUrl(undoToken)));
+        await sendNotice(await appLinkedMail(
+            linked.email, linked.appName, linked.appUserName, language, linkUndoUrl(undoToken)));
     }
 });
 
